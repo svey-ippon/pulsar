@@ -35,8 +35,11 @@ docker compose up -d
 
 ## Run Streamlit
 
+Cube reads `CUBEJS_API_SECRET` from `cube/.env`, but Streamlit does not load `cube/.env`. Set `CUBE_API_TOKEN` in the Streamlit process environment to a valid local Cube bearer token/JWT derived from that Cube secret, not to the raw secret. Do not commit `cube/.env` or local tokens.
+
 ```bash
-CUBE_API_URL=http://localhost:4000/cubejs-api/v1 CUBE_API_TOKEN=${CUBE_API_TOKEN} uv run streamlit run app/main.py
+export CUBE_API_TOKEN="replace-with-valid-local-cube-jwt"
+CUBE_API_URL=http://localhost:4000/cubejs-api/v1 uv run streamlit run app/main.py
 ```
 
 Ask:
