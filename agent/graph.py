@@ -45,8 +45,6 @@ def is_supported_revenue_question(question: str) -> bool:
 
 
 def answer_question(question: str, cube_client: SupportsCubeQueries | None = None) -> dict[str, Any]:
-    client = cube_client or default_cube_client()
-
     if "predict" in question.lower():
         return {
             "text": "I can't predict future revenue in this POC. I can only return governed historical metrics available in Cube.",
@@ -60,6 +58,8 @@ def answer_question(question: str, cube_client: SupportsCubeQueries | None = Non
             "data": None,
             "query": None,
         }
+
+    client = cube_client or default_cube_client()
 
     try:
         client.list_cubes()
