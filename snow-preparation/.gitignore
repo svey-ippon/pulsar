@@ -1,2 +1,4 @@
 data-brazilian-ecommerce/**/*.csv
 __pycache__/**/*
+.env
+.envrc
