@@ -20,9 +20,12 @@ def render_chart(rows: list[dict]) -> None:
 
     time_cols = [column for column in df.columns if column.endswith(".month")]
     value_cols = [column for column in df.columns if column not in time_cols]
+    numeric_value_cols = [
+        column for column in value_cols if pd.api.types.is_numeric_dtype(df[column])
+    ]
 
-    if time_cols and value_cols:
-        fig = px.line(df, x=time_cols[0], y=value_cols[0], markers=True)
+    if time_cols and numeric_value_cols:
+        fig = px.line(df, x=time_cols[0], y=numeric_value_cols[0], markers=True)
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.dataframe(df, use_container_width=True)
@@ -33,8 +36,9 @@ def render_chart(rows: list[dict]) -> None:
 
 def render_answer(answer: dict) -> None:
     st.write(answer["text"])
-    if answer.get("data"):
-        render_chart(answer["data"])
+    data = answer.get("data")
+    if data is not None:
+        render_chart(data)
     if answer.get("query"):
         with st.expander("Show Cube query"):
             st.json(answer["query"])
