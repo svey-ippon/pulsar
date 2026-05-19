@@ -88,6 +88,36 @@ def test_unsupported_question_is_refused_without_cube_environment(monkeypatch):
     }
 
 
+def test_graph_refuses_prediction_question_without_cube_environment(monkeypatch):
+    monkeypatch.delenv("CUBE_API_URL", raising=False)
+    monkeypatch.delenv("CUBE_API_TOKEN", raising=False)
+
+    graph = build_graph()
+
+    response = graph.invoke({"question": "Predict next month revenue."})
+
+    assert response["answer"] == {
+        "text": "I can't predict future revenue in this POC. I can only return governed historical metrics available in Cube.",
+        "data": None,
+        "query": None,
+    }
+
+
+def test_graph_refuses_unsupported_question_without_cube_environment(monkeypatch):
+    monkeypatch.delenv("CUBE_API_URL", raising=False)
+    monkeypatch.delenv("CUBE_API_TOKEN", raising=False)
+
+    graph = build_graph()
+
+    response = graph.invoke({"question": "What can you do?"})
+
+    assert response["answer"] == {
+        "text": "This POC currently supports only historical total revenue per month from the Cube semantic layer.",
+        "data": None,
+        "query": None,
+    }
+
+
 def test_graph_can_be_built():
     graph = build_graph(FakeCubeClient())
 

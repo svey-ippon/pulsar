@@ -75,10 +75,8 @@ def answer_question(question: str, cube_client: SupportsCubeQueries | None = Non
 
 
 def build_graph(cube_client: SupportsCubeQueries | None = None):
-    client = cube_client or default_cube_client()
-
     def answer_node(state: AgentState) -> AgentState:
-        return {"question": state["question"], "answer": answer_question(state["question"], cube_client=client)}
+        return {"question": state["question"], "answer": answer_question(state["question"], cube_client=cube_client)}
 
     graph = StateGraph(AgentState)
     graph.add_node("answer", answer_node)
