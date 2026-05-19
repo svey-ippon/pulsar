@@ -29,6 +29,15 @@ class FakeCubeClient:
         ]
 
 
+class FakeCubeClientWithMetadata(FakeCubeClient):
+    def __init__(self, metadata):
+        super().__init__()
+        self.metadata = metadata
+
+    def list_cubes(self):
+        return self.metadata
+
+
 def test_supported_revenue_question_returns_data_and_query_metadata():
     cube_client = FakeCubeClient()
 
@@ -47,6 +56,46 @@ def test_supported_revenue_question_returns_data_and_query_metadata():
     }
     assert "sum(order_items.price)" in response["text"]
     assert cube_client.queries == [response["query"]]
+
+
+def test_missing_revenue_measure_is_reported_unavailable_without_querying_cube():
+    cube_client = FakeCubeClientWithMetadata(
+        {
+            "cubes": [
+                {"name": "order_items", "measures": [], "dimensions": []},
+                {"name": "orders", "measures": [], "dimensions": [{"name": "orders.order_purchase_timestamp"}]},
+            ]
+        }
+    )
+
+    response = answer_question("What is the total revenue per month?", cube_client=cube_client)
+
+    assert response == {
+        "text": "The requested metric or dimension is not available in the Cube semantic layer.",
+        "data": None,
+        "query": None,
+    }
+    assert cube_client.queries == []
+
+
+def test_missing_order_month_dimension_is_reported_unavailable_without_querying_cube():
+    cube_client = FakeCubeClientWithMetadata(
+        {
+            "cubes": [
+                {"name": "order_items", "measures": [{"name": "order_items.total_revenue"}], "dimensions": []},
+                {"name": "orders", "measures": [], "dimensions": []},
+            ]
+        }
+    )
+
+    response = answer_question("What is the total revenue per month?", cube_client=cube_client)
+
+    assert response == {
+        "text": "The requested metric or dimension is not available in the Cube semantic layer.",
+        "data": None,
+        "query": None,
+    }
+    assert cube_client.queries == []
 
 
 def test_prediction_question_is_refused_without_querying_cube():

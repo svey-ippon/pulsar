@@ -16,6 +16,8 @@ TOTAL_REVENUE_QUERY = {
     "limit": 500,
 }
 
+REQUIRED_CUBE_MEMBERS = ["order_items.total_revenue", "orders.order_purchase_timestamp"]
+
 
 class SupportsCubeQueries(Protocol):
     def list_cubes(self) -> dict[str, Any]: ...
@@ -44,6 +46,20 @@ def is_supported_revenue_question(question: str) -> bool:
     return "revenue" in normalized and "month" in normalized and "predict" not in normalized
 
 
+def metadata_contains_member(metadata: Any, member: str) -> bool:
+    if isinstance(metadata, str):
+        return metadata == member
+    if isinstance(metadata, dict):
+        return any(metadata_contains_member(value, member) for value in metadata.values())
+    if isinstance(metadata, list):
+        return any(metadata_contains_member(value, member) for value in metadata)
+    return False
+
+
+def metadata_supports_total_revenue_query(metadata: dict[str, Any]) -> bool:
+    return all(metadata_contains_member(metadata, member) for member in REQUIRED_CUBE_MEMBERS)
+
+
 def answer_question(question: str, cube_client: SupportsCubeQueries | None = None) -> dict[str, Any]:
     if "predict" in question.lower():
         return {
@@ -62,7 +78,13 @@ def answer_question(question: str, cube_client: SupportsCubeQueries | None = Non
     client = cube_client or default_cube_client()
 
     try:
-        client.list_cubes()
+        metadata = client.list_cubes()
+        if not metadata_supports_total_revenue_query(metadata):
+            return {
+                "text": "The requested metric or dimension is not available in the Cube semantic layer.",
+                "data": None,
+                "query": None,
+            }
         rows = client.query_cube(**TOTAL_REVENUE_QUERY)
     except CubeServiceError:
         return {"text": "The data service is unavailable. Please try again later.", "data": None, "query": None}
