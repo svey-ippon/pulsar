@@ -1,6 +1,6 @@
 cubes:
   - name: order_payments
-    sql_table: "\"RAW\".\"ORDER_PAYMENTS\""
+    sql_table: ECOMMERCE_DB.MARTS.ORDER_PAYMENTS
     data_source: default
 
     joins:

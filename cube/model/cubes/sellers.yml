@@ -1,6 +1,6 @@
 cubes:
   - name: sellers
-    sql_table: "\"RAW\".\"SELLERS\""
+    sql_table: ECOMMERCE_DB.MARTS.SELLERS
     data_source: default
 
     joins: []

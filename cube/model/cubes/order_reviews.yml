@@ -1,6 +1,6 @@
 cubes:
   - name: order_reviews
-    sql_table: "\"RAW\".\"ORDER_REVIEWS\""
+    sql_table: ECOMMERCE_DB.MARTS.ORDER_REVIEWS
     data_source: default
 
     joins:

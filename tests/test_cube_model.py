@@ -4,6 +4,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CUBE_MODEL_DIR = ROOT / "cube/model/cubes"
 
 
 def load_cube(path: str) -> dict:
@@ -13,6 +14,15 @@ def load_cube(path: str) -> dict:
 
 def by_name(items: list[dict], name: str) -> dict:
     return next(item for item in items if item["name"] == name)
+
+
+def test_all_cube_models_read_from_marts_not_raw():
+    for path in sorted(CUBE_MODEL_DIR.glob("*.yml")):
+        cube = load_cube(str(path.relative_to(ROOT)))
+        sql_table = cube["sql_table"]
+
+        assert "RAW" not in sql_table, f"{path.name} reads from {sql_table}"
+        assert sql_table.startswith("ECOMMERCE_DB.MARTS."), f"{path.name} reads from {sql_table}"
 
 
 def test_orders_cube_points_to_marts_and_has_primary_key_time_dimension():
