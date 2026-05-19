@@ -17,6 +17,7 @@ TOTAL_REVENUE_QUERY = {
 }
 
 REQUIRED_CUBE_MEMBERS = ["order_items.total_revenue", "orders.order_purchase_timestamp"]
+MEMBER_IDENTITY_KEYS = {"name", "member", "shortTitle"}
 
 
 class SupportsCubeQueries(Protocol):
@@ -47,10 +48,12 @@ def is_supported_revenue_question(question: str) -> bool:
 
 
 def metadata_contains_member(metadata: Any, member: str) -> bool:
-    if isinstance(metadata, str):
-        return metadata == member
     if isinstance(metadata, dict):
-        return any(metadata_contains_member(value, member) for value in metadata.values())
+        return any(
+            (key in MEMBER_IDENTITY_KEYS and value == member)
+            or metadata_contains_member(value, member)
+            for key, value in metadata.items()
+        )
     if isinstance(metadata, list):
         return any(metadata_contains_member(value, member) for value in metadata)
     return False

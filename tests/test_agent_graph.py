@@ -98,6 +98,36 @@ def test_missing_order_month_dimension_is_reported_unavailable_without_querying_
     assert cube_client.queries == []
 
 
+def test_metadata_descriptions_do_not_satisfy_required_members():
+    cube_client = FakeCubeClientWithMetadata(
+        {
+            "cubes": [
+                {
+                    "name": "order_items",
+                    "measures": [],
+                    "dimensions": [],
+                    "description": "order_items.total_revenue",
+                },
+                {
+                    "name": "orders",
+                    "measures": [],
+                    "dimensions": [],
+                    "description": "orders.order_purchase_timestamp",
+                },
+            ]
+        }
+    )
+
+    response = answer_question("What is the total revenue per month?", cube_client=cube_client)
+
+    assert response == {
+        "text": "The requested metric or dimension is not available in the Cube semantic layer.",
+        "data": None,
+        "query": None,
+    }
+    assert cube_client.queries == []
+
+
 def test_prediction_question_is_refused_without_querying_cube():
     cube_client = FakeCubeClient()
 
