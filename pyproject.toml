@@ -1,0 +1,18 @@
+[project]
+name = "data-agent-poc"
+version = "0.1.0"
+description = "Thin-slice self-hosted data agent POC"
+requires-python = ">=3.12"
+dependencies = [
+    "langgraph>=0.2",
+    "pandas>=2.2",
+    "plotly>=5.22",
+    "pyyaml>=6.0.2",
+    "requests>=2.32",
+    "streamlit>=1.35",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+]

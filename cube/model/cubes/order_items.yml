@@ -1,6 +1,6 @@
 cubes:
   - name: order_items
-    sql_table: "\"RAW\".\"ORDER_ITEMS\""
+    sql_table: ECOMMERCE_DB.MARTS.ORDER_ITEMS
     data_source: default
 
     joins:
@@ -17,6 +17,11 @@ cubes:
         relationship: many_to_one
 
     dimensions:
+      - name: order_item_key
+        sql: "CONCAT({CUBE}.\"ORDER_ID\", '-', {CUBE}.\"ORDER_ITEM_ID\")"
+        type: string
+        primary_key: true
+
       - name: order_id
         sql: "{CUBE}.\"ORDER_ID\""
         type: string
@@ -41,6 +46,11 @@ cubes:
       - name: count
         type: count
 
+      - name: total_revenue
+        sql: "{CUBE}.\"PRICE\""
+        type: sum
+        description: "Merchandise revenue: sum of item price, excluding freight and payment adjustments."
+
       - name: freight_value
         sql: "{CUBE}.\"FREIGHT_VALUE\""
         type: sum
@@ -49,7 +59,4 @@ cubes:
         sql: "{CUBE}.\"PRICE\""
         type: sum
 
-    pre_aggregations:
-      # Pre-aggregation definitions go here.
-      # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
-
+    pre_aggregations: []
