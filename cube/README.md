@@ -1,14 +1,27 @@
+# Cube
+
+Local Cube Core project for the data-agent POC.
+
+## Run Cube
+
 ```bash
-# launch cube locally
 docker compose up -d
 ```
 
-Local URL:
-http://localhost:4000 
+Local URL: http://localhost:4000
 
+## Snowflake Credentials
 
-# Snowflake credentials
+Create `cube/.env` from `cube/example.env`, set local Snowflake values, and do not commit `cube/.env`.
 
-https://docs.cube.dev/admin/connect-to-data/data-sources/snowflake
+Cube reads the Olist mart tables from `ECOMMERCE_DB.MARTS`.
 
-Connection wizard -> credentials stored in the docker volume, in the .env file
+## First POC Metric
+
+The first implemented metric is:
+
+```text
+order_items.total_revenue = sum(ECOMMERCE_DB.MARTS.ORDER_ITEMS.price)
+```
+
+This is merchandise revenue and excludes freight and payment adjustments.
