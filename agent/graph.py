@@ -18,6 +18,7 @@ TOTAL_REVENUE_QUERY = {
 
 REQUIRED_CUBE_MEMBERS = ["order_items.total_revenue", "orders.order_purchase_timestamp"]
 MEMBER_IDENTITY_KEYS = {"name", "member", "shortTitle"}
+PREDICTIVE_TERMS = ("predict", "forecast", "projection", "project", "next month")
 
 
 class SupportsCubeQueries(Protocol):
@@ -44,7 +45,12 @@ def default_cube_client() -> CubeClient:
 
 def is_supported_revenue_question(question: str) -> bool:
     normalized = question.strip().lower()
-    return "revenue" in normalized and "month" in normalized and "predict" not in normalized
+    return "revenue" in normalized and "month" in normalized
+
+
+def is_predictive_question(question: str) -> bool:
+    normalized = question.strip().lower()
+    return any(term in normalized for term in PREDICTIVE_TERMS)
 
 
 def metadata_contains_member(metadata: Any, member: str) -> bool:
@@ -64,7 +70,7 @@ def metadata_supports_total_revenue_query(metadata: dict[str, Any]) -> bool:
 
 
 def answer_question(question: str, cube_client: SupportsCubeQueries | None = None) -> dict[str, Any]:
-    if "predict" in question.lower():
+    if is_predictive_question(question):
         return {
             "text": "I can't predict future revenue in this POC. I can only return governed historical metrics available in Cube.",
             "data": None,

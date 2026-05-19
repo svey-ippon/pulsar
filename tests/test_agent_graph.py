@@ -141,6 +141,32 @@ def test_prediction_question_is_refused_without_querying_cube():
     assert cube_client.queries == []
 
 
+def test_forecast_revenue_per_month_is_refused_without_querying_cube():
+    cube_client = FakeCubeClient()
+
+    response = answer_question("Forecast revenue per month", cube_client=cube_client)
+
+    assert response == {
+        "text": "I can't predict future revenue in this POC. I can only return governed historical metrics available in Cube.",
+        "data": None,
+        "query": None,
+    }
+    assert cube_client.queries == []
+
+
+def test_next_month_revenue_question_is_refused_without_cube_environment(monkeypatch):
+    monkeypatch.delenv("CUBE_API_URL", raising=False)
+    monkeypatch.delenv("CUBE_API_TOKEN", raising=False)
+
+    response = answer_question("What will revenue be next month?")
+
+    assert response == {
+        "text": "I can't predict future revenue in this POC. I can only return governed historical metrics available in Cube.",
+        "data": None,
+        "query": None,
+    }
+
+
 def test_prediction_question_is_refused_without_cube_environment(monkeypatch):
     monkeypatch.delenv("CUBE_API_URL", raising=False)
     monkeypatch.delenv("CUBE_API_TOKEN", raising=False)
