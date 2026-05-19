@@ -4,6 +4,7 @@ import argparse
 import os
 import re
 import tomllib
+from datetime import datetime
 from pathlib import Path
 from typing import Final
 
@@ -11,8 +12,8 @@ import snowflake.connector
 import yaml
 
 
-DEFAULT_DATABASE: Final[str] = "brazilian_ecommerce"
-DEFAULT_SCHEMA: Final[str] = "raw"
+DEFAULT_DATABASE: Final[str] = "ECOMMERCE_DB"
+DEFAULT_SCHEMA: Final[str] = "MARTS"
 DEFAULT_DATA_DIR: Final[Path] = Path("data-brazilian-ecommerce")
 DEFAULT_SCHEMA_DIR: Final[Path] = Path("schemas-brazilian-ecommerce")
 CSV_FILE_FORMAT: Final[str] = (
@@ -81,10 +82,14 @@ def create_table_sql(database: str, schema_name: str, schema_definition: dict) -
     table_name = sql_identifier(schema_definition["table"])
     target_table = f"{sql_identifier(database)}.{sql_identifier(schema_name)}.{table_name}"
     table_description = schema_definition.get("description", "")
-    column_sql = ",\n    ".join(
+    column_definitions = [
         f"{sql_identifier(column['name'])} {column['type']} COMMENT {sql_string(column.get('description', ''))}"
         for column in schema_definition["columns"]
+    ]
+    column_definitions.append(
+        "updated_at TIMESTAMP_NTZ COMMENT 'Timestamp when this loader execution populated the row'"
     )
+    column_sql = ",\n    ".join(column_definitions)
     return table_name, f"CREATE TABLE {target_table} (\n    {column_sql}\n) COMMENT = {sql_string(table_description)}"
 
 
@@ -131,11 +136,23 @@ def put_file(cursor: snowflake.connector.cursor.SnowflakeCursor, csv_path: Path,
     )
 
 
-def copy_into_table(cursor: snowflake.connector.cursor.SnowflakeCursor, target_table: str, table_name: str) -> None:
+def copy_into_table(
+    cursor: snowflake.connector.cursor.SnowflakeCursor,
+    target_table: str,
+    table_name: str,
+    schema_definition: dict,
+    load_timestamp: datetime,
+) -> None:
+    target_columns = [sql_identifier(column["name"]) for column in schema_definition["columns"]]
+    source_columns = [f"t.${index}" for index in range(1, len(target_columns) + 1)]
+    timestamp_literal = sql_string(load_timestamp.strftime("%Y-%m-%d %H:%M:%S.%f"))
     cursor.execute(
         f"""
-COPY INTO {target_table}
-FROM @csv_load_stage/{table_name}
+COPY INTO {target_table} ({', '.join(target_columns)}, updated_at)
+FROM (
+    SELECT {', '.join(source_columns)}, TO_TIMESTAMP_NTZ({timestamp_literal})
+    FROM @csv_load_stage/{table_name} t
+)
 FILE_FORMAT = ({CSV_FILE_FORMAT})
 ON_ERROR = 'ABORT_STATEMENT'
 PURGE = TRUE
@@ -149,19 +166,27 @@ PURGE = TRUE
         raise RuntimeError(f"COPY INTO loaded 0 rows for {target_table}")
 
 
-def load_csv(cursor: snowflake.connector.cursor.SnowflakeCursor, csv_path: Path, database: str, schema_name: str, schema_definition: dict) -> None:
+def load_csv(
+    cursor: snowflake.connector.cursor.SnowflakeCursor,
+    csv_path: Path,
+    database: str,
+    schema_name: str,
+    schema_definition: dict,
+    load_timestamp: datetime,
+) -> None:
     table_name, ddl = create_table_sql(database, schema_name, schema_definition)
     target_table = f"{sql_identifier(database)}.{sql_identifier(schema_name)}.{table_name}"
     print(f"Loading {csv_path.name} -> {target_table}")
     cursor.execute(f"DROP TABLE IF EXISTS {target_table}")
     cursor.execute(ddl)
     put_file(cursor, csv_path, table_name)
-    copy_into_table(cursor, target_table, table_name)
+    copy_into_table(cursor, target_table, table_name, schema_definition, load_timestamp)
 
 
 def main() -> None:
     args = parse_args()
     files = csv_files(args.data_dir)
+    load_timestamp = datetime.now()
 
     with open_connection(args.connection_name) as connection:
         with connection.cursor() as cursor:
@@ -173,7 +198,7 @@ def main() -> None:
                 schema_path = schema_path_for_csv(csv_path, args.schema_dir)
                 if not schema_path.exists():
                     raise FileNotFoundError(f"Missing schema file for {csv_path.name}: {schema_path}")
-                load_csv(cursor, csv_path, args.database, args.schema, load_schema_file(schema_path))
+                load_csv(cursor, csv_path, args.database, args.schema, load_schema_file(schema_path), load_timestamp)
 
 
 if __name__ == "__main__":

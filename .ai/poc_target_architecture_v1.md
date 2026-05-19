@@ -107,7 +107,7 @@ Snowflake is the single compute and storage layer. All queries, including those 
 The only schema Cube needs access to is `MARTS` — the layer containing clean, analytics-ready tables. How those tables are produced (dbt, Spark, raw SQL, stored procedures) is outside the scope of this architecture.
 
 ```
-ANALYTICS_DB
+ECOMMERCE_DB
 └── MARTS            -- analytics-ready tables, primary source for Cube
 ```
 
@@ -117,10 +117,10 @@ A dedicated service account is created for Cube Core with read-only access scope
 
 ```sql
 CREATE ROLE CUBE_READER;
-GRANT USAGE ON DATABASE ANALYTICS_DB TO ROLE CUBE_READER;
-GRANT USAGE ON SCHEMA ANALYTICS_DB.MARTS TO ROLE CUBE_READER;
-GRANT SELECT ON ALL TABLES IN SCHEMA ANALYTICS_DB.MARTS TO ROLE CUBE_READER;
-GRANT SELECT ON FUTURE TABLES IN SCHEMA ANALYTICS_DB.MARTS TO ROLE CUBE_READER;
+GRANT USAGE ON DATABASE ECOMMERCE_DB TO ROLE CUBE_READER;
+GRANT USAGE ON SCHEMA ECOMMERCE_DB.MARTS TO ROLE CUBE_READER;
+GRANT SELECT ON ALL TABLES IN SCHEMA ECOMMERCE_DB.MARTS TO ROLE CUBE_READER;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA ECOMMERCE_DB.MARTS TO ROLE CUBE_READER;
 
 CREATE USER CUBE_SVC PASSWORD='...' DEFAULT_ROLE=CUBE_READER;
 GRANT ROLE CUBE_READER TO USER CUBE_SVC;
@@ -132,13 +132,13 @@ GRANT ROLE CUBE_READER TO USER CUBE_SVC;
 
 ### Role
 
-Cube Core does not run transformations. It expects clean, analytics-ready tables to already exist in the `ANALYTICS_DB.MARTS` schema in Snowflake. The tool that produces those tables — dbt, Spark, raw SQL, stored procedures — is irrelevant to this architecture and not deployed as part of this stack.
+Cube Core does not run transformations. It expects clean, analytics-ready tables to already exist in the `ECOMMERCE_DB.MARTS` schema in Snowflake. The tool that produces those tables — dbt, Spark, raw SQL, stored procedures — is irrelevant to this architecture and not deployed as part of this stack.
 
 ### Table conventions required by Cube
 
 Cube YAML files reference Snowflake tables directly by name. For the semantic model to work reliably, tables in `MARTS` must follow these conventions:
 
-- Every table has a **primary key** column named `<table>_id`.
+- Every table has a **primary key** column. By convention, it is named after the singular form of the table name: `customers` → `customer_id`, `orders` → `order_id`. This naming is not enforced by Cube — any column name works as long as it is declared as `primary_key: true` in the YAML.
 - Every table has an `updated_at` column (`TIMESTAMP_NTZ`) used by Cube for pre-aggregation refresh keys.
 - Column names are stable. Renaming or dropping a column requires updating the corresponding Cube YAML in the same change.
 - Temporal columns are `TIMESTAMP_NTZ` (not `VARCHAR` dates or mixed formats).
@@ -165,7 +165,7 @@ These files are the only authoritative definition of business metrics. They are 
 # cube_project/model/cubes/orders.yml
 cubes:
   - name: orders
-    sql_table: ANALYTICS_DB.MARTS.FCT_ORDERS
+    sql_table: ECOMMERCE_DB.MARTS.FCT_ORDERS
 
     # --- Measures (metrics the agent can query) ---
     measures:
@@ -220,10 +220,10 @@ cubes:
         time_dimension: created_at
         granularity: month
         refresh_key:
-          sql: SELECT MAX(updated_at) FROM ANALYTICS_DB.MARTS.FCT_ORDERS
+          sql: SELECT MAX(updated_at) FROM ECOMMERCE_DB.MARTS.FCT_ORDERS
 
   - name: customers
-    sql_table: ANALYTICS_DB.MARTS.DIM_CUSTOMERS
+    sql_table: ECOMMERCE_DB.MARTS.DIM_CUSTOMERS
 
     dimensions:
       - name: customer_id
@@ -450,7 +450,7 @@ def _render_chart(df: pd.DataFrame):
 
 ### Snowflake → Cube
 
-Cube connects to Snowflake at startup using credentials from environment variables. The only contract is the presence of stable, analytics-ready tables in `ANALYTICS_DB.MARTS`. Cube YAML files reference these tables by their fully qualified Snowflake name (`ANALYTICS_DB.MARTS.FCT_ORDERS`). If a table is renamed or a referenced column is dropped, the corresponding Cube YAML must be updated before the Cube container is restarted.
+Cube connects to Snowflake at startup using credentials from environment variables. The only contract is the presence of stable, analytics-ready tables in `ECOMMERCE_DB.MARTS`. Cube YAML files reference these tables by their fully qualified Snowflake name (`ECOMMERCE_DB.MARTS.FCT_ORDERS`). If a table is renamed or a referenced column is dropped, the corresponding Cube YAML must be updated before the Cube container is restarted.
 
 ### Cube → LangGraph
 
@@ -514,7 +514,7 @@ services:
       CUBEJS_DB_USER: ${SNOWFLAKE_USER}
       CUBEJS_DB_PASS: ${SNOWFLAKE_PASSWORD}
       CUBEJS_DB_WAREHOUSE: ${SNOWFLAKE_WAREHOUSE}
-      CUBEJS_DB_DATABASE: ANALYTICS_DB
+      CUBEJS_DB_DATABASE: ECOMMERCE_DB
       CUBEJS_DB_SCHEMA: MARTS
       CUBEJS_API_SECRET: ${CUBE_API_SECRET}
       CUBEJS_DEV_MODE: "false"
@@ -597,7 +597,7 @@ ANTHROPIC_API_KEY=...
 
 ### Day-to-day: adding a new cube (new table)
 
-1. Confirm the table exists in `ANALYTICS_DB.MARTS` and follows the column conventions (primary key, `updated_at`, `TIMESTAMP_NTZ` temporals).
+1. Confirm the table exists in `ECOMMERCE_DB.MARTS` and follows the column conventions (primary key, `updated_at`, `TIMESTAMP_NTZ` temporals).
 2. Create a new file `cube_project/model/cubes/<table>.yml`.
 3. Define the cube: `sql_table`, dimensions, measures, any joins to existing cubes.
 4. PR, merge, restart Cube.

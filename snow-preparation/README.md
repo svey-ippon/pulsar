@@ -21,13 +21,15 @@ Running `main.py` performs these steps:
 3. Creates the target database and schema if needed
 4. Drops each target table if it already exists
 5. Recreates the table in Snowflake with column comments and table comment
-6. Uploads the local CSV file to a temporary Snowflake internal stage
-7. Loads the staged file into the table with `COPY INTO`
+6. Adds an `updated_at` column of type `TIMESTAMP_NTZ`
+7. Uploads the local CSV file to a temporary Snowflake internal stage
+8. Loads the staged file into the table with `COPY INTO`
+9. Stamps every loaded row with the same script execution timestamp in `updated_at`
 
 Target location:
 
-- database: `brazilian_ecommerce`
-- schema: `raw`
+- database: `ECOMMERCE_DB`
+- schema: `MARTS`
 
 ## Commands
 
@@ -48,3 +50,4 @@ uv run python main.py --connection-name dev
 - The YAML files are the source of truth and must exist before running the script.
 - The YAML files should be edited to fill table and column descriptions.
 - CSV files are uploaded to a temporary Snowflake stage during execution, then loaded into tables.
+- `updated_at` is not sourced from the CSV files. It is populated from a single timestamp captured once when the Python script starts.
