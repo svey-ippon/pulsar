@@ -13,6 +13,7 @@ cubes:
       - name: seller_id
         sql: "{CUBE}.\"SELLER_ID\""
         type: string
+        primary_key: true
 
       - name: seller_state
         sql: "{CUBE}.\"SELLER_STATE\""
@@ -29,4 +30,3 @@ cubes:
     pre_aggregations:
       # Pre-aggregation definitions go here.
       # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
-

@@ -13,6 +13,7 @@ cubes:
       - name: customer_id
         sql: "{CUBE}.\"CUSTOMER_ID\""
         type: string
+        primary_key: true
 
       - name: customer_state
         sql: "{CUBE}.\"CUSTOMER_STATE\""
@@ -33,4 +34,3 @@ cubes:
     pre_aggregations:
       # Pre-aggregation definitions go here.
       # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
-

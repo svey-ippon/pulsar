@@ -9,6 +9,11 @@ cubes:
         relationship: many_to_one
 
     dimensions:
+      - name: order_payment_key
+        sql: "CONCAT({CUBE}.\"ORDER_ID\", '-', {CUBE}.\"PAYMENT_SEQUENTIAL\")"
+        type: string
+        primary_key: true
+
       - name: order_id
         sql: "{CUBE}.\"ORDER_ID\""
         type: string
@@ -28,4 +33,3 @@ cubes:
     pre_aggregations:
       # Pre-aggregation definitions go here.
       # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
-

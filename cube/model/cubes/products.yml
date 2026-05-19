@@ -13,6 +13,7 @@ cubes:
       - name: product_id
         sql: "{CUBE}.\"PRODUCT_ID\""
         type: string
+        primary_key: true
 
     measures:
       - name: count
@@ -25,4 +26,3 @@ cubes:
     pre_aggregations:
       # Pre-aggregation definitions go here.
       # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
-

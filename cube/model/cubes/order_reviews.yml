@@ -24,6 +24,7 @@ cubes:
       - name: review_id
         sql: "{CUBE}.\"REVIEW_ID\""
         type: string
+        primary_key: true
 
       - name: review_answer_timestamp
         sql: "{CUBE}.\"REVIEW_ANSWER_TIMESTAMP\""
@@ -40,4 +41,3 @@ cubes:
     pre_aggregations:
       # Pre-aggregation definitions go here.
       # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
-
