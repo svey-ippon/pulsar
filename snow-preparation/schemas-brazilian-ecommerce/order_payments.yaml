@@ -1,0 +1,19 @@
+table: order_payments
+source_file: olist_order_payments_dataset.csv
+description: 'This dataset includes data about the orders payment options.'
+columns:
+- name: order_id
+  type: VARCHAR
+  description: 'unique identifier of an order'
+- name: payment_sequential
+  type: NUMBER(38,0)
+  description: 'a customer may pay an order with more than one payment method. If he does so, a sequence will be created to accommodate all payments'
+- name: payment_type
+  type: VARCHAR
+  description: 'method of payment chosen by the customer'
+- name: payment_installments
+  type: NUMBER(38,0)
+  description: 'number of installments chosen by the customer'
+- name: payment_value
+  type: FLOAT
+  description: 'transaction value'

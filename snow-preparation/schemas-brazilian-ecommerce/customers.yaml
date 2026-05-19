@@ -1,0 +1,19 @@
+table: customers
+source_file: olist_customers_dataset.csv
+description: 'This dataset has information about the customer and its location. Use it to identify unique customers in the orders dataset and to find the orders delivery location. At our system each order is assigned to a unique customer_id. This means that the same customer will get different ids for different orders. The purpose of having a customer_unique_id on the dataset is to allow you to identify customers that made repurchases at the store. Otherwise you would find that each order had a different customer associated with.'
+columns:
+- name: customer_id
+  type: VARCHAR
+  description: 'key to the orders dataset. Each order has a unique customer_id.'
+- name: customer_unique_id
+  type: VARCHAR
+  description: 'unique identifier of a customer.'
+- name: customer_zip_code_prefix
+  type: VARCHAR
+  description: 'first five digits of customer zip code'
+- name: customer_city
+  type: VARCHAR
+  description: 'customer city name'
+- name: customer_state
+  type: VARCHAR
+  description: 'customer state'

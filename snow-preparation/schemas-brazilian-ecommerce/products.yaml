@@ -1,0 +1,31 @@
+table: products
+source_file: olist_products_dataset.csv
+description: 'This dataset includes data about the products sold by Olist'
+columns:
+- name: product_id
+  type: VARCHAR
+  description: 'unique product identifier'
+- name: product_category_name
+  type: VARCHAR
+  description: 'root category of product, in Portuguese'
+- name: product_name_lenght
+  type: NUMBER(38,0)
+  description: 'number of characters extracted from the product name'
+- name: product_description_lenght
+  type: NUMBER(38,0)
+  description: 'number of characters extracted from the product description'
+- name: product_photos_qty
+  type: NUMBER(38,0)
+  description: 'number of product published photos'
+- name: product_weight_g
+  type: NUMBER(38,0)
+  description: 'product weight measured in grams'
+- name: product_length_cm
+  type: NUMBER(38,0)
+  description: 'product length measured in centimeters'
+- name: product_height_cm
+  type: NUMBER(38,0)
+  description: 'product height measured in centimeters'
+- name: product_width_cm
+  type: NUMBER(38,0)
+  description: 'product width measured in centimeters'

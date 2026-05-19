@@ -1,0 +1,28 @@
+table: orders
+source_file: olist_orders_dataset.csv
+description: 'This is the core dataset. From each order you might find all other information'
+columns:
+- name: order_id
+  type: VARCHAR
+  description: 'unique identifier of the order'
+- name: customer_id
+  type: VARCHAR
+  description: 'key to the customer dataset. Each order has a unique customer_id'
+- name: order_status
+  type: VARCHAR
+  description: 'Reference to the order status (delivered, shipped, etc)'
+- name: order_purchase_timestamp
+  type: TIMESTAMP_NTZ
+  description: 'Shows the purchase timestamp'
+- name: order_approved_at
+  type: TIMESTAMP_NTZ
+  description: 'Shows the payment approval timestamp'
+- name: order_delivered_carrier_date
+  type: TIMESTAMP_NTZ
+  description: 'Shows the order posting timestamp. When it was handled to the logistic partner'
+- name: order_delivered_customer_date
+  type: TIMESTAMP_NTZ
+  description: 'Shows the actual order delivery date to the customer'
+- name: order_estimated_delivery_date
+  type: TIMESTAMP_NTZ
+  description: 'Shows the estimated delivery date that was informed to customer at the purchase moment'

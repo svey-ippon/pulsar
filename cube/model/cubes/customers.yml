@@ -1,0 +1,36 @@
+cubes:
+  - name: customers
+    sql_table: "\"RAW\".\"CUSTOMERS\""
+    data_source: default
+
+    joins: []
+
+    dimensions:
+      - name: customer_city
+        sql: "{CUBE}.\"CUSTOMER_CITY\""
+        type: string
+
+      - name: customer_id
+        sql: "{CUBE}.\"CUSTOMER_ID\""
+        type: string
+
+      - name: customer_state
+        sql: "{CUBE}.\"CUSTOMER_STATE\""
+        type: string
+
+      - name: customer_unique_id
+        sql: "{CUBE}.\"CUSTOMER_UNIQUE_ID\""
+        type: string
+
+      - name: customer_zip_code_prefix
+        sql: "{CUBE}.\"CUSTOMER_ZIP_CODE_PREFIX\""
+        type: string
+
+    measures:
+      - name: count
+        type: count
+
+    pre_aggregations:
+      # Pre-aggregation definitions go here.
+      # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
+

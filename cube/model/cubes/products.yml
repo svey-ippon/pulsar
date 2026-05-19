@@ -1,0 +1,28 @@
+cubes:
+  - name: products
+    sql_table: "\"RAW\".\"PRODUCTS\""
+    data_source: default
+
+    joins: []
+
+    dimensions:
+      - name: product_category_name
+        sql: "{CUBE}.\"PRODUCT_CATEGORY_NAME\""
+        type: string
+
+      - name: product_id
+        sql: "{CUBE}.\"PRODUCT_ID\""
+        type: string
+
+    measures:
+      - name: count
+        type: count
+
+      - name: product_photos_qty
+        sql: "{CUBE}.\"PRODUCT_PHOTOS_QTY\""
+        type: sum
+
+    pre_aggregations:
+      # Pre-aggregation definitions go here.
+      # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
+

@@ -1,0 +1,28 @@
+table: order_reviews
+source_file: olist_order_reviews_dataset.csv
+description: |
+  This dataset includes data about the reviews made by the customers.
+
+  After a customer purchases the product from Olist Store a seller gets notified to fulfill that order. Once the customer receives the product, or the estimated delivery date is due, the customer gets a satisfaction survey by email where he can give a note for the purchase experience and write down some comments.
+columns:
+- name: review_id
+  type: VARCHAR
+  description: 'unique review identifier'
+- name: order_id
+  type: VARCHAR
+  description: 'unique order identifier'
+- name: review_score
+  type: NUMBER(38,0)
+  description: 'Note ranging from 1 to 5 given by the customer on a satisfaction survey'
+- name: review_comment_title
+  type: VARCHAR
+  description: 'Comment title from the review left by the customer, in Portuguese'
+- name: review_comment_message
+  type: VARCHAR
+  description: 'Comment message from the review left by the customer, in Portuguese'
+- name: review_creation_date
+  type: TIMESTAMP_NTZ
+  description: 'Shows the date in which the satisfaction survey was sent to the customer.'
+- name: review_answer_timestamp
+  type: TIMESTAMP_NTZ
+  description: 'Shows satisfaction survey answer timestamp'

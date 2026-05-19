@@ -1,0 +1,43 @@
+cubes:
+  - name: order_reviews
+    sql_table: "\"RAW\".\"ORDER_REVIEWS\""
+    data_source: default
+
+    joins:
+      - name: orders
+        sql: "{CUBE.order_id} = {orders.order_id}"
+        relationship: many_to_one
+
+    dimensions:
+      - name: order_id
+        sql: "{CUBE}.\"ORDER_ID\""
+        type: string
+
+      - name: review_comment_message
+        sql: "{CUBE}.\"REVIEW_COMMENT_MESSAGE\""
+        type: string
+
+      - name: review_comment_title
+        sql: "{CUBE}.\"REVIEW_COMMENT_TITLE\""
+        type: string
+
+      - name: review_id
+        sql: "{CUBE}.\"REVIEW_ID\""
+        type: string
+
+      - name: review_answer_timestamp
+        sql: "{CUBE}.\"REVIEW_ANSWER_TIMESTAMP\""
+        type: time
+
+      - name: review_creation_date
+        sql: "{CUBE}.\"REVIEW_CREATION_DATE\""
+        type: time
+
+    measures:
+      - name: count
+        type: count
+
+    pre_aggregations:
+      # Pre-aggregation definitions go here.
+      # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
+

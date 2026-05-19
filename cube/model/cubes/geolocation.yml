@@ -1,0 +1,28 @@
+cubes:
+  - name: geolocation
+    sql_table: "\"RAW\".\"GEOLOCATION\""
+    data_source: default
+
+    joins: []
+
+    dimensions:
+      - name: geolocation_city
+        sql: "{CUBE}.\"GEOLOCATION_CITY\""
+        type: string
+
+      - name: geolocation_state
+        sql: "{CUBE}.\"GEOLOCATION_STATE\""
+        type: string
+
+      - name: geolocation_zip_code_prefix
+        sql: "{CUBE}.\"GEOLOCATION_ZIP_CODE_PREFIX\""
+        type: string
+
+    measures:
+      - name: count
+        type: count
+
+    pre_aggregations:
+      # Pre-aggregation definitions go here.
+      # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
+
