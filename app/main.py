@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -10,6 +12,12 @@ from agent.graph import answer_question
 st.set_page_config(page_title="Data Assistant", layout="wide")
 st.title("Data Assistant")
 st.caption("First POC slice: governed monthly merchandise revenue from Cube.")
+
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = str(uuid.uuid4())
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 
 def render_chart(rows: list[dict]) -> None:
@@ -44,9 +52,6 @@ def render_answer(answer: dict) -> None:
             st.json(answer["query"])
 
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         if message["role"] == "assistant":
@@ -61,7 +66,7 @@ if prompt := st.chat_input("Ask: What is the total revenue per month?"):
 
     with st.chat_message("assistant"):
         with st.spinner("Querying Cube..."):
-            answer = answer_question(prompt)
+            answer = answer_question(prompt, thread_id=st.session_state.thread_id)
         render_answer(answer)
 
     st.session_state.messages.append({"role": "assistant", "content": answer})

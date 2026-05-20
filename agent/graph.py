@@ -1,58 +1,60 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
 from langchain.agents import create_agent
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 
-from agent.cube_client import CubeClient, SupportsCubeQueries
+from agent.cube_client import SupportsCubeQueries
+from agent.memory import get_checkpointer
+from agent.prompt import SYSTEM_PROMPT
 from agent.tools import make_tools
 
 
-SYSTEM_PROMPT = """You are a data analyst assistant backed by a governed semantic layer (Cube) connected to Snowflake.
-
-Rules (follow in order):
-1. Always call list_cubes first when you are unsure which measures or dimensions are available.
-2. Use only member names that appear in the list_cubes response. Never invent or guess metric names.
-3. Refuse any question that asks for predictions, forecasts, or projections. State clearly what you cannot do; attempt no workaround.
-4. Every successful answer must state which measure(s) and dimension(s) were queried.
-5. If a requested metric is not in the semantic layer, say so. Never write SQL as a workaround.
-6. If a tool returns a JSON object with an "error" key, stop immediately, do not call any more tools, and tell the user the data service is currently unavailable and they should try again later."""
-
-
-def default_cube_client() -> CubeClient:
-    return CubeClient(base_url=os.environ["CUBE_API_URL"], token=os.environ["CUBE_API_TOKEN"])
-
-
-def build_graph(cube_client: SupportsCubeQueries | None = None, model: Any = None):
+def build_graph(
+    cube_client: SupportsCubeQueries | None = None,
+    model: Any = None,
+    checkpointer: Any = None,
+):
     llm = model or ChatAnthropic(model="claude-sonnet-4-6", temperature=0)  # type: ignore[call-arg]
     tools = make_tools(cube_client)
-    return create_agent(llm, tools=tools, system_prompt=SYSTEM_PROMPT)
+    cp = checkpointer if checkpointer is not None else get_checkpointer()
+    return create_agent(llm, tools=tools, system_prompt=SYSTEM_PROMPT, checkpointer=cp)
 
 
 def answer_question(
     question: str,
+    thread_id: str = "default",
     cube_client: SupportsCubeQueries | None = None,
     model: Any = None,
+    checkpointer: Any = None,
 ) -> dict[str, Any]:
-    graph = build_graph(cube_client=cube_client, model=model)
-    state = graph.invoke({"messages": [HumanMessage(content=question)]})
+    graph = build_graph(cube_client=cube_client, model=model, checkpointer=checkpointer)
+    config = RunnableConfig(configurable={"thread_id": thread_id})
+    state = graph.invoke({"messages": [HumanMessage(content=question)]}, config=config)
     return _extract_answer(state)
 
 
 def _extract_answer(state: dict[str, Any]) -> dict[str, Any]:
     messages = state.get("messages", [])
 
+    # Scope extraction to the current turn (after the last HumanMessage).
+    last_human_pos = next(
+        (len(messages) - 1 - i for i, m in enumerate(reversed(messages)) if isinstance(m, HumanMessage)),
+        None,
+    )
+    current_turn = messages[last_human_pos:] if last_human_pos is not None else messages
+
     text = next(
-        (m.content for m in reversed(messages) if isinstance(m, AIMessage) and not m.tool_calls),
+        (m.content for m in reversed(current_turn) if isinstance(m, AIMessage) and not m.tool_calls),
         "",
     )
 
     data_msg = next(
-        (m for m in reversed(messages) if isinstance(m, ToolMessage) and m.name == "query_cube"),
+        (m for m in reversed(current_turn) if isinstance(m, ToolMessage) and m.name == "query_cube"),
         None,
     )
 
@@ -63,17 +65,22 @@ def _extract_answer(state: dict[str, Any]) -> dict[str, Any]:
         content = data_msg.content
         if isinstance(content, str):
             try:
-                data = json.loads(content)
+                parsed = json.loads(content)
+                # Only treat the response as data when it is a list of rows.
+                # A dict signals an error payload returned by the tool.
+                if isinstance(parsed, list):
+                    data = parsed
             except json.JSONDecodeError:
-                data = None
+                pass
 
-        for msg in reversed(messages):
-            if isinstance(msg, AIMessage) and msg.tool_calls:
-                for tc in msg.tool_calls:
-                    if tc.get("id") == data_msg.tool_call_id:
-                        query = tc["args"]
+        if data is not None:
+            for msg in reversed(current_turn):
+                if isinstance(msg, AIMessage) and msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        if tc.get("id") == data_msg.tool_call_id:
+                            query = tc["args"]
+                            break
+                    if query is not None:
                         break
-                if query is not None:
-                    break
 
     return {"text": text, "data": data, "query": query}
