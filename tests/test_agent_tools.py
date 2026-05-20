@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import pytest
+import json
 
 from agent.cube_client import CubeServiceError
 from agent.tools import make_tools
@@ -44,7 +44,7 @@ def test_list_cubes_tool_calls_client_and_returns_metadata():
 
     result = list_cubes.invoke({})
 
-    assert result == metadata
+    assert json.loads(result) == metadata
     assert fake.list_cubes_calls == 1
 
 
@@ -61,16 +61,27 @@ def test_query_cube_tool_passes_args_to_client_and_returns_rows():
         "limit": 500,
     })
 
-    assert result == rows
+    assert json.loads(result) == rows
     assert fake.query_cube_calls[0]["measures"] == ["order_items.total_revenue"]
     assert fake.query_cube_calls[0]["time_dimensions"][0]["granularity"] == "month"
 
 
-def test_query_cube_tool_propagates_cube_service_error():
+def test_list_cubes_tool_returns_error_json_when_cube_unavailable():
+    list_cubes = get_tool(make_tools(ErrorCubeClient()), "list_cubes")
+
+    result = list_cubes.invoke({})
+
+    parsed = json.loads(result)
+    assert "error" in parsed
+
+
+def test_query_cube_tool_returns_error_json_when_cube_unavailable():
     query_cube = get_tool(make_tools(ErrorCubeClient()), "query_cube")
 
-    with pytest.raises(CubeServiceError):
-        query_cube.invoke({"measures": ["order_items.total_revenue"]})
+    result = query_cube.invoke({"measures": ["order_items.total_revenue"]})
+
+    parsed = json.loads(result)
+    assert "error" in parsed
 
 
 def test_make_tools_does_not_require_env_vars_when_client_is_injected(monkeypatch):

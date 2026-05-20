@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 import requests
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 
 class CubeServiceError(RuntimeError):
@@ -32,6 +33,12 @@ class CubeClient(SupportsCubeQueries):
     def headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=8),
+        retry=retry_if_exception_type(CubeServiceError),
+        reraise=True,
+    )
     def list_cubes(self) -> dict[str, Any]:
         try:
             response = requests.get(f"{self.base_url.rstrip('/')}/meta", headers=self.headers, timeout=30)
@@ -40,6 +47,12 @@ class CubeClient(SupportsCubeQueries):
         except requests.RequestException as exc:
             raise CubeServiceError("Cube metadata unavailable") from exc
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=8),
+        retry=retry_if_exception_type(CubeServiceError),
+        reraise=True,
+    )
     def query_cube(
         self,
         measures: list[str],

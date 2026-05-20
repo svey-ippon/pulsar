@@ -72,4 +72,9 @@ cubes:
         type: sum
         description: "Alias for total_revenue — sum of item prices. Prefer total_revenue for revenue reporting."
 
+      - name: average_price
+        sql: "{CUBE}.\"PRICE\""
+        type: avg
+        description: "Average item price (merchandise only, excluding freight)."
+
     pre_aggregations: []
