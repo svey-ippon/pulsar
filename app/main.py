@@ -26,12 +26,12 @@ def render_chart(rows: list[dict]) -> None:
 
     if time_cols and numeric_value_cols:
         fig = px.line(df, x=time_cols[0], y=numeric_value_cols[0], markers=True)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width="stretch")
 
     with st.expander("Show raw data"):
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width="stretch")
 
 
 def render_answer(answer: dict) -> None:

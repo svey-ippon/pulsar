@@ -44,10 +44,10 @@ class FakeStreamlit(ModuleType):
         self.infos.append(value)
 
     def dataframe(self, value, **kwargs):
-        self.dataframes.append(value)
+        self.dataframes.append((value, kwargs))
 
     def plotly_chart(self, value, **kwargs):
-        self.plotly_charts.append(value)
+        self.plotly_charts.append((value, kwargs))
 
     def expander(self, label):
         return Context()
@@ -110,10 +110,12 @@ def test_render_chart_uses_dataframe_for_non_numeric_values(monkeypatch):
 
     assert fake_px.line_calls == []
     assert len(fake_streamlit.dataframes) == 2
+    assert fake_streamlit.dataframes[0][1] == {"width": "stretch"}
+    assert fake_streamlit.dataframes[1][1] == {"width": "stretch"}
 
 
 def test_render_chart_uses_line_chart_for_numeric_values(monkeypatch):
-    module, _fake_streamlit, fake_px = load_app(monkeypatch)
+    module, fake_streamlit, fake_px = load_app(monkeypatch)
 
     module.render_chart(
         [
@@ -125,3 +127,4 @@ def test_render_chart_uses_line_chart_for_numeric_values(monkeypatch):
     )
 
     assert fake_px.line_calls[0][1]["y"] == "order_items.total_revenue"
+    assert fake_streamlit.plotly_charts[0][1] == {"width": "stretch"}

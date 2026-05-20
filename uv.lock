@@ -181,7 +181,7 @@ wheels = [
 [[package]]
 name = "data-agent-poc"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "langgraph" },
     { name = "pandas" },
