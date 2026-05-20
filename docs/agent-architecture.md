@@ -47,11 +47,9 @@ app/main.py
 ### StateGraph and the ReAct loop
 
 LangGraph models an agent as a **StateGraph** — a directed graph where nodes transform a shared
-state object. The state is essentially the conversation message list. At each step the graph
-decides which node to run next based on the current state.
+state object. At each step the graph decides which node to run next based on the current state.
 
-`create_agent` (from `langchain.agents`) builds a pre-configured **ReAct** (Reason + Act)
-StateGraph for us:
+The graph is built manually in `build_graph` using a **ReAct** (Reason + Act) pattern:
 
 ```
 START
@@ -62,8 +60,28 @@ START
   └──── no tool calls ────────────────────────────────────────► END
 ```
 
-Each pass through the agent node sends the full message history to the LLM. The LLM either
-calls a tool (the loop continues) or produces a final text answer (the loop ends).
+Each pass through the agent node sends the full message history (prepended with the system
+prompt) to the LLM. The LLM either calls a tool (the loop continues) or produces a final
+text answer (the loop ends).
+
+### Custom state: `AgentState`
+
+Rather than the default message-only state, the graph uses a typed state with two fields:
+
+```python
+class AgentState(TypedDict):
+    messages:     Annotated[list[BaseMessage], add_messages]   # append reducer
+    cube_results: Annotated[list[QueryResult], operator.add]   # append reducer
+```
+
+`QueryResult` is a typed dict `{"query": dict, "data": list[dict]}`. The `operator.add`
+reducer means every node that returns `{"cube_results": [...]}` **appends** to the list —
+no overwrites. If the agent calls `query_cube` twice in one turn, both results accumulate.
+
+The `tool_node` is the only node that writes to `cube_results`: it parses the JSON string
+returned by `query_cube` and appends a `QueryResult` for every successful list response.
+Error payloads (`{"error": "..."}`) are silently skipped — the error text is already in
+the ToolMessage and will surface in the LLM's final answer.
 
 ### Checkpointer and thread_id
 
@@ -168,35 +186,50 @@ each test gets an isolated, empty checkpointer.
 
 ---
 
-## Answer Extraction (`agent/graph._extract_answer`)
+## Answer Assembly (`agent/graph`)
 
-After the graph finishes, the state contains the full message history for the thread — including
-messages from previous turns. `_extract_answer` must isolate the **current turn** to avoid
-returning stale data.
+After the graph finishes, `answer_question` and `stream_question` assemble the answer from
+two sources in the final state.
 
-### Current-turn scoping
+### `cube_results` — current-turn scoping
 
-The function finds the index of the **last `HumanMessage`** in the message list. Everything
-from that index onward is the current turn.
+`cube_results` accumulates across turns because `MemorySaver` persists the whole state.
+Before each invocation, `_prev_results_count` records how many results already exist in the
+checkpoint. After invocation, only the new slice is returned:
+
+```python
+prev_count = _prev_results_count(graph, config)   # e.g. 1 result from turn 1
+state = graph.invoke(...)
+results = state["cube_results"][prev_count:]       # only turn 2 results
+```
+
+### `_extract_text` — current-turn scoping
+
+The function finds the index of the **last `HumanMessage`** in the message list (which
+includes all prior turns). Everything from that index onward is the current turn.
 
 ```
-[HumanMessage(t1), AIMessage(t1), ToolMessage(t1), AIMessage(t1_answer),
+[HumanMessage(t1), AIMessage(t1_answer),
  HumanMessage(t2), AIMessage(t2_answer)]
-                                  ▲
-                            last HumanMessage → current turn starts here
+                   ▲
+             last HumanMessage → current turn starts here
 ```
 
-### Extraction logic
+It returns the last `AIMessage` in the current turn that has no `tool_calls`.
 
-Within the current turn:
+### Answer shape
 
-1. **`text`** — the last `AIMessage` that has no `tool_calls` (the final answer).
-2. **`data`** — the content of the last `ToolMessage` named `"query_cube"`, parsed as JSON.
-   Only set if the parsed result is a `list` (rows). A `dict` indicates an error payload and
-   is discarded — the error text is already in `text`.
-3. **`query`** — the `args` dict from the `AIMessage` tool call whose `id` matches
-   `data_msg.tool_call_id`. This is the exact Cube query that produced the data, exposed for
-   auditability in the UI.
+Both `answer_question` and `stream_question` produce:
+
+```python
+{
+    "text":    str,              # LLM prose answer
+    "results": list[QueryResult] # all query+data pairs from this turn; [] if no Cube call
+}
+```
+
+`QueryResult = {"query": dict, "data": list[dict]}`. Multiple results appear when the agent
+calls `query_cube` more than once in a single turn (e.g. two independent metrics).
 
 ---
 

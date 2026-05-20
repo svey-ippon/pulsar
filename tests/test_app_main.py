@@ -49,7 +49,7 @@ class FakeStreamlit(ModuleType):
     def plotly_chart(self, value, **kwargs):
         self.plotly_charts.append((value, kwargs))
 
-    def expander(self, label):
+    def expander(self, label, **kwargs):
         return Context()
 
     def write(self, value):
@@ -72,10 +72,15 @@ class FakePlotlyExpress(ModuleType):
     def __init__(self):
         super().__init__("plotly.express")
         self.line_calls = []
+        self.bar_calls = []
 
     def line(self, *args, **kwargs):
         self.line_calls.append((args, kwargs))
         return {"kind": "line"}
+
+    def bar(self, *args, **kwargs):
+        self.bar_calls.append((args, kwargs))
+        return {"kind": "bar"}
 
 
 def load_app(monkeypatch):
@@ -91,9 +96,18 @@ def load_app(monkeypatch):
 def test_render_answer_shows_empty_data_message(monkeypatch):
     module, fake_streamlit, _fake_px = load_app(monkeypatch)
 
-    module.render_answer({"text": "No data", "data": []})
+    module.render_answer({"text": "No data", "results": [{"data": [], "query": {}}]})
 
     assert fake_streamlit.infos == ["No rows returned."]
+
+
+def test_render_answer_with_no_results_shows_only_text(monkeypatch):
+    module, fake_streamlit, _fake_px = load_app(monkeypatch)
+
+    module.render_answer({"text": "I cannot answer that.", "results": []})
+
+    assert fake_streamlit.writes == ["I cannot answer that."]
+    assert fake_streamlit.infos == []
 
 
 def test_render_chart_uses_dataframe_for_non_numeric_values(monkeypatch):
@@ -109,9 +123,8 @@ def test_render_chart_uses_dataframe_for_non_numeric_values(monkeypatch):
     )
 
     assert fake_px.line_calls == []
-    assert len(fake_streamlit.dataframes) == 2
+    assert len(fake_streamlit.dataframes) == 1
     assert fake_streamlit.dataframes[0][1] == {"use_container_width": True}
-    assert fake_streamlit.dataframes[1][1] == {"use_container_width": True}
 
 
 def test_render_chart_uses_line_chart_for_numeric_values(monkeypatch):

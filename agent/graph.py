@@ -1,17 +1,29 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Generator
+import operator
+from typing import Annotated, Any, Generator, TypedDict, cast
 
-from langchain.agents import create_agent
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import add_messages
 
 from agent.cube_client import SupportsCubeQueries
 from agent.memory import get_checkpointer
 from agent.prompt import SYSTEM_PROMPT
 from agent.tools import make_tools
+
+
+class QueryResult(TypedDict):
+    query: dict
+    data: list[dict]
+
+
+class AgentState(TypedDict):
+    messages: Annotated[list[BaseMessage], add_messages]
+    cube_results: Annotated[list[QueryResult], operator.add]
 
 
 def build_graph(
@@ -21,8 +33,64 @@ def build_graph(
 ):
     llm = model or ChatAnthropic(model="claude-sonnet-4-6", temperature=0)  # type: ignore[call-arg]
     tools = make_tools(cube_client)
+    tools_by_name = {t.name: t for t in tools}
+    llm_with_tools = llm.bind_tools(tools)
+
+    def agent_node(state: AgentState) -> dict:
+        messages = [SystemMessage(content=SYSTEM_PROMPT)] + list(state["messages"])
+        response = llm_with_tools.invoke(messages)
+        return {"messages": [response]}
+
+    def tool_node(state: AgentState) -> dict:
+        last_ai = cast(AIMessage, state["messages"][-1])
+        new_messages: list[BaseMessage] = []
+        new_results: list[QueryResult] = []
+        for tc in last_ai.tool_calls:
+            result_str = tools_by_name[tc["name"]].invoke(tc["args"])
+            new_messages.append(
+                ToolMessage(content=result_str, tool_call_id=tc["id"], name=tc["name"])
+            )
+            if tc["name"] == "query_cube":
+                try:
+                    parsed = json.loads(result_str)
+                    if isinstance(parsed, list):
+                        new_results.append({"query": tc["args"], "data": parsed})
+                except json.JSONDecodeError:
+                    pass
+        return {"messages": new_messages, "cube_results": new_results}
+
+    def should_continue(state: AgentState) -> str:
+        last = state["messages"][-1]
+        return "tools" if (isinstance(last, AIMessage) and last.tool_calls) else END
+
+    graph = StateGraph(AgentState)
+    graph.add_node("agent", agent_node)
+    graph.add_node("tools", tool_node)
+    graph.add_edge(START, "agent")
+    graph.add_conditional_edges("agent", should_continue)
+    graph.add_edge("tools", "agent")
+
     cp = checkpointer if checkpointer is not None else get_checkpointer()
-    return create_agent(llm, tools=tools, system_prompt=SYSTEM_PROMPT, checkpointer=cp)
+    return graph.compile(checkpointer=cp)
+
+
+def _extract_text(messages: list[BaseMessage]) -> str:
+    last_human_pos = next(
+        (len(messages) - 1 - i for i, m in enumerate(reversed(messages)) if isinstance(m, HumanMessage)),
+        None,
+    )
+    current_turn = messages[last_human_pos:] if last_human_pos is not None else messages
+    content = next(
+        (m.content for m in reversed(current_turn) if isinstance(m, AIMessage) and not m.tool_calls),
+        "",
+    )
+    return content if isinstance(content, str) else ""
+
+
+def _prev_results_count(graph: Any, config: RunnableConfig) -> int:
+    """Return the number of cube_results already saved for this thread before the current turn."""
+    checkpoint = graph.get_state(config)
+    return len((checkpoint.values or {}).get("cube_results", []))
 
 
 def answer_question(
@@ -34,56 +102,12 @@ def answer_question(
 ) -> dict[str, Any]:
     graph = build_graph(cube_client=cube_client, model=model, checkpointer=checkpointer)
     config = RunnableConfig(configurable={"thread_id": thread_id})
-    state = graph.invoke({"messages": [HumanMessage(content=question)]}, config=config)
-    return _extract_answer(state)
-
-
-def _extract_answer(state: dict[str, Any]) -> dict[str, Any]:
-    messages = state.get("messages", [])
-
-    # Scope extraction to the current turn (after the last HumanMessage).
-    last_human_pos = next(
-        (len(messages) - 1 - i for i, m in enumerate(reversed(messages)) if isinstance(m, HumanMessage)),
-        None,
-    )
-    current_turn = messages[last_human_pos:] if last_human_pos is not None else messages
-
-    text = next(
-        (m.content for m in reversed(current_turn) if isinstance(m, AIMessage) and not m.tool_calls),
-        "",
-    )
-
-    data_msg = next(
-        (m for m in reversed(current_turn) if isinstance(m, ToolMessage) and m.name == "query_cube"),
-        None,
-    )
-
-    data: list[dict] | None = None
-    query: dict | None = None
-
-    if data_msg is not None:
-        content = data_msg.content
-        if isinstance(content, str):
-            try:
-                parsed = json.loads(content)
-                # Only treat the response as data when it is a list of rows.
-                # A dict signals an error payload returned by the tool.
-                if isinstance(parsed, list):
-                    data = parsed
-            except json.JSONDecodeError:
-                pass
-
-        if data is not None:
-            for msg in reversed(current_turn):
-                if isinstance(msg, AIMessage) and msg.tool_calls:
-                    for tc in msg.tool_calls:
-                        if tc.get("id") == data_msg.tool_call_id:
-                            query = tc["args"]
-                            break
-                    if query is not None:
-                        break
-
-    return {"text": text, "data": data, "query": query}
+    prev_count = _prev_results_count(graph, config)
+    state = graph.invoke({"messages": [HumanMessage(content=question)]}, config=config)  # type: ignore[arg-type]
+    return {
+        "text": _extract_text(state["messages"]),
+        "results": state["cube_results"][prev_count:],
+    }
 
 
 def stream_question(
@@ -101,19 +125,25 @@ def stream_question(
     """
     graph = build_graph(cube_client=cube_client, model=model, checkpointer=checkpointer)
     config = RunnableConfig(configurable={"thread_id": thread_id})
+    prev_count = _prev_results_count(graph, config)
 
     last_state: dict[str, Any] | None = None
     for state in graph.stream(
-        {"messages": [HumanMessage(content=question)]},
+        {"messages": [HumanMessage(content=question)]},  # type: ignore[arg-type]
         config,
         stream_mode="values",
     ):
         last_state = state
-        messages = state.get("messages", [])
-        last_msg = messages[-1] if messages else None
+        last_msg = state["messages"][-1] if state["messages"] else None
         if isinstance(last_msg, AIMessage) and last_msg.tool_calls:
             for tc in last_msg.tool_calls:
                 yield {"type": "tool_call", "tool": tc["name"]}
 
     if last_state is not None:
-        yield {"type": "answer", "answer": _extract_answer(last_state)}
+        yield {
+            "type": "answer",
+            "answer": {
+                "text": _extract_text(last_state["messages"]),
+                "results": last_state["cube_results"][prev_count:],
+            },
+        }

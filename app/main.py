@@ -33,32 +33,31 @@ def render_chart(rows: list[dict]) -> None:
         return
 
     time_cols = [column for column in df.columns if column.endswith(".month")]
-    value_cols = [column for column in df.columns if column not in time_cols]
     numeric_value_cols = [
-        column for column in value_cols if pd.api.types.is_numeric_dtype(df[column])
+        column for column in df.columns
+        if column not in time_cols and pd.api.types.is_numeric_dtype(df[column])
     ]
 
     if time_cols and numeric_value_cols:
-        fig = px.line(df, x=time_cols[0], y=numeric_value_cols[0], markers=True)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(px.line(df, x=time_cols[0], y=numeric_value_cols[0], markers=True), use_container_width=True)
     elif numeric_value_cols:
-        fig = px.bar(df, x=df.columns[0], y=numeric_value_cols[0])
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(px.bar(df, x=df.columns[0], y=numeric_value_cols[0]), use_container_width=True)
     else:
-        st.dataframe(df, use_container_width=True)
-
-    with st.expander("Show raw data"):
         st.dataframe(df, use_container_width=True)
 
 
 def render_answer(answer: dict) -> None:
     st.write(answer["text"])
-    data = answer.get("data")
-    if data is not None:
-        render_chart(data)
-    if answer.get("query"):
-        with st.expander("Show Cube query"):
-            st.json(answer["query"])
+    results = answer.get("results", [])
+    if not results:
+        return
+    with st.expander("Queried Data", expanded=False):
+        for i, result in enumerate(results):
+            label = f"Query {i + 1}" if len(results) > 1 else "Results"
+            with st.expander(label, expanded=True):
+                with st.expander("Query details"):
+                    st.json(result["query"])
+                render_chart(result["data"])
 
 
 for message in st.session_state.messages:
