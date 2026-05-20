@@ -1,231 +1,202 @@
-from agent.graph import build_graph, answer_question
+from __future__ import annotations
+
+import json
+from unittest.mock import MagicMock, patch
+
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+from agent.graph import _extract_answer, answer_question, build_graph
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _tool_call(name: str, args: dict, call_id: str = "call_1") -> dict:
+    return {"id": call_id, "name": name, "args": args, "type": "tool_call"}
+
+
+def _revenue_state(rows: list, query_args: dict, text: str = "Total revenue from order_items.total_revenue.") -> dict:
+    return {
+        "messages": [
+            HumanMessage(content="What is the total revenue per month?"),
+            AIMessage(content="", tool_calls=[_tool_call("list_cubes", {}, "c1")]),
+            ToolMessage(content=json.dumps({"cubes": []}), tool_call_id="c1", name="list_cubes"),
+            AIMessage(content="", tool_calls=[_tool_call("query_cube", query_args, "c2")]),
+            ToolMessage(content=json.dumps(rows), tool_call_id="c2", name="query_cube"),
+            AIMessage(content=text),
+        ]
+    }
+
+
+def _refusal_state(text: str = "I cannot predict future revenue.") -> dict:
+    return {
+        "messages": [
+            HumanMessage(content="Predict next month's revenue"),
+            AIMessage(content=text),
+        ]
+    }
+
+
+SAMPLE_ROWS = [
+    {"orders.order_purchase_timestamp.month": "2017-01-01T00:00:00.000", "order_items.total_revenue": 120.5},
+    {"orders.order_purchase_timestamp.month": "2017-02-01T00:00:00.000", "order_items.total_revenue": 140.0},
+]
+
+SAMPLE_QUERY_ARGS = {
+    "measures": ["order_items.total_revenue"],
+    "time_dimensions": [{"dimension": "orders.order_purchase_timestamp", "granularity": "month"}],
+    "dimensions": [],
+    "filters": [],
+    "limit": 500,
+}
 
 
 class FakeCubeClient:
-    def __init__(self):
-        self.queries = []
-
-    def list_cubes(self):
-        return {
-            "cubes": [
-                {"name": "order_items", "measures": [{"name": "order_items.total_revenue"}], "dimensions": []},
-                {"name": "orders", "measures": [], "dimensions": [{"name": "orders.order_purchase_timestamp"}]},
-            ]
-        }
+    def list_cubes(self) -> dict:
+        return {"cubes": []}
 
     def query_cube(self, measures, dimensions=None, filters=None, time_dimensions=None, limit=500):
-        self.queries.append(
-            {
-                "measures": measures,
-                "dimensions": dimensions or [],
-                "filters": filters or [],
-                "time_dimensions": time_dimensions or [],
-                "limit": limit,
-            }
-        )
-        return [
-            {"orders.order_purchase_timestamp.month": "2017-01-01T00:00:00.000", "order_items.total_revenue": 120.5},
-            {"orders.order_purchase_timestamp.month": "2017-02-01T00:00:00.000", "order_items.total_revenue": 140.0},
+        return []
+
+
+# ---------------------------------------------------------------------------
+# _extract_answer — pure unit tests, no LLM
+# ---------------------------------------------------------------------------
+
+def test_extract_answer_returns_data_query_and_text_when_query_cube_was_called():
+    answer = _extract_answer(_revenue_state(SAMPLE_ROWS, SAMPLE_QUERY_ARGS))
+
+    assert answer["data"] == SAMPLE_ROWS
+    assert answer["query"] == SAMPLE_QUERY_ARGS
+    assert "order_items.total_revenue" in answer["text"]
+
+
+def test_extract_answer_returns_none_data_and_query_when_no_tool_call():
+    answer = _extract_answer(_refusal_state())
+
+    assert answer["data"] is None
+    assert answer["query"] is None
+    assert answer["text"] == "I cannot predict future revenue."
+
+
+def test_extract_answer_uses_last_ai_message_without_tool_calls_as_text():
+    state = {
+        "messages": [
+            HumanMessage(content="question"),
+            AIMessage(content="First attempt.", tool_calls=[_tool_call("list_cubes", {}, "x")]),
+            ToolMessage(content="{}", tool_call_id="x", name="list_cubes"),
+            AIMessage(content="Final answer."),
         ]
-
-
-class FakeCubeClientWithMetadata(FakeCubeClient):
-    def __init__(self, metadata):
-        super().__init__()
-        self.metadata = metadata
-
-    def list_cubes(self):
-        return self.metadata
-
-
-def test_supported_revenue_question_returns_data_and_query_metadata():
-    cube_client = FakeCubeClient()
-
-    response = answer_question("What is the total revenue per month?", cube_client=cube_client)
-
-    assert response["data"] == [
-        {"orders.order_purchase_timestamp.month": "2017-01-01T00:00:00.000", "order_items.total_revenue": 120.5},
-        {"orders.order_purchase_timestamp.month": "2017-02-01T00:00:00.000", "order_items.total_revenue": 140.0},
-    ]
-    assert response["query"] == {
-        "measures": ["order_items.total_revenue"],
-        "dimensions": [],
-        "filters": [],
-        "time_dimensions": [{"dimension": "orders.order_purchase_timestamp", "granularity": "month"}],
-        "limit": 500,
     }
-    assert "sum(order_items.price)" in response["text"]
-    assert cube_client.queries == [response["query"]]
+    answer = _extract_answer(state)
+
+    assert answer["text"] == "Final answer."
 
 
-def test_missing_revenue_measure_is_reported_unavailable_without_querying_cube():
-    cube_client = FakeCubeClientWithMetadata(
-        {
-            "cubes": [
-                {"name": "order_items", "measures": [], "dimensions": []},
-                {"name": "orders", "measures": [], "dimensions": [{"name": "orders.order_purchase_timestamp"}]},
-            ]
-        }
-    )
+def test_extract_answer_returns_empty_text_and_nones_for_empty_message_list():
+    answer = _extract_answer({"messages": []})
 
-    response = answer_question("What is the total revenue per month?", cube_client=cube_client)
+    assert answer == {"text": "", "data": None, "query": None}
 
-    assert response == {
-        "text": "The requested metric or dimension is not available in the Cube semantic layer.",
-        "data": None,
-        "query": None,
+
+def test_extract_answer_ignores_list_cubes_tool_message_for_data():
+    state = {
+        "messages": [
+            HumanMessage(content="question"),
+            AIMessage(content="", tool_calls=[_tool_call("list_cubes", {}, "c1")]),
+            ToolMessage(content=json.dumps({"cubes": []}), tool_call_id="c1", name="list_cubes"),
+            AIMessage(content="The metric is not available."),
+        ]
     }
-    assert cube_client.queries == []
+    answer = _extract_answer(state)
+
+    assert answer["data"] is None
+    assert answer["query"] is None
 
 
-def test_missing_order_month_dimension_is_reported_unavailable_without_querying_cube():
-    cube_client = FakeCubeClientWithMetadata(
-        {
-            "cubes": [
-                {"name": "order_items", "measures": [{"name": "order_items.total_revenue"}], "dimensions": []},
-                {"name": "orders", "measures": [], "dimensions": []},
-            ]
-        }
-    )
+# ---------------------------------------------------------------------------
+# answer_question — uses patched build_graph to isolate from LLM + Cube
+# ---------------------------------------------------------------------------
 
-    response = answer_question("What is the total revenue per month?", cube_client=cube_client)
+def test_supported_revenue_question_returns_data_query_and_text():
+    mock_graph = MagicMock()
+    mock_graph.invoke.return_value = _revenue_state(SAMPLE_ROWS, SAMPLE_QUERY_ARGS)
 
-    assert response == {
-        "text": "The requested metric or dimension is not available in the Cube semantic layer.",
-        "data": None,
-        "query": None,
+    with patch("agent.graph.build_graph", return_value=mock_graph):
+        answer = answer_question("What is the total revenue per month?", cube_client=FakeCubeClient())
+
+    assert answer["data"] == SAMPLE_ROWS
+    assert answer["query"]["measures"] == ["order_items.total_revenue"]
+    assert answer["text"] != ""
+
+
+def test_refusal_question_returns_no_data_no_query():
+    mock_graph = MagicMock()
+    mock_graph.invoke.return_value = _refusal_state("I cannot predict future revenue.")
+
+    with patch("agent.graph.build_graph", return_value=mock_graph):
+        answer = answer_question("Predict next month's revenue", cube_client=FakeCubeClient())
+
+    assert answer["data"] is None
+    assert answer["query"] is None
+    assert answer["text"] != ""
+
+
+def test_unsupported_question_returns_no_data():
+    mock_graph = MagicMock()
+    mock_graph.invoke.return_value = {
+        "messages": [
+            HumanMessage(content="What can you do?"),
+            AIMessage(content="I only support governed historical metrics from Cube."),
+        ]
     }
-    assert cube_client.queries == []
+
+    with patch("agent.graph.build_graph", return_value=mock_graph):
+        answer = answer_question("What can you do?", cube_client=FakeCubeClient())
+
+    assert answer["data"] is None
+    assert answer["query"] is None
 
 
-def test_metadata_descriptions_do_not_satisfy_required_members():
-    cube_client = FakeCubeClientWithMetadata(
-        {
-            "cubes": [
-                {
-                    "name": "order_items",
-                    "measures": [],
-                    "dimensions": [],
-                    "description": "order_items.total_revenue",
-                },
-                {
-                    "name": "orders",
-                    "measures": [],
-                    "dimensions": [],
-                    "description": "orders.order_purchase_timestamp",
-                },
-            ]
-        }
-    )
-
-    response = answer_question("What is the total revenue per month?", cube_client=cube_client)
-
-    assert response == {
-        "text": "The requested metric or dimension is not available in the Cube semantic layer.",
-        "data": None,
-        "query": None,
-    }
-    assert cube_client.queries == []
-
-
-def test_prediction_question_is_refused_without_querying_cube():
-    cube_client = FakeCubeClient()
-
-    response = answer_question("Predict next month's revenue.", cube_client=cube_client)
-
-    assert response == {
-        "text": "I can't predict future revenue in this POC. I can only return governed historical metrics available in Cube.",
-        "data": None,
-        "query": None,
-    }
-    assert cube_client.queries == []
-
-
-def test_forecast_revenue_per_month_is_refused_without_querying_cube():
-    cube_client = FakeCubeClient()
-
-    response = answer_question("Forecast revenue per month", cube_client=cube_client)
-
-    assert response == {
-        "text": "I can't predict future revenue in this POC. I can only return governed historical metrics available in Cube.",
-        "data": None,
-        "query": None,
-    }
-    assert cube_client.queries == []
-
-
-def test_next_month_revenue_question_is_refused_without_cube_environment(monkeypatch):
+def test_answer_question_does_not_require_env_vars_when_model_and_client_are_injected(monkeypatch):
     monkeypatch.delenv("CUBE_API_URL", raising=False)
     monkeypatch.delenv("CUBE_API_TOKEN", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    response = answer_question("What will revenue be next month?")
+    mock_graph = MagicMock()
+    mock_graph.invoke.return_value = _refusal_state()
 
-    assert response == {
-        "text": "I can't predict future revenue in this POC. I can only return governed historical metrics available in Cube.",
-        "data": None,
-        "query": None,
+    with patch("agent.graph.build_graph", return_value=mock_graph):
+        answer = answer_question("Predict revenue", cube_client=FakeCubeClient(), model=MagicMock())
+
+    assert answer is not None
+
+
+def test_data_is_none_when_query_cube_was_not_called():
+    mock_graph = MagicMock()
+    mock_graph.invoke.return_value = {
+        "messages": [
+            HumanMessage(content="Hello"),
+            AIMessage(content="I support only historical revenue questions from Cube."),
+        ]
     }
 
+    with patch("agent.graph.build_graph", return_value=mock_graph):
+        answer = answer_question("Hello", cube_client=FakeCubeClient())
 
-def test_prediction_question_is_refused_without_cube_environment(monkeypatch):
-    monkeypatch.delenv("CUBE_API_URL", raising=False)
-    monkeypatch.delenv("CUBE_API_TOKEN", raising=False)
-
-    response = answer_question("Predict next month's revenue.")
-
-    assert response == {
-        "text": "I can't predict future revenue in this POC. I can only return governed historical metrics available in Cube.",
-        "data": None,
-        "query": None,
-    }
+    assert answer["data"] is None
+    assert answer["query"] is None
 
 
-def test_unsupported_question_is_refused_without_cube_environment(monkeypatch):
-    monkeypatch.delenv("CUBE_API_URL", raising=False)
-    monkeypatch.delenv("CUBE_API_TOKEN", raising=False)
+# ---------------------------------------------------------------------------
+# build_graph — construction smoke test
+# ---------------------------------------------------------------------------
 
-    response = answer_question("What can you do?")
+def test_graph_can_be_built_with_injected_dependencies():
+    with patch("agent.graph.create_agent") as mock_create:
+        mock_create.return_value = MagicMock()
+        graph = build_graph(cube_client=FakeCubeClient(), model=MagicMock())
 
-    assert response == {
-        "text": "This POC currently supports only historical total revenue per month from the Cube semantic layer.",
-        "data": None,
-        "query": None,
-    }
-
-
-def test_graph_refuses_prediction_question_without_cube_environment(monkeypatch):
-    monkeypatch.delenv("CUBE_API_URL", raising=False)
-    monkeypatch.delenv("CUBE_API_TOKEN", raising=False)
-
-    graph = build_graph()
-
-    response = graph.invoke({"question": "Predict next month revenue."})
-
-    assert response["answer"] == {
-        "text": "I can't predict future revenue in this POC. I can only return governed historical metrics available in Cube.",
-        "data": None,
-        "query": None,
-    }
-
-
-def test_graph_refuses_unsupported_question_without_cube_environment(monkeypatch):
-    monkeypatch.delenv("CUBE_API_URL", raising=False)
-    monkeypatch.delenv("CUBE_API_TOKEN", raising=False)
-
-    graph = build_graph()
-
-    response = graph.invoke({"question": "What can you do?"})
-
-    assert response["answer"] == {
-        "text": "This POC currently supports only historical total revenue per month from the Cube semantic layer.",
-        "data": None,
-        "query": None,
-    }
-
-
-def test_graph_can_be_built():
-    graph = build_graph(FakeCubeClient())
-
-    response = graph.invoke({"question": "What is the total revenue per month?"})
-
-    assert response["answer"]["query"]["measures"] == ["order_items.total_revenue"]
+    assert graph is not None
+    mock_create.assert_called_once()

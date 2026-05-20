@@ -2,27 +2,30 @@ cubes:
   - name: products
     sql_table: ECOMMERCE_DB.MARTS.PRODUCTS
     data_source: default
+    description: "Products sold on Olist. One row per product. Category names are in Portuguese; join to product_category_name_translation for English equivalents."
 
     joins: []
 
     dimensions:
-      - name: product_category_name
-        sql: "{CUBE}.\"PRODUCT_CATEGORY_NAME\""
-        type: string
-
       - name: product_id
         sql: "{CUBE}.\"PRODUCT_ID\""
         type: string
         primary_key: true
+        description: "Unique product identifier."
+
+      - name: product_category_name
+        sql: "{CUBE}.\"PRODUCT_CATEGORY_NAME\""
+        type: string
+        description: "Root product category in Portuguese. Join to product_category_name_translation for the English name."
 
     measures:
       - name: count
         type: count
+        description: "Number of distinct products."
 
       - name: product_photos_qty
         sql: "{CUBE}.\"PRODUCT_PHOTOS_QTY\""
         type: sum
+        description: "Total number of published product listing photos."
 
-    pre_aggregations:
-      # Pre-aggregation definitions go here.
-      # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
+    pre_aggregations: []

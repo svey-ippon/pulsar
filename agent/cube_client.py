@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 import requests
 
@@ -10,8 +10,21 @@ class CubeServiceError(RuntimeError):
     """Raised when Cube cannot serve metadata or data."""
 
 
+class SupportsCubeQueries(Protocol):
+    def list_cubes(self) -> dict[str, Any]: ...
+
+    def query_cube(
+        self,
+        measures: list[str],
+        dimensions: list[str] | None = None,
+        filters: list[dict[str, Any]] | None = None,
+        time_dimensions: list[dict[str, Any]] | None = None,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]: ...
+
+
 @dataclass(frozen=True)
-class CubeClient:
+class CubeClient(SupportsCubeQueries):
     base_url: str
     token: str
 

@@ -2,6 +2,11 @@ cubes:
   - name: order_payments
     sql_table: ECOMMERCE_DB.MARTS.ORDER_PAYMENTS
     data_source: default
+    description: >
+      Payment transactions for each order. One row per payment method used.
+      An order may have multiple rows if the customer split payment across
+      methods (e.g. credit card + voucher); sum payment_value across rows
+      to get the true order total, which includes freight and adjustments.
 
     joins:
       - name: orders
@@ -17,19 +22,21 @@ cubes:
       - name: order_id
         sql: "{CUBE}.\"ORDER_ID\""
         type: string
+        description: "Foreign key to the orders cube."
 
       - name: payment_type
         sql: "{CUBE}.\"PAYMENT_TYPE\""
         type: string
+        description: "Payment method chosen by the customer (credit_card, boleto, voucher, debit_card, etc.)."
 
     measures:
       - name: count
         type: count
+        description: "Number of payment rows. One order can have multiple rows (split payments), so this is not equivalent to order count."
 
       - name: payment_value
         sql: "{CUBE}.\"PAYMENT_VALUE\""
         type: sum
+        description: "Total transaction value including freight and adjustments. Unlike order_items.total_revenue, this reflects what the customer actually paid."
 
-    pre_aggregations:
-      # Pre-aggregation definitions go here.
-      # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
+    pre_aggregations: []

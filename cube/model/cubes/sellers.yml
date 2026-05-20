@@ -2,31 +2,35 @@ cubes:
   - name: sellers
     sql_table: ECOMMERCE_DB.MARTS.SELLERS
     data_source: default
+    description: "Sellers that fulfil orders on Olist. One row per seller. Use to filter or group metrics by seller location."
 
     joins: []
 
     dimensions:
-      - name: seller_city
-        sql: "{CUBE}.\"SELLER_CITY\""
-        type: string
-
       - name: seller_id
         sql: "{CUBE}.\"SELLER_ID\""
         type: string
         primary_key: true
-
-      - name: seller_state
-        sql: "{CUBE}.\"SELLER_STATE\""
-        type: string
+        description: "Unique seller identifier."
 
       - name: seller_zip_code_prefix
         sql: "{CUBE}.\"SELLER_ZIP_CODE_PREFIX\""
         type: string
+        description: "First five digits of the seller's zip code."
+
+      - name: seller_city
+        sql: "{CUBE}.\"SELLER_CITY\""
+        type: string
+        description: "Seller's city."
+
+      - name: seller_state
+        sql: "{CUBE}.\"SELLER_STATE\""
+        type: string
+        description: "Seller's state (two-letter Brazilian state code)."
 
     measures:
       - name: count
         type: count
+        description: "Number of distinct sellers."
 
-    pre_aggregations:
-      # Pre-aggregation definitions go here.
-      # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
+    pre_aggregations: []

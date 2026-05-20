@@ -2,35 +2,43 @@ cubes:
   - name: customers
     sql_table: ECOMMERCE_DB.MARTS.CUSTOMERS
     data_source: default
+    description: >
+      Customer location and identity data. Note: customer_id is order-scoped —
+      the same physical customer gets a new customer_id for each order.
+      Use customer_unique_id to count distinct returning customers across orders.
 
     joins: []
 
     dimensions:
-      - name: customer_city
-        sql: "{CUBE}.\"CUSTOMER_CITY\""
-        type: string
-
       - name: customer_id
         sql: "{CUBE}.\"CUSTOMER_ID\""
         type: string
         primary_key: true
-
-      - name: customer_state
-        sql: "{CUBE}.\"CUSTOMER_STATE\""
-        type: string
+        description: "Order-scoped customer key; joins to orders.customer_id. Not stable across orders — use customer_unique_id for repeat-purchase analysis."
 
       - name: customer_unique_id
         sql: "{CUBE}.\"CUSTOMER_UNIQUE_ID\""
         type: string
+        description: "Stable identifier for the physical customer. Use this to count unique buyers or detect repeat purchases."
 
       - name: customer_zip_code_prefix
         sql: "{CUBE}.\"CUSTOMER_ZIP_CODE_PREFIX\""
         type: string
+        description: "First five digits of the customer's zip code."
+
+      - name: customer_city
+        sql: "{CUBE}.\"CUSTOMER_CITY\""
+        type: string
+        description: "Customer's city."
+
+      - name: customer_state
+        sql: "{CUBE}.\"CUSTOMER_STATE\""
+        type: string
+        description: "Customer's state (two-letter Brazilian state code)."
 
     measures:
       - name: count
         type: count
+        description: "Number of customer records. Because customer_id is order-scoped, this equals the number of orders placed, not unique buyers. Use customer_unique_id for true unique buyer counts."
 
-    pre_aggregations:
-      # Pre-aggregation definitions go here.
-      # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
+    pre_aggregations: []

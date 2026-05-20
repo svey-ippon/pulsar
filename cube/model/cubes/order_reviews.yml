@@ -2,6 +2,10 @@ cubes:
   - name: order_reviews
     sql_table: ECOMMERCE_DB.MARTS.ORDER_REVIEWS
     data_source: default
+    description: >
+      Customer satisfaction surveys sent after order delivery (or estimated
+      delivery date). One row per review. The survey asks customers to rate
+      their experience 1–5. Comments are written in Portuguese.
 
     joins:
       - name: orders
@@ -9,35 +13,40 @@ cubes:
         relationship: many_to_one
 
     dimensions:
-      - name: order_id
-        sql: "{CUBE}.\"ORDER_ID\""
-        type: string
-
-      - name: review_comment_message
-        sql: "{CUBE}.\"REVIEW_COMMENT_MESSAGE\""
-        type: string
-
-      - name: review_comment_title
-        sql: "{CUBE}.\"REVIEW_COMMENT_TITLE\""
-        type: string
-
       - name: review_id
         sql: "{CUBE}.\"REVIEW_ID\""
         type: string
         primary_key: true
+        description: "Unique review identifier."
 
-      - name: review_answer_timestamp
-        sql: "{CUBE}.\"REVIEW_ANSWER_TIMESTAMP\""
-        type: time
+      - name: order_id
+        sql: "{CUBE}.\"ORDER_ID\""
+        type: string
+        description: "Foreign key to the orders cube."
+
+      - name: review_comment_title
+        sql: "{CUBE}.\"REVIEW_COMMENT_TITLE\""
+        type: string
+        description: "Optional title left by the customer, in Portuguese."
+
+      - name: review_comment_message
+        sql: "{CUBE}.\"REVIEW_COMMENT_MESSAGE\""
+        type: string
+        description: "Optional free-text review message from the customer, in Portuguese."
 
       - name: review_creation_date
         sql: "{CUBE}.\"REVIEW_CREATION_DATE\""
         type: time
+        description: "Date the satisfaction survey was sent to the customer."
+
+      - name: review_answer_timestamp
+        sql: "{CUBE}.\"REVIEW_ANSWER_TIMESTAMP\""
+        type: time
+        description: "Timestamp when the customer submitted their survey response."
 
     measures:
       - name: count
         type: count
+        description: "Number of reviews submitted."
 
-    pre_aggregations:
-      # Pre-aggregation definitions go here.
-      # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
+    pre_aggregations: []

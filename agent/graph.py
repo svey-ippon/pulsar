@@ -1,116 +1,78 @@
 from __future__ import annotations
 
+import json
 import os
-from typing import Any, Protocol, TypedDict
+from typing import Any
 
-from langgraph.graph import END, StateGraph
+from langchain.agents import create_agent
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from agent.cube_client import CubeClient, CubeServiceError
-
-
-TOTAL_REVENUE_QUERY = {
-    "measures": ["order_items.total_revenue"],
-    "dimensions": [],
-    "filters": [],
-    "time_dimensions": [{"dimension": "orders.order_purchase_timestamp", "granularity": "month"}],
-    "limit": 500,
-}
-
-REQUIRED_CUBE_MEMBERS = ["order_items.total_revenue", "orders.order_purchase_timestamp"]
-MEMBER_IDENTITY_KEYS = {"name", "member", "shortTitle"}
-PREDICTIVE_TERMS = ("predict", "forecast", "projection", "project", "next month")
+from agent.cube_client import CubeClient, SupportsCubeQueries
+from agent.tools import make_tools
 
 
-class SupportsCubeQueries(Protocol):
-    def list_cubes(self) -> dict[str, Any]: ...
+SYSTEM_PROMPT = """You are a data analyst assistant backed by a governed semantic layer (Cube) connected to Snowflake.
 
-    def query_cube(
-        self,
-        measures: list[str],
-        dimensions: list[str] | None = None,
-        filters: list[dict[str, Any]] | None = None,
-        time_dimensions: list[dict[str, Any]] | None = None,
-        limit: int = 500,
-    ) -> list[dict[str, Any]]: ...
-
-
-class AgentState(TypedDict, total=False):
-    question: str
-    answer: dict[str, Any]
+Rules (follow in order):
+1. Always call list_cubes first when you are unsure which measures or dimensions are available.
+2. Use only member names that appear in the list_cubes response. Never invent or guess metric names.
+3. Refuse any question that asks for predictions, forecasts, or projections. State clearly what you cannot do; attempt no workaround.
+4. Every successful answer must state which measure(s) and dimension(s) were queried.
+5. If a requested metric is not in the semantic layer, say so. Never write SQL as a workaround."""
 
 
 def default_cube_client() -> CubeClient:
     return CubeClient(base_url=os.environ["CUBE_API_URL"], token=os.environ["CUBE_API_TOKEN"])
 
 
-def is_supported_revenue_question(question: str) -> bool:
-    normalized = question.strip().lower()
-    return "revenue" in normalized and "month" in normalized
+def build_graph(cube_client: SupportsCubeQueries | None = None, model: Any = None):
+    llm = model or ChatAnthropic(model="claude-sonnet-4-6", temperature=0)  # type: ignore[call-arg]
+    tools = make_tools(cube_client)
+    return create_agent(llm, tools=tools, system_prompt=SYSTEM_PROMPT)
 
 
-def is_predictive_question(question: str) -> bool:
-    normalized = question.strip().lower()
-    return any(term in normalized for term in PREDICTIVE_TERMS)
+def answer_question(
+    question: str,
+    cube_client: SupportsCubeQueries | None = None,
+    model: Any = None,
+) -> dict[str, Any]:
+    graph = build_graph(cube_client=cube_client, model=model)
+    state = graph.invoke({"messages": [HumanMessage(content=question)]})
+    return _extract_answer(state)
 
 
-def metadata_contains_member(metadata: Any, member: str) -> bool:
-    if isinstance(metadata, dict):
-        return any(
-            (key in MEMBER_IDENTITY_KEYS and value == member)
-            or metadata_contains_member(value, member)
-            for key, value in metadata.items()
-        )
-    if isinstance(metadata, list):
-        return any(metadata_contains_member(value, member) for value in metadata)
-    return False
+def _extract_answer(state: dict[str, Any]) -> dict[str, Any]:
+    messages = state.get("messages", [])
 
+    text = next(
+        (m.content for m in reversed(messages) if isinstance(m, AIMessage) and not m.tool_calls),
+        "",
+    )
 
-def metadata_supports_total_revenue_query(metadata: dict[str, Any]) -> bool:
-    return all(metadata_contains_member(metadata, member) for member in REQUIRED_CUBE_MEMBERS)
+    data_msg = next(
+        (m for m in reversed(messages) if isinstance(m, ToolMessage) and m.name == "query_cube"),
+        None,
+    )
 
+    data: list[dict] | None = None
+    query: dict | None = None
 
-def answer_question(question: str, cube_client: SupportsCubeQueries | None = None) -> dict[str, Any]:
-    if is_predictive_question(question):
-        return {
-            "text": "I can't predict future revenue in this POC. I can only return governed historical metrics available in Cube.",
-            "data": None,
-            "query": None,
-        }
+    if data_msg is not None:
+        content = data_msg.content
+        if isinstance(content, str):
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError:
+                data = None
 
-    if not is_supported_revenue_question(question):
-        return {
-            "text": "This POC currently supports only historical total revenue per month from the Cube semantic layer.",
-            "data": None,
-            "query": None,
-        }
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage) and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    if tc.get("id") == data_msg.tool_call_id:
+                        query = tc["args"]
+                        break
+                if query is not None:
+                    break
 
-    client = cube_client or default_cube_client()
-
-    try:
-        metadata = client.list_cubes()
-        if not metadata_supports_total_revenue_query(metadata):
-            return {
-                "text": "The requested metric or dimension is not available in the Cube semantic layer.",
-                "data": None,
-                "query": None,
-            }
-        rows = client.query_cube(**TOTAL_REVENUE_QUERY)
-    except CubeServiceError:
-        return {"text": "The data service is unavailable. Please try again later.", "data": None, "query": None}
-
-    return {
-        "text": "Total revenue is calculated as sum(order_items.price), excluding freight and payment adjustments.",
-        "data": rows,
-        "query": TOTAL_REVENUE_QUERY,
-    }
-
-
-def build_graph(cube_client: SupportsCubeQueries | None = None):
-    def answer_node(state: AgentState) -> AgentState:
-        return {"question": state["question"], "answer": answer_question(state["question"], cube_client=cube_client)}
-
-    graph = StateGraph(AgentState)
-    graph.add_node("answer", answer_node)
-    graph.set_entry_point("answer")
-    graph.add_edge("answer", END)
-    return graph.compile()
+    return {"text": text, "data": data, "query": query}

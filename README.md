@@ -35,10 +35,15 @@ docker compose up -d
 
 ## Run Streamlit
 
-Cube reads `CUBEJS_API_SECRET` from `cube/.env`, but Streamlit does not load `cube/.env`. Set `CUBE_API_TOKEN` in the Streamlit process environment to a valid local Cube bearer token/JWT derived from that Cube secret, not to the raw secret. Do not commit `cube/.env` or local tokens.
+Three environment variables are required:
+
+- `CUBE_API_URL` — Cube REST API base URL.
+- `CUBE_API_TOKEN` — valid Cube bearer JWT derived from `CUBEJS_API_SECRET` (not the raw secret). Do not commit.
+- `ANTHROPIC_API_KEY` — Anthropic API key for the Claude LLM. Do not commit.
 
 ```bash
 export CUBE_API_TOKEN="replace-with-valid-local-cube-jwt"
+export ANTHROPIC_API_KEY="replace-with-anthropic-api-key"
 CUBE_API_URL=http://localhost:4000/cubejs-api/v1 uv run streamlit run app/main.py
 ```
 

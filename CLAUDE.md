@@ -69,7 +69,8 @@ uv run python main.py
 
 - `cube/.env` holds Snowflake credentials and `CUBEJS_API_SECRET`. **Never read, print, or commit it.**
 - `CUBE_API_TOKEN` must be a JWT signed from `CUBEJS_API_SECRET`, not the raw secret.
-- `cube/example.env` shows the required variables.
+- `ANTHROPIC_API_KEY` is required by the Streamlit process for the Claude LLM. Never commit it.
+- `cube/example.env` shows the required Cube variables.
 
 ### Cube model
 

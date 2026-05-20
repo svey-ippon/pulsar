@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "Thin-slice self-hosted data agent POC"
 requires-python = ">=3.12"
 dependencies = [
+    "langchain>=1.3.1",
+    "langchain-anthropic>=0.3",
+    "langchain-core>=0.3",
     "langgraph>=0.2",
     "pandas>=2.2",
     "plotly>=5.22",
@@ -14,11 +17,17 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pyright>=1.1",
     "pytest>=8.2",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
 
 [build-system]
 requires = ["hatchling"]

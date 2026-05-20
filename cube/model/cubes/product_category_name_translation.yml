@@ -2,6 +2,7 @@ cubes:
   - name: product_category_name_translation
     sql_table: ECOMMERCE_DB.MARTS.PRODUCT_CATEGORY_NAME_TRANSLATION
     data_source: default
+    description: "Lookup table translating Portuguese product category names to English. Join to products on product_category_name."
 
     joins: []
 
@@ -9,15 +10,16 @@ cubes:
       - name: product_category_name
         sql: "{CUBE}.\"PRODUCT_CATEGORY_NAME\""
         type: string
+        description: "Category name in Portuguese (matches products.product_category_name)."
 
       - name: product_category_name_english
         sql: "{CUBE}.\"PRODUCT_CATEGORY_NAME_ENGLISH\""
         type: string
+        description: "Category name translated to English."
 
     measures:
       - name: count
         type: count
+        description: "Number of category translation entries."
 
-    pre_aggregations:
-      # Pre-aggregation definitions go here.
-      # Learn more in the documentation: https://cube.dev/docs/caching/pre-aggregations/getting-started
+    pre_aggregations: []
