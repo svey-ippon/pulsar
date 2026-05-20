@@ -67,6 +67,13 @@ class FakeStreamlit(ModuleType):
     def spinner(self, label):
         return Context()
 
+    def button(self, label, **kwargs):
+        return False
+
+    @property
+    def sidebar(self):
+        return Context()
+
 
 class FakePlotlyExpress(ModuleType):
     def __init__(self):

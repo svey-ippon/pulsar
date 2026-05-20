@@ -19,6 +19,12 @@ if "thread_id" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+with st.sidebar:
+    if st.button("Clear conversation"):
+        st.session_state.messages = []
+        st.session_state.thread_id = str(uuid.uuid4())
+        st.rerun()
+
 
 _TOOL_LABELS: dict[str, str] = {
     "list_cubes": "Fetching schema...",
