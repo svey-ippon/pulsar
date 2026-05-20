@@ -52,9 +52,7 @@ def render_chart(rows: list[dict]) -> None:
         st.dataframe(df, use_container_width=True)
 
 
-def render_answer(answer: dict) -> None:
-    st.write(answer["text"])
-    results = answer.get("results", [])
+def render_results(results: list[dict]) -> None:
     if not results:
         return
     with st.expander("Queried Data", expanded=False):
@@ -64,6 +62,11 @@ def render_answer(answer: dict) -> None:
                 with st.expander("Query details"):
                     st.json(result["query"])
                 render_chart(result["data"])
+
+
+def render_answer(answer: dict) -> None:
+    st.write(answer["text"])
+    render_results(answer.get("results", []))
 
 
 for message in st.session_state.messages:
@@ -78,17 +81,33 @@ if prompt := st.chat_input("Ask: What is the total revenue per month?"):
     with st.chat_message("user"):
         st.write(prompt)
 
-    answer: dict | None = None
+    question: str = prompt  # narrow str | None → str for the closure below
+    answer_box: list[dict] = []
     with st.chat_message("assistant"):
-        with st.status("Working...", expanded=True) as status:
-            for event in stream_question(prompt, thread_id=st.session_state.thread_id):
+        status = st.status("Working...", expanded=True)
+        generating = [False]
+        streamed_text = [False]
+
+        def event_stream():
+            for event in stream_question(question, thread_id=st.session_state.thread_id):
                 if event["type"] == "tool_call":
                     status.update(label=_TOOL_LABELS.get(event["tool"], f"Calling `{event['tool']}`..."))
+                elif event["type"] == "token":
+                    if not generating[0]:
+                        status.update(label="Generating answer...")
+                        generating[0] = True
+                    streamed_text[0] = True
+                    yield event["content"]
                 elif event["type"] == "answer":
-                    answer = event["answer"]
-            status.update(label="Done", state="complete", expanded=False)
-        if answer is not None:
-            render_answer(answer)
+                    answer_box.append(event["answer"])
 
-    if answer is not None:
-        st.session_state.messages.append({"role": "assistant", "content": answer})
+        st.write_stream(event_stream())
+        status.update(state="complete", expanded=False)
+
+        if answer_box:
+            if not streamed_text[0] and answer_box[0].get("text"):
+                st.write(answer_box[0]["text"])
+            render_results(answer_box[0].get("results", []))
+
+    if answer_box:
+        st.session_state.messages.append({"role": "assistant", "content": answer_box[0]})

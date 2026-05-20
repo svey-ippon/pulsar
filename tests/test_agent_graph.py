@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 
-from agent.graph import _extract_text, answer_question, build_graph
+from agent.graph import _extract_text, answer_question, build_graph, stream_question
 from agent.memory import make_checkpointer
 
 
@@ -100,6 +100,15 @@ def test_extract_text_scopes_to_current_turn():
     assert _extract_text(messages) == "Answer turn 2."
 
 
+def test_extract_text_supports_structured_text_blocks():
+    messages = [
+        HumanMessage(content="question"),
+        AIMessage(content=[{"type": "text", "text": "Structured answer."}]),
+    ]
+
+    assert _extract_text(messages) == "Structured answer."
+
+
 # ---------------------------------------------------------------------------
 # answer_question — uses patched build_graph to isolate from LLM + Cube
 # ---------------------------------------------------------------------------
@@ -184,6 +193,29 @@ def test_answer_question_does_not_require_env_vars_when_model_and_client_are_inj
         answer = answer_question("Predict revenue", cube_client=FakeCubeClient(), model=MagicMock())
 
     assert answer is not None
+
+
+def test_stream_question_yields_structured_text_blocks():
+    class FakeToolBoundModel:
+        def stream(self, messages, config):
+            yield AIMessageChunk(content=[{"type": "text", "text": "Hello", "index": 0}])
+            yield AIMessageChunk(content=[{"type": "text", "text": " world", "index": 0}])
+
+    class FakeModel:
+        def bind_tools(self, tools):
+            return FakeToolBoundModel()
+
+    events = list(
+        stream_question(
+            "question",
+            cube_client=FakeCubeClient(),
+            model=FakeModel(),
+            checkpointer=make_checkpointer(),
+        )
+    )
+
+    assert [event["content"] for event in events if event["type"] == "token"] == ["Hello world"]
+    assert events[-1] == {"type": "answer", "answer": {"text": "Hello world", "results": []}}
 
 
 # ---------------------------------------------------------------------------

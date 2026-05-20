@@ -36,9 +36,14 @@ def build_graph(
     tools_by_name = {t.name: t for t in tools}
     llm_with_tools = llm.bind_tools(tools)
 
-    def agent_node(state: AgentState) -> dict:
+    def agent_node(state: AgentState, config: RunnableConfig) -> dict:
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + list(state["messages"])
-        response = llm_with_tools.invoke(messages)
+        # stream() fires on_chat_model_stream callbacks, which LangGraph captures
+        # as individual ("messages", chunk) events when stream_mode includes "messages".
+        # invoke() is blocking and never fires those callbacks.
+        response: Any = None
+        for chunk in llm_with_tools.stream(messages, config):
+            response = chunk if response is None else response + chunk
         return {"messages": [response]}
 
     def tool_node(state: AgentState) -> dict:
@@ -74,6 +79,24 @@ def build_graph(
     return graph.compile(checkpointer=cp)
 
 
+def _content_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict):
+            block_type = block.get("type")
+            text = block.get("text")
+            if isinstance(text, str) and block_type in {None, "text", "text_delta", "plain_text"}:
+                parts.append(text)
+    return "".join(parts)
+
+
 def _extract_text(messages: list[BaseMessage]) -> str:
     last_human_pos = next(
         (len(messages) - 1 - i for i, m in enumerate(reversed(messages)) if isinstance(m, HumanMessage)),
@@ -84,7 +107,7 @@ def _extract_text(messages: list[BaseMessage]) -> str:
         (m.content for m in reversed(current_turn) if isinstance(m, AIMessage) and not m.tool_calls),
         "",
     )
-    return content if isinstance(content, str) else ""
+    return _content_text(content)
 
 
 def _prev_results_count(graph: Any, config: RunnableConfig) -> int:
@@ -117,27 +140,43 @@ def stream_question(
     model: Any = None,
     checkpointer: Any = None,
 ) -> Generator[dict[str, Any], None, None]:
-    """Yield tool-call events then a final answer event.
+    """Yield tool-call, token, and answer events.
 
     Yields dicts with shape:
-      {"type": "tool_call", "tool": str}   — when the LLM calls a tool
-      {"type": "answer", "answer": dict}   — once, at the end
+      {"type": "tool_call", "tool": str}      — when the LLM invokes a tool
+      {"type": "token",    "content": str}    — one per streamed LLM token
+      {"type": "answer",   "answer": dict}    — once, at the end
     """
     graph = build_graph(cube_client=cube_client, model=model, checkpointer=checkpointer)
     config = RunnableConfig(configurable={"thread_id": thread_id})
     prev_count = _prev_results_count(graph, config)
 
     last_state: dict[str, Any] | None = None
-    for state in graph.stream(
+    for chunk in graph.stream(  # type: ignore[call-overload]
         {"messages": [HumanMessage(content=question)]},  # type: ignore[arg-type]
         config,
-        stream_mode="values",
+        stream_mode=["values", "messages"],
+        version="v2",
     ):
-        last_state = state
-        last_msg = state["messages"][-1] if state["messages"] else None
-        if isinstance(last_msg, AIMessage) and last_msg.tool_calls:
-            for tc in last_msg.tool_calls:
-                yield {"type": "tool_call", "tool": tc["name"]}
+        chunk_type = chunk["type"]
+        chunk_data = chunk["data"]
+        if chunk_type == "values":
+            state_chunk = cast(dict[str, Any], chunk_data)
+            last_state = state_chunk
+            last_msg = state_chunk["messages"][-1] if state_chunk["messages"] else None
+            if isinstance(last_msg, AIMessage) and last_msg.tool_calls:
+                for tc in last_msg.tool_calls:
+                    yield {"type": "tool_call", "tool": tc["name"]}
+        elif chunk_type == "messages":
+            msg_chunk, metadata = cast(tuple[Any, dict[str, Any]], chunk_data)
+            content = _content_text(msg_chunk.content)
+            if (
+                metadata.get("langgraph_node") == "agent"
+                and content
+                and not getattr(msg_chunk, "tool_call_chunks", None)
+                and not getattr(msg_chunk, "tool_calls", None)
+            ):
+                yield {"type": "token", "content": content}
 
     if last_state is not None:
         yield {

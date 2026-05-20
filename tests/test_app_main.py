@@ -67,6 +67,14 @@ class FakeStreamlit(ModuleType):
     def spinner(self, label):
         return Context()
 
+    def write_stream(self, stream):
+        text = "".join(stream)
+        self.writes.append(text)
+        return text
+
+    def status(self, label, **kwargs):
+        return Context()
+
     def button(self, label, **kwargs):
         return False
 
