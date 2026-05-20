@@ -200,7 +200,7 @@ The prompt encodes the agent's constraints as an ordered rule list:
 
 | Rule | Purpose |
 |---|---|
-| 1. Call `list_cubes` first | Prevent the LLM from guessing metric names |
+| 1. Call `list_cubes` only if schema not in history | Prevent the LLM from guessing metric names; avoid redundant schema fetches on follow-up questions |
 | 2. Use only known member names | Prevent hallucinated Cube members |
 | 3. Refuse predictions/forecasts | Hard boundary — no LLM guessing |
 | 4. State queried members in every answer | Auditability for the user |
@@ -217,4 +217,4 @@ The prompt encodes the agent's constraints as an ordered rule list:
 | All sessions share the same process memory | On a multi-worker deployment, sessions routed to different workers lose their history |
 | Single Cube data source | `make_tools` creates one client pointing at one Cube instance; multi-source queries are not supported |
 | No response streaming | `graph.invoke` waits for the full agent loop to complete; the UI shows a spinner, not a streaming response |
-| `list_cubes` is called every turn | The schema is fetched on every question; there is no schema cache |
+| `list_cubes` still called on first turn of each session | The schema is not pre-loaded; the first question always pays one `/meta` round-trip. Subsequent questions reuse the schema already in history. |
