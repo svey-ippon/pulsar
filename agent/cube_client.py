@@ -1,14 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Any, Protocol
 
 import requests
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+logger = logging.getLogger(__name__)
+
 
 class CubeServiceError(RuntimeError):
     """Raised when Cube cannot serve metadata or data."""
+
+
+class CubeQueryError(RuntimeError):
+    """Raised when Cube rejects a query as invalid."""
+
+    def __init__(self, message: str, *, query: dict[str, Any], status_code: int | None = None):
+        super().__init__(message)
+        self.query = query
+        self.status_code = status_code
 
 
 class SupportsCubeQueries(Protocol):
@@ -75,7 +87,36 @@ class CubeClient(SupportsCubeQueries):
                 json={"query": query},
                 timeout=60,
             )
-            response.raise_for_status()
+            if response.status_code >= 400:
+                detail = _response_error_text(response)
+                logger.error(
+                    "Cube rejected query with status %s: %s; query=%s",
+                    response.status_code,
+                    detail,
+                    query,
+                )
+                if 400 <= response.status_code < 500:
+                    raise CubeQueryError(
+                        f"Cube rejected query: {detail}",
+                        query=query,
+                        status_code=response.status_code,
+                    )
+                raise CubeServiceError(f"Cube query unavailable: {detail}")
             return response.json().get("data", [])
         except requests.RequestException as exc:
             raise CubeServiceError("Cube query unavailable") from exc
+
+
+def _response_error_text(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        return getattr(response, "text", "") or getattr(response, "reason", "") or "No response body"
+
+    if isinstance(payload, dict):
+        for key in ("error", "message"):
+            value = payload.get(key)
+            if isinstance(value, str) and value:
+                return value
+        return str(payload)
+    return str(payload)

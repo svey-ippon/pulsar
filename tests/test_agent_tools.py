@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from agent.cube_client import CubeServiceError
+from agent.cube_client import CubeQueryError, CubeServiceError
 from agent.tools import make_tools
 
 
@@ -31,6 +31,24 @@ class ErrorCubeClient:
 
     def query_cube(self, measures, dimensions=None, filters=None, time_dimensions=None, limit=500):
         raise CubeServiceError("unavailable")
+
+
+class InvalidQueryCubeClient:
+    def list_cubes(self):
+        return {"cubes": []}
+
+    def query_cube(self, measures, dimensions=None, filters=None, time_dimensions=None, limit=500):
+        raise CubeQueryError(
+            'Cube rejected query: Invalid query format: "timeDimensions[0].granularity" must be a string',
+            query={
+                "measures": measures,
+                "dimensions": dimensions or [],
+                "filters": filters or [],
+                "timeDimensions": time_dimensions or [],
+                "limit": limit,
+            },
+            status_code=400,
+        )
 
 
 def get_tool(tools, name):
@@ -66,6 +84,29 @@ def test_query_cube_tool_passes_args_to_client_and_returns_rows():
     assert fake.query_cube_calls[0]["time_dimensions"][0]["granularity"] == "month"
 
 
+def test_query_cube_tool_omits_empty_time_granularity_for_date_filter():
+    fake = FakeCubeClient()
+    query_cube = get_tool(make_tools(fake), "query_cube")
+
+    result = query_cube.invoke({
+        "measures": ["order_reviews.avg_review_score"],
+        "time_dimensions": [
+            {
+                "dimension": "order_reviews.review_creation_date",
+                "dateRange": ["2017-01-01", "2017-12-31"],
+            }
+        ],
+    })
+
+    assert json.loads(result) == []
+    assert fake.query_cube_calls[0]["time_dimensions"] == [
+        {
+            "dimension": "order_reviews.review_creation_date",
+            "dateRange": ["2017-01-01", "2017-12-31"],
+        }
+    ]
+
+
 def test_list_cubes_tool_returns_error_json_when_cube_unavailable():
     list_cubes = get_tool(make_tools(ErrorCubeClient()), "list_cubes")
 
@@ -82,6 +123,36 @@ def test_query_cube_tool_returns_error_json_when_cube_unavailable():
 
     parsed = json.loads(result)
     assert "error" in parsed
+
+
+def test_query_cube_tool_returns_cube_query_error_details_to_llm():
+    query_cube = get_tool(make_tools(InvalidQueryCubeClient()), "query_cube")
+
+    result = query_cube.invoke({"measures": ["order_reviews.avg_review_score"]})
+
+    parsed = json.loads(result)
+    assert parsed["error"] == "Cube rejected the query."
+    assert "Invalid query format" in parsed["details"]
+    assert parsed["status_code"] == 400
+    assert parsed["query"]["measures"] == ["order_reviews.avg_review_score"]
+    assert "call query_cube again" in parsed["hint"]
+
+
+def test_query_cube_tool_validation_error_is_returned_to_llm():
+    fake = FakeCubeClient()
+    query_cube = get_tool(make_tools(fake), "query_cube")
+
+    result = query_cube.invoke({
+        "measures": ["order_reviews.avg_review_score"],
+        "time_dimensions": [
+            {"dimension": "order_reviews.review_creation_date", "granularity": None}
+        ],
+    })
+
+    parsed = json.loads(result)
+    assert parsed["error"] == "Invalid query_cube tool arguments."
+    assert parsed["details"][0]["loc"] == ["time_dimensions", 0, "granularity"]
+    assert fake.query_cube_calls == []
 
 
 def test_make_tools_does_not_require_env_vars_when_client_is_injected(monkeypatch):
