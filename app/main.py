@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from agent.graph import answer_question
+from agent.graph import stream_question
 
 
 st.set_page_config(page_title="Data Assistant", layout="wide")
@@ -18,6 +18,12 @@ if "thread_id" not in st.session_state:
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+
+_TOOL_LABELS: dict[str, str] = {
+    "list_cubes": "Fetching schema...",
+    "query_cube": "Querying data...",
+}
 
 
 def render_chart(rows: list[dict]) -> None:
@@ -34,12 +40,15 @@ def render_chart(rows: list[dict]) -> None:
 
     if time_cols and numeric_value_cols:
         fig = px.line(df, x=time_cols[0], y=numeric_value_cols[0], markers=True)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
+    elif numeric_value_cols:
+        fig = px.bar(df, x=df.columns[0], y=numeric_value_cols[0])
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        st.dataframe(df, width="stretch")
+        st.dataframe(df, use_container_width=True)
 
     with st.expander("Show raw data"):
-        st.dataframe(df, width="stretch")
+        st.dataframe(df, use_container_width=True)
 
 
 def render_answer(answer: dict) -> None:
@@ -64,9 +73,17 @@ if prompt := st.chat_input("Ask: What is the total revenue per month?"):
     with st.chat_message("user"):
         st.write(prompt)
 
+    answer: dict | None = None
     with st.chat_message("assistant"):
-        with st.spinner("Querying Cube..."):
-            answer = answer_question(prompt, thread_id=st.session_state.thread_id)
-        render_answer(answer)
+        with st.status("Working...", expanded=True) as status:
+            for event in stream_question(prompt, thread_id=st.session_state.thread_id):
+                if event["type"] == "tool_call":
+                    status.update(label=_TOOL_LABELS.get(event["tool"], f"Calling `{event['tool']}`..."))
+                elif event["type"] == "answer":
+                    answer = event["answer"]
+            status.update(label="Done", state="complete", expanded=False)
+        if answer is not None:
+            render_answer(answer)
 
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+    if answer is not None:
+        st.session_state.messages.append({"role": "assistant", "content": answer})

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Generator
 
 from langchain.agents import create_agent
 from langchain_anthropic import ChatAnthropic
@@ -84,3 +84,36 @@ def _extract_answer(state: dict[str, Any]) -> dict[str, Any]:
                         break
 
     return {"text": text, "data": data, "query": query}
+
+
+def stream_question(
+    question: str,
+    thread_id: str = "default",
+    cube_client: SupportsCubeQueries | None = None,
+    model: Any = None,
+    checkpointer: Any = None,
+) -> Generator[dict[str, Any], None, None]:
+    """Yield tool-call events then a final answer event.
+
+    Yields dicts with shape:
+      {"type": "tool_call", "tool": str}   — when the LLM calls a tool
+      {"type": "answer", "answer": dict}   — once, at the end
+    """
+    graph = build_graph(cube_client=cube_client, model=model, checkpointer=checkpointer)
+    config = RunnableConfig(configurable={"thread_id": thread_id})
+
+    last_state: dict[str, Any] | None = None
+    for state in graph.stream(
+        {"messages": [HumanMessage(content=question)]},
+        config,
+        stream_mode="values",
+    ):
+        last_state = state
+        messages = state.get("messages", [])
+        last_msg = messages[-1] if messages else None
+        if isinstance(last_msg, AIMessage) and last_msg.tool_calls:
+            for tc in last_msg.tool_calls:
+                yield {"type": "tool_call", "tool": tc["name"]}
+
+    if last_state is not None:
+        yield {"type": "answer", "answer": _extract_answer(last_state)}

@@ -44,9 +44,19 @@ cubes:
         type: time
         description: "Timestamp when the customer submitted their survey response."
 
+      - name: review_score
+        sql: "{CUBE}.\"REVIEW_SCORE\""
+        type: number
+        description: "Customer satisfaction rating from 1 (worst) to 5 (best)."
+
     measures:
-      - name: count
+      - name: review_count
         type: count
         description: "Number of reviews submitted."
+
+      - name: avg_review_score
+        sql: "{CUBE}.\"REVIEW_SCORE\""
+        type: avg
+        description: "Average customer satisfaction score (1–5). Use with order or seller dimensions to diagnose satisfaction patterns."
 
     pre_aggregations: []

@@ -3,23 +3,29 @@
 ## Overview
 
 The `agent/` module is a conversational data agent that answers natural-language questions by
-querying the Cube semantic layer. It is built on LangGraph and exposes a single entry point —
-`answer_question` — to the Streamlit UI.
+querying the Cube semantic layer. It is built on LangGraph and exposes two entry points to the
+Streamlit UI: `stream_question` (used by the UI for live status updates) and `answer_question`
+(used by tests).
 
 ```
 app/main.py
     │
-    └── agent.graph.answer_question(question, thread_id)
+    └── agent.graph.stream_question(question, thread_id)
             │
             ├── agent.graph.build_graph()
             │       ├── agent.prompt   → SYSTEM_PROMPT
             │       ├── agent.tools    → [list_cubes, query_cube]
             │       └── agent.memory   → MemorySaver checkpointer
             │
-            └── graph.invoke({"messages": [HumanMessage]}, config)
+            └── graph.stream({"messages": [HumanMessage]}, config, stream_mode="values")
                     │
-                    └── agent.graph._extract_answer(state)
-                            → {"text": str, "data": list | None, "query": dict | None}
+                    ├── yield {"type": "tool_call", "tool": str}   ← one per tool invocation
+                    │         ↓
+                    │     st.status.update("Fetching schema..." | "Querying data...")
+                    │
+                    └── yield {"type": "answer", "answer": dict}   ← once, at the end
+                                └── agent.graph._extract_answer(state)
+                                        → {"text": str, "data": list | None, "query": dict | None}
 ```
 
 ---
@@ -32,7 +38,7 @@ app/main.py
 | `agent/cube_client.py` | HTTP client for Cube (`/meta`, `/load`); retry logic; `SupportsCubeQueries` protocol |
 | `agent/tools.py` | LangChain tool factory — wraps `CubeClient` methods as LLM-callable tools |
 | `agent/memory.py` | `MemorySaver` checkpointer — singleton for production, factory for tests |
-| `agent/graph.py` | Graph construction, `answer_question` entry point, answer extraction |
+| `agent/graph.py` | Graph construction; `stream_question` (UI entry point); `answer_question` (test entry point); answer extraction |
 
 ---
 
@@ -158,7 +164,7 @@ share the same instance; thread isolation is provided by `thread_id`.
 each test gets an isolated, empty checkpointer.
 
 `app/main.py` generates a UUID `thread_id` once per Streamlit session and stores it in
-`st.session_state`. It is passed to `answer_question` on every subsequent message.
+`st.session_state`. It is passed to `stream_question` on every subsequent message.
 
 ---
 
@@ -216,5 +222,5 @@ The prompt encodes the agent's constraints as an ordered rule list:
 | Memory is lost on process restart | `MemorySaver` is in-memory only; no persistent store (Redis, SQLite) is wired up |
 | All sessions share the same process memory | On a multi-worker deployment, sessions routed to different workers lose their history |
 | Single Cube data source | `make_tools` creates one client pointing at one Cube instance; multi-source queries are not supported |
-| No response streaming | `graph.invoke` waits for the full agent loop to complete; the UI shows a spinner, not a streaming response |
+| No LLM token streaming | `graph.stream` surfaces tool-call events (schema fetch, data query) as live status updates, but the final LLM answer still appears all at once — token-by-token streaming requires `astream_events` and async plumbing |
 | `list_cubes` still called on first turn of each session | The schema is not pre-loaded; the first question always pays one `/meta` round-trip. Subsequent questions reuse the schema already in history. |

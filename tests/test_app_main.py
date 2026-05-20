@@ -110,8 +110,8 @@ def test_render_chart_uses_dataframe_for_non_numeric_values(monkeypatch):
 
     assert fake_px.line_calls == []
     assert len(fake_streamlit.dataframes) == 2
-    assert fake_streamlit.dataframes[0][1] == {"width": "stretch"}
-    assert fake_streamlit.dataframes[1][1] == {"width": "stretch"}
+    assert fake_streamlit.dataframes[0][1] == {"use_container_width": True}
+    assert fake_streamlit.dataframes[1][1] == {"use_container_width": True}
 
 
 def test_render_chart_uses_line_chart_for_numeric_values(monkeypatch):
@@ -127,4 +127,4 @@ def test_render_chart_uses_line_chart_for_numeric_values(monkeypatch):
     )
 
     assert fake_px.line_calls[0][1]["y"] == "order_items.total_revenue"
-    assert fake_streamlit.plotly_charts[0][1] == {"width": "stretch"}
+    assert fake_streamlit.plotly_charts[0][1] == {"use_container_width": True}
