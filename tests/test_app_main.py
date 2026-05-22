@@ -81,6 +81,9 @@ class FakeStreamlit(ModuleType):
     def status(self, label, **kwargs):
         return Context()
 
+    def markdown(self, value, **kwargs):
+        self.writes.append(value)
+
     def button(self, label, **kwargs):
         return False
 
@@ -132,6 +135,23 @@ def test_render_answer_with_no_results_shows_only_text(monkeypatch):
 
     assert fake_streamlit.writes == ["I cannot answer that."]
     assert fake_streamlit.infos == []
+
+
+def test_render_answer_with_reasoning_blocks_shows_text_and_tool_calls(monkeypatch):
+    module, fake_streamlit, _fake_px = load_app(monkeypatch)
+
+    blocks = [
+        {"type": "text", "content": "Let me check the schema."},
+        {"type": "tool", "tool": "list_cubes", "args": {}, "result": "[]"},
+        {"type": "tool", "tool": "query_cube", "args": {"measures": ["m"]}, "result": '[{"m": 1}]'},
+    ]
+    module.render_answer({"text": "Here is the answer.", "results": [], "reasoning_blocks": blocks})
+
+    assert "Here is the answer." in fake_streamlit.writes
+    # st.json called for: list_cubes args {}, list_cubes result [], query_cube args {"measures": ["m"]}
+    # query_cube result is a list → st.dataframe, not st.json
+    assert fake_streamlit.json_values == [{}, [], {"measures": ["m"]}]
+    assert len(fake_streamlit.dataframes) == 1
 
 
 def test_render_chart_uses_dataframe_for_non_numeric_values(monkeypatch):

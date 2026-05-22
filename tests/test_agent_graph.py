@@ -221,6 +221,46 @@ def test_stream_question_yields_structured_text_blocks():
     assert events[-1] == {"type": "answer", "answer": {"text": "Hello world", "results": []}}
 
 
+def test_stream_question_emits_tool_call_with_args_and_id_and_tool_result():
+    call_count = [0]
+
+    class FakeToolBoundModel:
+        def stream(self, messages, config):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                yield AIMessageChunk(
+                    content="",
+                    tool_call_chunks=[{"name": "list_cubes", "args": "{}", "id": "tc_1", "index": 0}],
+                )
+            else:
+                yield AIMessageChunk(content="Done.")
+
+    class FakeModel:
+        def bind_tools(self, tools):
+            return FakeToolBoundModel()
+
+    events = list(
+        stream_question(
+            "question",
+            cube_client=FakeCubeClient(),
+            model=FakeModel(),
+            checkpointer=make_checkpointer(),
+        )
+    )
+
+    tool_call_events = [e for e in events if e["type"] == "tool_call"]
+    tool_result_events = [e for e in events if e["type"] == "tool_result"]
+
+    assert len(tool_call_events) == 1
+    assert tool_call_events[0]["tool"] == "list_cubes"
+    assert tool_call_events[0]["args"] == {}
+    assert tool_call_events[0]["id"] == "tc_1"
+
+    assert len(tool_result_events) == 1
+    assert tool_result_events[0]["id"] == "tc_1"
+    assert "content" in tool_result_events[0]
+
+
 # ---------------------------------------------------------------------------
 # build_graph — construction smoke test
 # ---------------------------------------------------------------------------
