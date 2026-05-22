@@ -20,6 +20,12 @@ class Context:
     def __exit__(self, exc_type, exc_value, traceback):
         return False
 
+    def container(self):
+        return Context()
+
+    def empty(self):
+        pass
+
 
 class FakeStreamlit(ModuleType):
     def __init__(self):
@@ -77,6 +83,9 @@ class FakeStreamlit(ModuleType):
 
     def button(self, label, **kwargs):
         return False
+
+    def empty(self):
+        return Context()
 
     @property
     def sidebar(self):

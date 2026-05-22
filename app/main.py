@@ -26,13 +26,6 @@ with st.sidebar:
         st.rerun()
 
 
-_TOOL_LABELS: dict[str, str] = {
-    "list_cubes": "Fetching schema...",
-    "get_cube_schema": "Fetching cube details...",
-    "query_cube": "Querying data...",
-}
-
-
 def render_chart(rows: list[dict]) -> None:
     df = pd.DataFrame(rows)
     if df.empty:
@@ -66,6 +59,10 @@ def render_results(results: list[dict]) -> None:
 
 
 def render_answer(answer: dict) -> None:
+    reasoning = answer.get("reasoning", "")
+    if reasoning:
+        with st.expander("reasoning", expanded=False):
+            st.write(reasoning)
     st.write(answer["text"])
     render_results(answer.get("results", []))
 
@@ -85,29 +82,60 @@ if prompt := st.chat_input("Ask: What is the total revenue per month?"):
     question: str = prompt  # narrow str | None → str for the closure below
     answer_box: list[dict] = []
     with st.chat_message("assistant"):
-        status = st.status("Working...", expanded=True)
+        placeholder = st.empty()
+        all_events: list[dict] = []
         generating = [False]
-        streamed_text = [False]
 
         def event_stream():
             for event in stream_question(question, thread_id=st.session_state.thread_id):
                 if event["type"] == "tool_call":
-                    status.update(label=_TOOL_LABELS.get(event["tool"], f"Calling `{event['tool']}`..."))
+                    all_events.append({"type": "tool_call", "tool": event["tool"]})
+                    status.update(label=f"calling tool(s) {event['tool']} ...", expanded=True)
+                    generating[0] = False
+                    yield f"\n\ntool call: {event['tool']}\n\n"
                 elif event["type"] == "token":
+                    all_events.append({"type": "token", "content": event["content"]})
                     if not generating[0]:
-                        status.update(label="Generating answer...")
+                        status.update(label="generating...", expanded=True)
                         generating[0] = True
-                    streamed_text[0] = True
                     yield event["content"]
                 elif event["type"] == "answer":
                     answer_box.append(event["answer"])
 
-        st.write_stream(event_stream())
-        status.update(state="complete", expanded=False)
+        with placeholder.container():
+            status = st.status("Working...", expanded=True)
+            with status:
+                st.write_stream(event_stream())
 
         if answer_box:
-            if not streamed_text[0] and answer_box[0].get("text"):
-                st.write(answer_box[0]["text"])
+            final_text = answer_box[0].get("text", "")
+
+            # Split buffered stream into preceding content and final answer.
+            # final_text is exactly the last AIMessage content, so it is a suffix
+            # of the concatenated token stream.
+            all_token_text = "".join(e["content"] for e in all_events if e["type"] == "token")
+            preceding_token_len = max(0, len(all_token_text) - len(final_text))
+
+            parts: list[str] = []
+            token_pos = 0
+            for event in all_events:
+                if event["type"] == "tool_call":
+                    parts.append(f"\n\n🛠 {event['tool']} 🛠\n\n")
+                elif event["type"] == "token" and token_pos < preceding_token_len:
+                    take = min(len(event["content"]), preceding_token_len - token_pos)
+                    parts.append(event["content"][:take])
+                    token_pos += len(event["content"])
+
+            reasoning = "".join(parts).strip()
+            answer_box[0]["reasoning"] = reasoning
+
+            placeholder.empty()
+            with placeholder.container():
+                if reasoning:
+                    with st.expander("reasoning details", expanded=False):
+                        st.write(reasoning)
+                st.write(final_text)
+
             render_results(answer_box[0].get("results", []))
 
     if answer_box:
