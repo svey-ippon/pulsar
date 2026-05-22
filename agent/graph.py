@@ -1,29 +1,21 @@
 from __future__ import annotations
 
 import json
-import operator
-from typing import Annotated, Any, Generator, TypedDict, cast
+from typing import Any, Generator, cast
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
-from langgraph.graph.message import add_messages
 
 from agent.cube_client import SupportsCubeQueries
+from agent.extraction import content_text as _content_text
+from agent.extraction import extract_text as _extract_text
+from agent.extraction import prev_results_count as _prev_results_count
 from agent.memory import get_checkpointer
 from agent.prompt import SYSTEM_PROMPT
+from agent.state import AgentState, QueryResult
 from agent.tools import make_tools
-
-
-class QueryResult(TypedDict):
-    query: dict
-    data: list[dict]
-
-
-class AgentState(TypedDict):
-    messages: Annotated[list[BaseMessage], add_messages]
-    cube_results: Annotated[list[QueryResult], operator.add]
 
 
 def build_graph(
@@ -77,43 +69,6 @@ def build_graph(
 
     cp = checkpointer if checkpointer is not None else get_checkpointer()
     return graph.compile(checkpointer=cp)
-
-
-def _content_text(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if not isinstance(content, list):
-        return ""
-
-    parts: list[str] = []
-    for block in content:
-        if isinstance(block, str):
-            parts.append(block)
-        elif isinstance(block, dict):
-            block_type = block.get("type")
-            text = block.get("text")
-            if isinstance(text, str) and block_type in {None, "text", "text_delta", "plain_text"}:
-                parts.append(text)
-    return "".join(parts)
-
-
-def _extract_text(messages: list[BaseMessage]) -> str:
-    last_human_pos = next(
-        (len(messages) - 1 - i for i, m in enumerate(reversed(messages)) if isinstance(m, HumanMessage)),
-        None,
-    )
-    current_turn = messages[last_human_pos:] if last_human_pos is not None else messages
-    content = next(
-        (m.content for m in reversed(current_turn) if isinstance(m, AIMessage) and not m.tool_calls),
-        "",
-    )
-    return _content_text(content)
-
-
-def _prev_results_count(graph: Any, config: RunnableConfig) -> int:
-    """Return the number of cube_results already saved for this thread before the current turn."""
-    checkpoint = graph.get_state(config)
-    return len((checkpoint.values or {}).get("cube_results", []))
 
 
 def answer_question(
