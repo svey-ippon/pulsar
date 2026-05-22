@@ -1,16 +1,5 @@
-# UI :
-
-A tester sur question M1 :
-- le raisonnement s'affiche comme du texte standard, pas de séparation avec la réponse finale
-- pour la dernière réponse du LLM, c'est affiché ainsi
-- pour les réponse précédente, ce n'est plus inclu
-
--> on voudrait :
-- que ce soit affiché dans la petite box déplié lors de la génération
-- que la box soit replié une fois la réponse finie
-- que ce soit toujours accessible dans les réponses précédentes
-- (other fix) : la box affiche toujours 'generating answer...' même quand elle a fini
-
+# QUESTIONS EVALUATION
+-> j'en suis à M2
 
 # AGENT TEST :
 voir `learning_must_read.md` -> Question M1 - détournement
