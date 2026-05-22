@@ -4,7 +4,6 @@ import json
 import uuid
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
 from agent.graph import stream_question
@@ -61,44 +60,12 @@ def render_reasoning_blocks(blocks: list[dict]) -> None:
         if block["type"] == "text":
             st.write(block["content"])
         elif block["type"] == "tool":
-            with st.expander(f"tool call: {block['tool']}", expanded=False):
+            with st.expander(f"🛠 {block['tool']}", expanded=False):
                 st.write("**Arguments**")
                 st.json(block["args"])
                 st.write("**Result**")
                 formatter = _TOOL_RESULT_FORMATTERS.get(block["tool"], _fmt_default)
                 formatter(block["tool"], block["args"], block["result"])
-
-
-def render_chart(rows: list[dict]) -> None:
-    df = pd.DataFrame(rows)
-    if df.empty:
-        st.info("No rows returned.")
-        return
-
-    time_cols = [column for column in df.columns if column.endswith(".month")]
-    numeric_value_cols = [
-        column for column in df.columns
-        if column not in time_cols and pd.api.types.is_numeric_dtype(df[column])
-    ]
-
-    if time_cols and numeric_value_cols:
-        st.plotly_chart(px.line(df, x=time_cols[0], y=numeric_value_cols[0], markers=True), width='stretch')
-    elif numeric_value_cols:
-        st.plotly_chart(px.bar(df, x=df.columns[0], y=numeric_value_cols[0]), width='stretch')
-    else:
-        st.dataframe(df, width='stretch')
-
-
-def render_results(results: list[dict]) -> None:
-    if not results:
-        return
-    with st.expander("Queried Data", expanded=False):
-        for i, result in enumerate(results):
-            label = f"Query {i + 1}" if len(results) > 1 else "Results"
-            with st.expander(label, expanded=True):
-                with st.expander("Query details"):
-                    st.json(result["query"])
-                render_chart(result["data"])
 
 
 def render_answer(answer: dict) -> None:
@@ -107,7 +74,6 @@ def render_answer(answer: dict) -> None:
         with st.expander("reasoning", expanded=False):
             render_reasoning_blocks(reasoning_blocks)
     st.write(answer["text"])
-    render_results(answer.get("results", []))
 
 
 for message in st.session_state.messages:
@@ -198,8 +164,6 @@ if prompt := st.chat_input("Ask: What is the total revenue per month?"):
                     with st.expander("reasoning details", expanded=False):
                         render_reasoning_blocks(reasoning_blocks)
                 st.write(final_text)
-
-            render_results(answer_box[0].get("results", []))
 
     if answer_box:
         st.session_state.messages.append({"role": "assistant", "content": answer_box[0]})
