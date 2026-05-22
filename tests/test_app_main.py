@@ -89,16 +89,21 @@ class FakeStreamlit(ModuleType):
         return Context()
 
 
-def load_app(monkeypatch):
+def load_rendering(monkeypatch):
     fake_streamlit = FakeStreamlit()
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
-    sys.modules.pop("app.main", None)
-    module = importlib.import_module("app.main")
+    sys.modules.pop("app.rendering", None)
+    module = importlib.import_module("app.rendering")
     return module, fake_streamlit
 
 
+def load_reasoning():
+    sys.modules.pop("app.reasoning", None)
+    return importlib.import_module("app.reasoning")
+
+
 def test_render_answer_does_not_render_results_block(monkeypatch):
-    module, fake_streamlit = load_app(monkeypatch)
+    module, fake_streamlit = load_rendering(monkeypatch)
 
     module.render_answer({"text": "No data", "results": [{"data": [], "query": {}}]})
 
@@ -108,7 +113,7 @@ def test_render_answer_does_not_render_results_block(monkeypatch):
 
 
 def test_render_answer_with_no_results_shows_only_text(monkeypatch):
-    module, fake_streamlit = load_app(monkeypatch)
+    module, fake_streamlit = load_rendering(monkeypatch)
 
     module.render_answer({"text": "I cannot answer that.", "results": []})
 
@@ -116,7 +121,7 @@ def test_render_answer_with_no_results_shows_only_text(monkeypatch):
 
 
 def test_render_answer_with_reasoning_blocks_shows_text_and_tool_calls(monkeypatch):
-    module, fake_streamlit = load_app(monkeypatch)
+    module, fake_streamlit = load_rendering(monkeypatch)
 
     blocks = [
         {"type": "text", "content": "Let me check the schema."},
@@ -135,7 +140,7 @@ def test_render_answer_with_reasoning_blocks_shows_text_and_tool_calls(monkeypat
 
 
 def test_render_reasoning_blocks_shows_running_tool_result(monkeypatch):
-    module, fake_streamlit = load_app(monkeypatch)
+    module, fake_streamlit = load_rendering(monkeypatch)
 
     module.render_reasoning_blocks([
         {
@@ -154,7 +159,7 @@ def test_render_reasoning_blocks_shows_running_tool_result(monkeypatch):
 
 
 def test_build_final_reasoning_blocks_excludes_final_answer_text(monkeypatch):
-    module, _fake_streamlit = load_app(monkeypatch)
+    module = load_reasoning()
 
     events = [
         {"type": "token", "content": "Let me check."},
