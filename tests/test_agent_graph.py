@@ -221,8 +221,9 @@ def test_stream_question_yields_structured_text_blocks():
     assert events[-1] == {"type": "answer", "answer": {"text": "Hello world", "results": []}}
 
 
-def test_stream_question_emits_tool_call_with_args_and_id_and_tool_result():
+def test_stream_question_emits_complete_tool_call_args_and_matching_result():
     call_count = [0]
+    query_args = {"measures": ["order_items.total_revenue"]}
 
     class FakeToolBoundModel:
         def stream(self, messages, config):
@@ -230,7 +231,15 @@ def test_stream_question_emits_tool_call_with_args_and_id_and_tool_result():
             if call_count[0] == 1:
                 yield AIMessageChunk(
                     content="",
-                    tool_call_chunks=[{"name": "list_cubes", "args": "{}", "id": "tc_1", "index": 0}],
+                    tool_call_chunks=[
+                        {"name": "query_cube", "args": '{"measures":', "id": "tc_1", "index": 0}
+                    ],
+                )
+                yield AIMessageChunk(
+                    content="",
+                    tool_call_chunks=[
+                        {"name": None, "args": '["order_items.total_revenue"]}', "id": None, "index": 0}
+                    ],
                 )
             else:
                 yield AIMessageChunk(content="Done.")
@@ -252,8 +261,8 @@ def test_stream_question_emits_tool_call_with_args_and_id_and_tool_result():
     tool_result_events = [e for e in events if e["type"] == "tool_result"]
 
     assert len(tool_call_events) == 1
-    assert tool_call_events[0]["tool"] == "list_cubes"
-    assert tool_call_events[0]["args"] == {}
+    assert tool_call_events[0]["tool"] == "query_cube"
+    assert tool_call_events[0]["args"] == query_args
     assert tool_call_events[0]["id"] == "tc_1"
 
     assert len(tool_result_events) == 1
