@@ -33,14 +33,16 @@ def stream_agent_events(
 
             if isinstance(last_msg, AIMessage) and last_msg.tool_calls:
                 for tool_call in last_msg.tool_calls:
-                    if tool_call["id"] not in seen_tool_call_ids:
-                        seen_tool_call_ids.add(tool_call["id"])
-                        yield {
-                            "type": "tool_call",
-                            "tool": tool_call["name"],
-                            "args": tool_call["args"],
-                            "id": tool_call["id"],
-                        }
+                    tool_call_id = tool_call.get("id")
+                    if tool_call_id is None or tool_call_id in seen_tool_call_ids:
+                        continue
+                    seen_tool_call_ids.add(tool_call_id)
+                    yield {
+                        "type": "tool_call",
+                        "tool": tool_call["name"],
+                        "args": tool_call["args"],
+                        "id": tool_call_id,
+                    }
 
             if isinstance(last_msg, ToolMessage):
                 for msg in state_chunk["messages"]:

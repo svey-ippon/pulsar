@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Generator
+from typing import Any, Generator, cast
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
@@ -28,8 +28,8 @@ def build_graph(
     llm_with_tools = llm.bind_tools(tools)
 
     graph = StateGraph(AgentState)
-    graph.add_node("agent", make_agent_node(llm_with_tools))
-    graph.add_node("tools", make_tool_node(tools_by_name))
+    graph.add_node("agent", cast(Any, make_agent_node(llm_with_tools)))
+    graph.add_node("tools", cast(Any, make_tool_node(tools_by_name)))
     graph.add_edge(START, "agent")
     graph.add_conditional_edges("agent", should_continue)
     graph.add_edge("tools", "agent")
