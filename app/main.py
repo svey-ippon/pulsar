@@ -83,6 +83,10 @@ def apply_tool_result(blocks: list[dict], event: dict) -> None:
             return
 
 
+def stream_tool_call_text(event: dict) -> str:
+    return f"\n\n🛠 {event['tool']}\n\n"
+
+
 def render_reasoning_blocks(blocks: list[dict]) -> None:
     for block in blocks:
         if block["type"] == "text":
@@ -187,6 +191,7 @@ if prompt := st.chat_input("Ask: What is the total revenue per month?"):
                     render_live_reasoning()
                     status.update(label=f"calling tool {event['tool']} ...", state="running", expanded=False)
                     generating[0] = False
+                    yield stream_tool_call_text(event)
                 elif event["type"] == "tool_result":
                     all_events.append(event)
                     apply_tool_result(live_reasoning_blocks, event)
