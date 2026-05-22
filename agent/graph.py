@@ -4,17 +4,17 @@ import json
 from typing import Any, Generator, cast
 
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.graph import END, START, StateGraph
+from langgraph.graph import START, StateGraph
 
 from agent.cube_client import SupportsCubeQueries
 from agent.extraction import content_text as _content_text
 from agent.extraction import extract_text as _extract_text
 from agent.extraction import prev_results_count as _prev_results_count
 from agent.memory import get_checkpointer
-from agent.prompt import SYSTEM_PROMPT
-from agent.state import AgentState, QueryResult
+from agent.nodes import make_agent_node, make_tool_node, should_continue
+from agent.state import AgentState
 from agent.tools import make_tools
 
 
@@ -28,41 +28,9 @@ def build_graph(
     tools_by_name = {t.name: t for t in tools}
     llm_with_tools = llm.bind_tools(tools)
 
-    def agent_node(state: AgentState, config: RunnableConfig) -> dict:
-        messages = [SystemMessage(content=SYSTEM_PROMPT)] + list(state["messages"])
-        # stream() fires on_chat_model_stream callbacks, which LangGraph captures
-        # as individual ("messages", chunk) events when stream_mode includes "messages".
-        # invoke() is blocking and never fires those callbacks.
-        response: Any = None
-        for chunk in llm_with_tools.stream(messages, config):
-            response = chunk if response is None else response + chunk
-        return {"messages": [response]}
-
-    def tool_node(state: AgentState) -> dict:
-        last_ai = cast(AIMessage, state["messages"][-1])
-        new_messages: list[BaseMessage] = []
-        new_results: list[QueryResult] = []
-        for tc in last_ai.tool_calls:
-            result_str = tools_by_name[tc["name"]].invoke(tc["args"])
-            new_messages.append(
-                ToolMessage(content=result_str, tool_call_id=tc["id"], name=tc["name"])
-            )
-            if tc["name"] == "query_cube":
-                try:
-                    parsed = json.loads(result_str)
-                    if isinstance(parsed, list):
-                        new_results.append({"query": tc["args"], "data": parsed})
-                except json.JSONDecodeError:
-                    pass
-        return {"messages": new_messages, "cube_results": new_results}
-
-    def should_continue(state: AgentState) -> str:
-        last = state["messages"][-1]
-        return "tools" if (isinstance(last, AIMessage) and last.tool_calls) else END
-
     graph = StateGraph(AgentState)
-    graph.add_node("agent", agent_node)
-    graph.add_node("tools", tool_node)
+    graph.add_node("agent", make_agent_node(llm_with_tools))
+    graph.add_node("tools", make_tool_node(tools_by_name))
     graph.add_edge(START, "agent")
     graph.add_conditional_edges("agent", should_continue)
     graph.add_edge("tools", "agent")
