@@ -1,5 +1,7 @@
 cubes:
   - name: order_items
+    meta:
+      summary: "Line items within orders, one row per (order, item) pair. Tracks merchandise price and freight per item."
     sql_table: ECOMMERCE_DB.MARTS.ORDER_ITEMS
     data_source: default
     description: >

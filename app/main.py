@@ -28,6 +28,7 @@ with st.sidebar:
 
 _TOOL_LABELS: dict[str, str] = {
     "list_cubes": "Fetching schema...",
+    "get_cube_schema": "Fetching cube details...",
     "query_cube": "Querying data...",
 }
 

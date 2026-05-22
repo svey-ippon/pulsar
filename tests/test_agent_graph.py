@@ -63,6 +63,9 @@ class FakeCubeClient:
     def list_cubes(self) -> dict:
         return {"cubes": []}
 
+    def get_cube_schema(self, cube_name: str) -> dict:
+        return {"name": cube_name, "title": cube_name, "description": "", "measures": [], "dimensions": []}
+
     def query_cube(self, measures, dimensions=None, filters=None, time_dimensions=None, limit=500):
         return []
 

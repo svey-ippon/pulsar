@@ -1,5 +1,7 @@
 cubes:
   - name: customers
+    meta:
+      summary: "Buyer profiles, one row per order-customer pair. Use customer_unique_id for repeat-buyer analysis."
     sql_table: ECOMMERCE_DB.MARTS.CUSTOMERS
     data_source: default
     description: >

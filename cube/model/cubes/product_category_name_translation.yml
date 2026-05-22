@@ -1,5 +1,7 @@
 cubes:
   - name: product_category_name_translation
+    meta:
+      summary: "Lookup table: Portuguese product_category_name → English product_category_name_english."
     sql_table: ECOMMERCE_DB.MARTS.PRODUCT_CATEGORY_NAME_TRANSLATION
     data_source: default
     description: "Lookup table translating Portuguese product category names to English. Join to products on product_category_name."

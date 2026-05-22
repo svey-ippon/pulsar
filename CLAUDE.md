@@ -73,17 +73,18 @@ The agent is a LangGraph `StateGraph` using the ReAct pattern:
 
 ### agent/tools.py internals
 
-`make_tools(cube_client)` returns two LangChain tools:
+`make_tools(cube_client)` returns three LangChain tools:
 
-- **`list_cubes()`** — calls `/meta`; returns full semantic model as JSON string; catches `CubeServiceError`
-- **`query_cube(measures, dimensions, filters, time_dimensions, limit)`** — validated by `CubeQueryArgs` (Pydantic); calls `/load`; returns rows as JSON string; catches both `CubeServiceError` (stop + report) and `CubeQueryError` 400 (hint to retry with corrected args); default limit 500, max 5000
+- **`list_cubes()`** — calls `/meta`; returns `[{name, title, summary}]` for all cubes (lightweight orientation); extracts `meta.summary` from each cube, falling back to the first sentence of `description` if absent; catches `CubeServiceError`
+- **`get_cube_schema(cube_name)`** — validated by `GetCubeSchemaArgs` (Pydantic); calls `client.get_cube_schema()`; returns `{name, title, description, measures, dimensions}` for one cube; on unknown cube name returns structured error JSON; catches `CubeServiceError`
+- **`query_cube(measures, dimensions, filters, time_dimensions, limit)`** — validated by `QueryCubeArgs` (Pydantic); calls `/load`; returns rows as JSON string; catches both `CubeServiceError` (stop + report) and `CubeQueryError` 400 (hint to retry with corrected args); default limit 500, max 5000
 
 Error responses are structured JSON so the LLM can react correctly (retry vs. stop).
 
 ### System prompt rules (agent/prompt.py)
 
-1. Call `list_cubes` first if schema not already in history; reuse if present.
-2. Use only member names from the `list_cubes` response — no invention.
+1. Two-step schema discovery: call `list_cubes` to see all cube summaries, then call `get_cube_schema(cube_name)` on the relevant cube(s) before querying. Reuse schema already in conversation history.
+2. Use only member names from the `get_cube_schema` response — no invention.
 3. Refuse predictions, forecasts, projections, and "next month" questions.
 4. Every answer must state which measures/dimensions were queried.
 5. If a metric is not in the semantic layer, say so — no SQL workarounds.
@@ -98,7 +99,9 @@ Error responses are structured JSON so the LLM can react correctly (retry vs. st
 
 ### Cube semantic models
 
-All cube YAML files live in `cube/model/cubes/`. Each maps a single `ECOMMERCE_DB.MARTS.*` table.
+All cube YAML files live in `cube/model/cubes/`. Each maps a single `ECOMMERCE_DB.MARTS.*` table. Every cube must declare both:
+- `meta.summary` (≤120 chars) — one-liner used by the `list_cubes` tool
+- `description` (multi-line prose) — full detail used by `get_cube_schema`
 
 | Cube | Table | Key measures / notes |
 |---|---|---|
@@ -130,9 +133,9 @@ All cube YAML files live in `cube/model/cubes/`. Each maps a single `ECOMMERCE_D
 
 ## Testing
 
-- `tests/test_cube_model.py` — static contract: all cubes read from MARTS, primary keys set, `total_revenue` measure definition exact-matched.
+- `tests/test_cube_model.py` — static contract: all cubes read from MARTS, primary keys set, `total_revenue` measure definition exact-matched, all cubes have `meta.summary` ≤120 chars.
 - `tests/test_agent_graph.py` — graph build, answer extraction, refusal and happy-path behaviour using `FakeCubeClient` (no env vars needed).
-- `tests/test_agent_tools.py` — tool wrapping, Pydantic validation, structured error JSON for each error path.
+- `tests/test_agent_tools.py` — tool wrapping, Pydantic validation, structured error JSON for each error path; covers all three tools including `get_cube_schema` and `list_cubes` summary extraction/fallback.
 - `tests/test_cube_client.py` — HTTP client unit tests: retries, error classification, 4xx vs 5xx handling.
 - `tests/test_app_main.py` — Streamlit rendering (mocked): chart type selection, empty data, raw table fallback.
 - `tests/test_project_imports.py` — import path verification from non-root directories.

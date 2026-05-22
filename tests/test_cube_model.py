@@ -48,6 +48,16 @@ def test_order_items_cube_points_to_marts_and_defines_total_revenue():
     }
 
 
+def test_all_cube_models_have_meta_summary():
+    for path in sorted(CUBE_MODEL_DIR.glob("*.yml")):
+        cube = load_cube(str(path.relative_to(ROOT)))
+        summary = (cube.get("meta") or {}).get("summary")
+        assert summary, f"{path.name} is missing meta.summary"
+        assert len(summary) <= 120, (
+            f"{path.name} meta.summary exceeds 120 chars ({len(summary)})"
+        )
+
+
 def test_order_items_joins_orders_on_order_id():
     order_items = load_cube("cube/model/cubes/order_items.yml")
 

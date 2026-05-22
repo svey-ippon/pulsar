@@ -1,5 +1,7 @@
 cubes:
   - name: orders
+    meta:
+      summary: "Customer orders, one row per order; grain is order_id. Links to items, payments, reviews, and customers."
     sql_table: ECOMMERCE_DB.MARTS.ORDERS
     data_source: default
     description: >

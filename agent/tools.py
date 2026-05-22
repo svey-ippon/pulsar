@@ -18,7 +18,7 @@ _UNAVAILABLE = json.dumps({"error": "Cube service unavailable. Please try again 
 class CubeFilter(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    member: str = Field(description="Cube member name returned by list_cubes().")
+    member: str = Field(description="Cube member name returned by get_cube_schema().")
     operator: str = Field(description='Cube filter operator, e.g. "equals", "gte", "lte", "contains".')
     values: list[str | int | float | bool] = Field(description="Filter values.")
 
@@ -26,7 +26,7 @@ class CubeFilter(BaseModel):
 class CubeTimeDimension(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
-    dimension: str = Field(description="Cube time dimension name returned by list_cubes().")
+    dimension: str = Field(description="Cube time dimension name returned by get_cube_schema().")
     granularity: str = Field(
         default="",
         description='Optional grouping granularity such as "day", "week", "month", or "year". Omit for date-only filters; never pass null.',
@@ -51,6 +51,12 @@ class QueryCubeArgs(BaseModel):
     limit: int = Field(default=500, ge=1, le=5000, description="Maximum rows returned.")
 
 
+class GetCubeSchemaArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cube_name: str = Field(description="Exact cube name as returned by list_cubes().")
+
+
 def _dump_models(value: Any) -> Any:
     if isinstance(value, BaseModel):
         return value.model_dump(by_alias=True, exclude_none=True, exclude_defaults=True)
@@ -69,8 +75,18 @@ def _validation_error(exc: Any) -> str:
     )
 
 
+def _extract_summary(cube: dict) -> str:
+    summary = (cube.get("meta") or {}).get("summary")
+    if summary:
+        return summary
+    desc = cube.get("description", "").strip()
+    if desc:
+        return desc.split(".")[0].strip() + "."
+    return "(no description)"
+
+
 def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]:
-    """Return the two Cube tools, bound to *cube_client* or a default client built from env vars."""
+    """Return the three Cube tools, bound to *cube_client* or a default client built from env vars."""
     client: SupportsCubeQueries = cube_client or CubeClient(
         base_url=os.environ["CUBE_API_URL"],
         token=os.environ["CUBE_API_TOKEN"],
@@ -78,15 +94,46 @@ def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]
 
     @tool
     def list_cubes() -> str:
-        """Return the full semantic model: all cubes, their measures, and dimensions.
+        """Return a lightweight list of all available cubes with one-line summaries.
 
-        Call this first when you are unsure which measures or dimensions exist.
-        Never invent or guess member names — only use names this tool returns.
+        Each entry contains: name, title, summary.
+        Call this first to identify which cube(s) are relevant to the question,
+        then call get_cube_schema(cube_name) for full measure and dimension details
+        before calling query_cube.
         """
         try:
-            return json.dumps(client.list_cubes())
+            meta = client.list_cubes()
+            result = [
+                {
+                    "name": cube["name"],
+                    "title": cube.get("title", cube["name"]),
+                    "summary": _extract_summary(cube),
+                }
+                for cube in meta.get("cubes", [])
+            ]
+            return json.dumps(result)
         except CubeServiceError:
             logger.error("Cube unavailable during list_cubes", exc_info=True)
+            return _UNAVAILABLE
+
+    @tool(args_schema=GetCubeSchemaArgs)
+    def get_cube_schema(cube_name: str) -> str:
+        """Return the full schema for a single cube: description, all measures, and all dimensions.
+
+        Each measure and dimension entry contains: name, type, description.
+        Call this after list_cubes() has identified the relevant cube, and before
+        calling query_cube. Use only the member names this tool returns.
+
+        Args:
+            cube_name: Exact cube name as returned by list_cubes().
+        """
+        try:
+            schema = client.get_cube_schema(cube_name)
+            return json.dumps(schema)
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)})
+        except CubeServiceError:
+            logger.error("Cube unavailable during get_cube_schema", exc_info=True)
             return _UNAVAILABLE
 
     @tool(args_schema=QueryCubeArgs)
@@ -108,7 +155,7 @@ def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]
                      Only include granularity when grouping by time; never pass null.
             limit: Maximum rows returned (default 500)
 
-        Use only member names returned by list_cubes(). Never invent metric names.
+        Use only member names returned by get_cube_schema(). Never invent metric names.
         """
         try:
             filter_args = _dump_models(filters)
@@ -137,4 +184,4 @@ def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]
 
     query_cube.handle_validation_error = _validation_error
 
-    return [list_cubes, query_cube]
+    return [list_cubes, get_cube_schema, query_cube]

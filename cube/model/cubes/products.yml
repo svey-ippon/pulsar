@@ -1,5 +1,7 @@
 cubes:
   - name: products
+    meta:
+      summary: "Product catalog, one row per product. Category names are in Portuguese; join translation cube for English."
     sql_table: ECOMMERCE_DB.MARTS.PRODUCTS
     data_source: default
     description: "Products sold on Olist. One row per product. Category names are in Portuguese; join to product_category_name_translation for English equivalents."

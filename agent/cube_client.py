@@ -26,6 +26,8 @@ class CubeQueryError(RuntimeError):
 class SupportsCubeQueries(Protocol):
     def list_cubes(self) -> dict[str, Any]: ...
 
+    def get_cube_schema(self, cube_name: str) -> dict[str, Any]: ...
+
     def query_cube(
         self,
         measures: list[str],
@@ -58,6 +60,29 @@ class CubeClient(SupportsCubeQueries):
             return response.json()
         except requests.RequestException as exc:
             raise CubeServiceError("Cube metadata unavailable") from exc
+
+    def get_cube_schema(self, cube_name: str) -> dict[str, Any]:
+        meta = self.list_cubes()
+        cubes = meta.get("cubes", [])
+        cube = next((c for c in cubes if c["name"] == cube_name), None)
+        if cube is None:
+            available = [c["name"] for c in cubes]
+            raise ValueError(f"Cube '{cube_name}' not found. Available: {available}")
+
+        def _field(item: dict) -> dict:
+            return {
+                "name": item["name"],
+                "type": item.get("type", "unknown"),
+                "description": item.get("description", ""),
+            }
+
+        return {
+            "name": cube["name"],
+            "title": cube.get("title", cube["name"]),
+            "description": cube.get("description", ""),
+            "measures": [_field(m) for m in cube.get("measures", [])],
+            "dimensions": [_field(d) for d in cube.get("dimensions", [])],
+        }
 
     @retry(
         stop=stop_after_attempt(3),
