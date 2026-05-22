@@ -174,7 +174,7 @@ def test_get_cube_schema_tool_returns_full_schema_for_known_cube():
     assert "summary" not in result
 
 
-def test_get_cube_schema_tool_returns_error_json_for_unknown_cube():
+def test_get_cube_schema_tool_returns_error_json_with_hint_for_unknown_cube():
     fake = FakeCubeClient(metadata={"cubes": []})
     get_cube_schema = get_tool(make_tools(fake), "get_cube_schema")
 
@@ -182,6 +182,7 @@ def test_get_cube_schema_tool_returns_error_json_for_unknown_cube():
 
     assert "error" in result
     assert "nonexistent" in result["error"]
+    assert "hint" in result
 
 
 def test_get_cube_schema_tool_returns_error_json_when_cube_unavailable():

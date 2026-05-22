@@ -131,7 +131,10 @@ def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]
             schema = client.get_cube_schema(cube_name)
             return json.dumps(schema)
         except ValueError as exc:
-            return json.dumps({"error": str(exc)})
+            return json.dumps({
+                "error": str(exc),
+                "hint": "Call list_cubes() to see available cube names, then retry get_cube_schema with a valid name.",
+            })
         except CubeServiceError:
             logger.error("Cube unavailable during get_cube_schema", exc_info=True)
             return _UNAVAILABLE
