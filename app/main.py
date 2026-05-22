@@ -83,10 +83,6 @@ def apply_tool_result(blocks: list[dict], event: dict) -> None:
             return
 
 
-def stream_tool_call_text(event: dict) -> str:
-    return f"\n\n🛠 {event['tool']}\n\n"
-
-
 def render_reasoning_blocks(blocks: list[dict]) -> None:
     for block in blocks:
         if block["type"] == "text":
@@ -178,31 +174,34 @@ if prompt := st.chat_input("Ask: What is the total revenue per month?"):
         live_reasoning_blocks: list[dict] = []
         generating = [False]
 
-        def render_live_reasoning() -> None:
-            reasoning_placeholder.empty()
-            with reasoning_placeholder.container():
-                render_reasoning_blocks(live_reasoning_blocks)
+        def render_blocks(target_placeholder, blocks: list[dict]) -> None:
+            target_placeholder.empty()
+            with target_placeholder.container():
+                render_reasoning_blocks(blocks)
 
-        def event_stream():
+        def render_live_blocks() -> None:
+            render_blocks(reasoning_placeholder, live_reasoning_blocks)
+            render_blocks(stream_placeholder, live_reasoning_blocks)
+
+        def run_event_stream() -> None:
             for event in stream_question(question, thread_id=st.session_state.thread_id):
                 if event["type"] == "tool_call":
                     all_events.append(event)
                     append_tool_call_block(live_reasoning_blocks, event)
-                    render_live_reasoning()
+                    render_live_blocks()
                     status.update(label=f"calling tool {event['tool']} ...", state="running", expanded=False)
                     generating[0] = False
-                    yield stream_tool_call_text(event)
                 elif event["type"] == "tool_result":
                     all_events.append(event)
                     apply_tool_result(live_reasoning_blocks, event)
-                    render_live_reasoning()
+                    render_live_blocks()
                 elif event["type"] == "token":
                     all_events.append({"type": "token", "content": event["content"]})
                     append_reasoning_token(live_reasoning_blocks, event["content"])
+                    render_live_blocks()
                     if not generating[0]:
                         status.update(label="generating...", state="running", expanded=False)
                         generating[0] = True
-                    yield event["content"]
                 elif event["type"] == "answer":
                     answer_box.append(event["answer"])
 
@@ -210,9 +209,9 @@ if prompt := st.chat_input("Ask: What is the total revenue per month?"):
             status = st.status("Working...", expanded=False)
             with status:
                 reasoning_placeholder = st.empty()
+            stream_placeholder = st.empty()
             answer_placeholder = st.empty()
-            with answer_placeholder.container():
-                st.write_stream(event_stream())
+            run_event_stream()
 
         if answer_box:
             final_text = answer_box[0].get("text", "")
@@ -224,6 +223,7 @@ if prompt := st.chat_input("Ask: What is the total revenue per month?"):
             with reasoning_placeholder.container():
                 if reasoning_blocks:
                     render_reasoning_blocks(reasoning_blocks)
+            stream_placeholder.empty()
             answer_placeholder.empty()
             with answer_placeholder.container():
                 st.write(final_text)

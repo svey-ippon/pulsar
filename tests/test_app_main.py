@@ -176,9 +176,3 @@ def test_build_final_reasoning_blocks_excludes_final_answer_text(monkeypatch):
             "status": "done",
         },
     ]
-
-
-def test_stream_tool_call_text_uses_tool_icon(monkeypatch):
-    module, _fake_streamlit = load_app(monkeypatch)
-
-    assert module.stream_tool_call_text({"tool": "query_cube"}) == "\n\n🛠 query_cube\n\n"
