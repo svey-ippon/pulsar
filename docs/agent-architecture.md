@@ -36,7 +36,7 @@ from agent.graph import answer_question, build_graph, stream_question
 ## Runtime Flow
 
 ```text
-app/main.py
+app.ui
   │
   └── agent.graph.stream_question(question, thread_id)
         │
@@ -392,6 +392,6 @@ The most important behavior to preserve in tests:
   `extraction`.
 - Keep `agent.extraction` pure. It should not call the LLM, Streamlit, or Cube.
 - Keep `agent.streaming` UI-agnostic. It emits dictionaries; Streamlit formatting belongs in
-  `app/main.py`.
+  `app.ui` and `app.rendering`.
 - Keep `agent.tools` as the only place where LangChain tool schemas are defined.
 - Keep `agent.cube_client` as the only place that knows Cube HTTP endpoints.

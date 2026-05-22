@@ -13,7 +13,7 @@ the UI.
 
 ## Step 1: Streamlit Starts a Turn
 
-`app/main.py` calls:
+`app.ui.stream_assistant_response` calls:
 
 ```python
 stream_question(question, thread_id=st.session_state.thread_id)
@@ -101,15 +101,15 @@ that match the later `tool_result` events.
 
 ---
 
-## Step 5: Streamlit Builds Reasoning Details
+## Step 5: Streamlit Builds Live and Final Reasoning Details
 
-`app/main.py` buffers the streamed events for the current turn.
+`app.ui.stream_assistant_response` buffers the streamed events for the current turn.
 
 During streaming:
 
-- `token` events are written into the assistant message stream
-- `tool_call` events update the status label
-- `tool_result` events are stored for later pairing by id
+- `token` events update live text blocks
+- `tool_call` events add visible live tool boxes and update the status label
+- `tool_result` events update the matching live tool box by id
 - the final `answer` event is stored as the canonical answer
 
 After streaming completes, Streamlit builds `reasoning_blocks`:
@@ -126,8 +126,9 @@ After streaming completes, Streamlit builds `reasoning_blocks`:
 ]
 ```
 
-Those blocks are rendered in the "reasoning details" expander. Tool result formatting is
-UI-specific:
+Those blocks are rendered in the collapsed "reasoning details" status box. During streaming,
+the same block renderer is also used in the visible assistant message stream so tool calls
+appear inline as full boxes. Tool result formatting is UI-specific:
 
 - JSON objects/lists are rendered with `st.json`
 - `query_cube` list results are rendered as a dataframe
@@ -182,7 +183,10 @@ currently unavailable.
 User question
   │
   ▼
-app/main.py
+app.main
+  │
+  ▼
+app.ui.run_app
   │
   ▼
 agent.graph.stream_question
@@ -199,5 +203,5 @@ agent.graph.stream_question
         └── answer event
               │
               ▼
-app/main.py renders final answer + reasoning details
+app.ui/app.rendering render final answer + reasoning details
 ```
