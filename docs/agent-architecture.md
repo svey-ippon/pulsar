@@ -1,259 +1,397 @@
 # Agent Module Architecture
 
-## Overview
+The `agent/` package contains the LangGraph-based data agent used by the Streamlit UI.
+It turns a user question into a sequence of LLM messages, Cube tool calls, tool results,
+and a final answer.
 
-The `agent/` module is a conversational data agent that answers natural-language questions by
-querying the Cube semantic layer. It is built on LangGraph and exposes two entry points to the
-Streamlit UI: `stream_question` (used by the UI for live status updates) and `answer_question`
-(used by tests).
+The public API is intentionally small:
 
+```python
+from agent.graph import answer_question, build_graph, stream_question
 ```
-app/main.py
-    │
-    └── agent.graph.stream_question(question, thread_id)
-            │
-            ├── agent.graph.build_graph()
-            │       ├── agent.prompt   → SYSTEM_PROMPT
-            │       ├── agent.tools    → [list_cubes, query_cube]
-            │       └── agent.memory   → MemorySaver checkpointer
-            │
-            └── graph.stream({"messages": [HumanMessage]}, config, stream_mode="values")
-                    │
-                    ├── yield {"type": "tool_call", "tool": str}   ← one per tool invocation
-                    │         ↓
-                    │     st.status.update("Fetching schema..." | "Querying data...")
-                    │
-                    └── yield {"type": "answer", "answer": dict}   ← once, at the end
-                                └── agent.graph._extract_answer(state)
-                                        → {"text": str, "data": list | None, "query": dict | None}
-```
+
+- `stream_question(...)` is the UI entry point. It yields incremental events for Streamlit.
+- `answer_question(...)` is the synchronous entry point used by tests and simple callers.
+- `build_graph(...)` wires the LangGraph state machine.
 
 ---
 
-## Module Structure
+## Package Layout
 
-| File | Responsibility |
+| Module | Responsibility |
 |---|---|
-| `agent/prompt.py` | `SYSTEM_PROMPT` constant — the agent's rules |
-| `agent/cube_client.py` | HTTP client for Cube (`/meta`, `/load`); retry logic; `SupportsCubeQueries` protocol |
-| `agent/tools.py` | LangChain tool factory — wraps `CubeClient` methods as LLM-callable tools |
-| `agent/memory.py` | `MemorySaver` checkpointer — singleton for production, factory for tests |
-| `agent/graph.py` | Graph construction; `stream_question` (UI entry point); `answer_question` (test entry point); answer extraction |
+| `agent.graph` | Public orchestration API. Builds the graph and exposes `answer_question` / `stream_question`. |
+| `agent.state` | Shared typed state for LangGraph: message history and captured Cube query results. |
+| `agent.nodes` | LangGraph node factories and routing logic for the ReAct loop. |
+| `agent.streaming` | Adapter from LangGraph stream chunks to UI-facing events. |
+| `agent.extraction` | Pure helpers that extract final answer text and current-turn result slices. |
+| `agent.tools` | LangChain tool definitions backed by a Cube query client. |
+| `agent.cube_client` | HTTP client and protocol for Cube `/meta` and `/load` operations. |
+| `agent.memory` | In-process LangGraph checkpointer factories. |
+| `agent.prompt` | System prompt that constrains the agent's behavior. |
+| `agent.__init__` | Empty package marker. No runtime behavior. |
 
 ---
 
-## LangGraph Concepts Used
+## Runtime Flow
 
-### StateGraph and the ReAct loop
-
-LangGraph models an agent as a **StateGraph** — a directed graph where nodes transform a shared
-state object. At each step the graph decides which node to run next based on the current state.
-
-The graph is built manually in `build_graph` using a **ReAct** (Reason + Act) pattern:
-
+```text
+app/main.py
+  │
+  └── agent.graph.stream_question(question, thread_id)
+        │
+        ├── build_graph()
+        │     ├── make_tools()              → LangChain tools
+        │     ├── make_agent_node()         → LLM node
+        │     ├── make_tool_node()          → Cube tool execution node
+        │     └── get_checkpointer()        → MemorySaver
+        │
+        └── agent.streaming.stream_agent_events()
+              ├── token       events        → streamed prose / reasoning text
+              ├── tool_call   events        → completed tool call name, args, id
+              ├── tool_result events        → raw tool result content
+              └── answer      event         → final answer dict
 ```
+
+The graph follows a ReAct loop:
+
+```text
 START
   │
   ▼
-[agent node] ──── has tool calls? ──── yes ──► [tool node] ──► [agent node]
-  │                                                                    ▲
-  └──── no tool calls ────────────────────────────────────────► END
+[agent node] ── has tool calls? ── yes ──► [tools node] ──► [agent node]
+  │                                                             ▲
+  └── no ───────────────────────────────────────────────────────┘
+       │
+       ▼
+      END
 ```
 
-Each pass through the agent node sends the full message history (prepended with the system
-prompt) to the LLM. The LLM either calls a tool (the loop continues) or produces a final
-text answer (the loop ends).
+The LLM sees the system prompt plus the persisted message history. It either emits tool calls
+or produces a final answer. Tool calls are executed by the tools node, converted into
+`ToolMessage` objects, appended to the state, and sent back to the LLM on the next loop.
 
-### Custom state: `AgentState`
+---
 
-Rather than the default message-only state, the graph uses a typed state with two fields:
+## `agent.graph`
+
+`agent.graph` is the public integration layer. It should stay small and mostly declarative.
+
+### Contents
+
+- `build_graph(cube_client=None, model=None, checkpointer=None)`
+- `answer_question(question, thread_id="default", ...)`
+- `stream_question(question, thread_id="default", ...)`
+
+### Responsibilities
+
+- Instantiate the default Claude model when no model is injected.
+- Build the Cube-backed tools via `make_tools`.
+- Bind tools to the LLM.
+- Wire the LangGraph `StateGraph` with the agent node, tools node, and conditional edge.
+- Create a `RunnableConfig` with the caller's `thread_id`.
+- Delegate answer extraction to `agent.extraction`.
+- Delegate stream adaptation to `agent.streaming`.
+
+### Deliberate non-responsibilities
+
+- It does not implement tool execution logic. That lives in `agent.nodes`.
+- It does not parse streamed chunks. That lives in `agent.streaming`.
+- It does not know Cube HTTP details. That lives in `agent.cube_client`.
+
+---
+
+## `agent.state`
+
+`agent.state` defines the shared graph state.
 
 ```python
+class QueryResult(TypedDict):
+    query: dict
+    data: list[dict]
+
+
 class AgentState(TypedDict):
-    messages:     Annotated[list[BaseMessage], add_messages]   # append reducer
-    cube_results: Annotated[list[QueryResult], operator.add]   # append reducer
+    messages: Annotated[list[BaseMessage], add_messages]
+    cube_results: Annotated[list[QueryResult], operator.add]
 ```
 
-`QueryResult` is a typed dict `{"query": dict, "data": list[dict]}`. The `operator.add`
-reducer means every node that returns `{"cube_results": [...]}` **appends** to the list —
-no overwrites. If the agent calls `query_cube` twice in one turn, both results accumulate.
+### Responsibilities
 
-The `tool_node` is the only node that writes to `cube_results`: it parses the JSON string
-returned by `query_cube` and appends a `QueryResult` for every successful list response.
-Error payloads (`{"error": "..."}`) are silently skipped — the error text is already in
-the ToolMessage and will surface in the LLM's final answer.
+- Keep the message history in `messages`.
+- Keep structured query outputs in `cube_results`.
+- Define the reducers used by LangGraph:
+  - `add_messages` appends and merges message history.
+  - `operator.add` appends new `QueryResult` entries.
 
-### Checkpointer and thread_id
+### Important behavior
 
-A **checkpointer** is a persistence backend that saves and restores graph state between
-invocations. Without one, every `graph.invoke` call starts from an empty message list.
-
-We use `MemorySaver` — an in-process, in-memory checkpointer. State is keyed by **`thread_id`**
-(a string passed in the invocation config). LangGraph automatically:
-1. Loads the prior state for `thread_id` before running the graph.
-2. Appends the new messages produced in this run.
-3. Saves the updated state back to the checkpointer.
-
-This is how the agent remembers previous questions within the same session.
+`cube_results` is append-only across a thread. Current-turn scoping is handled later by
+recording the previous result count before graph execution and slicing the final state.
 
 ---
 
-## Tool Construction (`agent/tools.py`)
+## `agent.nodes`
 
-Tools are functions the LLM can call during the ReAct loop. LangChain discovers available tools
-from their docstrings, which the LLM reads to decide when and how to call them.
+`agent.nodes` contains the executable graph nodes and routing decision.
 
-`make_tools(cube_client)` uses a **closure** to bind a `CubeClient` instance to the tool
-functions at construction time:
+### Contents
 
-```python
-def make_tools(cube_client):
-    client = cube_client or CubeClient(...)   # injected or built from env
+- `make_agent_node(llm_with_tools)`
+- `make_tool_node(tools_by_name)`
+- `should_continue(state)`
 
-    @tool
-    def list_cubes() -> str:
-        ...                                   # client is closed over here
+### `make_agent_node`
 
-    @tool
-    def query_cube(measures, dimensions, ...) -> str:
-        ...
+Creates the LangGraph node that calls the tool-bound LLM.
 
-    return [list_cubes, query_cube]
-```
+Responsibilities:
 
-This pattern lets tests inject a `FakeCubeClient` without touching environment variables.
+- Prepend `SYSTEM_PROMPT` to the stored conversation.
+- Stream the LLM response so LangGraph can surface message chunks to `stream_mode="messages"`.
+- Accumulate chunks into a final `AIMessage`.
+- Return that `AIMessage` into `state["messages"]`.
 
-Both tools return **JSON strings** (not Python objects). This keeps the tool output format
-consistent with what the LLM receives as a `ToolMessage`.
+The node uses `llm_with_tools.stream(...)` rather than `invoke(...)` so UI token/tool-call
+streaming can work.
+
+### `make_tool_node`
+
+Creates the LangGraph node that executes tool calls from the latest `AIMessage`.
+
+Responsibilities:
+
+- Read `last_ai.tool_calls`.
+- Invoke the matching LangChain tool with the model-provided arguments.
+- Convert every tool output into a `ToolMessage`.
+- Parse successful `query_cube` list results into structured `QueryResult` entries.
+- Return both `messages` and `cube_results` updates.
+
+Tool errors are not raised here. Tools return JSON error payloads so the LLM can read the error
+and produce a controlled answer.
+
+### `should_continue`
+
+Routes the graph:
+
+- returns `"tools"` when the latest message is an `AIMessage` with tool calls
+- returns `END` otherwise
 
 ---
 
-## Error Handling
+## `agent.streaming`
 
-### Retry (`agent/cube_client.py`)
+`agent.streaming` converts raw LangGraph stream chunks into stable application events.
 
-`CubeClient.list_cubes` and `CubeClient.query_cube` are decorated with `@retry` from
-**tenacity**:
+### Contents
 
-- **3 attempts** with exponential backoff (1 s → 2 s → 4 s).
-- Retries only on `CubeServiceError` (which wraps `requests.RequestException`).
-- After all attempts fail, `CubeServiceError` is re-raised.
+- `stream_agent_events(graph, question, config, prev_results_count)`
 
-This handles transient network blips transparently — the LLM agent never sees them.
-
-### Tools never raise (`agent/tools.py`)
-
-If `CubeServiceError` reaches the tool function (after all retries), the tool **catches it,
-logs at ERROR level, and returns an error JSON string** instead of raising:
+### Output event shapes
 
 ```python
+{"type": "token", "content": str}
+{"type": "tool_call", "tool": str, "args": dict, "id": str}
+{"type": "tool_result", "id": str, "content": str}
+{"type": "answer", "answer": {"text": str, "results": list[QueryResult]}}
+```
+
+### Responsibilities
+
+- Run `graph.stream(..., stream_mode=["values", "messages"], version="v2")`.
+- Emit text chunks from `"messages"` stream chunks.
+- Emit completed tool calls from canonical `AIMessage.tool_calls` in `"values"` chunks.
+- Emit tool results from `ToolMessage` objects.
+- Deduplicate tool calls and tool results by id.
+- Emit one final `answer` event from the last graph state.
+
+### Important behavior
+
+Tool calls are emitted only after they are complete. The code intentionally does not reconstruct
+tool calls from partial JSON deltas. This avoids UI events with incomplete arguments such as
+`{}` or unmatched tool result ids.
+
+---
+
+## `agent.extraction`
+
+`agent.extraction` contains pure helpers for answer assembly.
+
+### Contents
+
+- `content_text(content)`
+- `extract_text(messages)`
+- `prev_results_count(graph, config)`
+
+### Responsibilities
+
+- Normalize plain string and structured LangChain content blocks into display text.
+- Find the final answer for the current user turn.
+- Count persisted `cube_results` before a graph run starts.
+
+### Current-turn scoping
+
+The checkpointer stores all previous turns for the same `thread_id`. `extract_text` starts at
+the last `HumanMessage` and returns the last `AIMessage` in that slice that has no tool calls.
+
+For results, callers record:
+
+```python
+prev_count = prev_results_count(graph, config)
+```
+
+Then after graph execution:
+
+```python
+results = state["cube_results"][prev_count:]
+```
+
+This keeps follow-up questions from re-rendering previous turn results.
+
+---
+
+## `agent.tools`
+
+`agent.tools` defines the LLM-callable Cube tools.
+
+### Contents
+
+- Pydantic schemas:
+  - `CubeFilter`
+  - `CubeTimeDimension`
+  - `QueryCubeArgs`
+  - `GetCubeSchemaArgs`
+- Tool factory:
+  - `make_tools(cube_client=None)`
+- Internal helpers:
+  - `_dump_models`
+  - `_validation_error`
+  - `_extract_summary`
+
+### Tools exposed to the LLM
+
+| Tool | Purpose |
+|---|---|
+| `list_cubes` | Return available cubes with lightweight summaries. |
+| `get_cube_schema` | Return measures and dimensions for one cube. |
+| `query_cube` | Execute a semantic-layer query and return rows. |
+
+### Responsibilities
+
+- Bind tools to either an injected `SupportsCubeQueries` client or a default `CubeClient`.
+- Validate model-provided arguments with Pydantic schemas.
+- Serialize tool outputs as JSON strings, matching what the LLM receives as `ToolMessage` content.
+- Convert `CubeServiceError` and `CubeQueryError` into JSON error payloads.
+
+### Error contract
+
+Tools should return error JSON rather than raise runtime exceptions:
+
+```json
 {"error": "Cube service unavailable. Please try again later."}
 ```
 
-This is a deliberate design choice: a tool that raises an exception bypasses the LangGraph
-agent loop and crashes the caller (Streamlit). A tool that returns an error string gives the
-LLM a `ToolMessage` it can read and reason about.
-
-### LLM error handling (`agent/prompt.py`)
-
-Rule 6 of the system prompt instructs the LLM what to do when it receives an error payload:
-
-> If a tool returns a JSON object with an "error" key, stop immediately, do not call any more
-> tools, and tell the user the data service is currently unavailable and they should try again later.
+This keeps the LangGraph loop alive and lets the LLM produce a user-facing failure message.
 
 ---
 
-## Memory Management (`agent/memory.py`)
+## `agent.cube_client`
 
-```
-Session A (thread_id = "abc")          Session B (thread_id = "xyz")
-─────────────────────────────          ─────────────────────────────
-Turn 1: "revenue per month?"           Turn 1: "orders per state?"
-Turn 2: "and for 2017?"          ┐
-         ↑ agent recalls Turn 1  │     MemorySaver (in-process singleton)
-                                 └──►  { "abc": [msg, msg, msg, ...],
-                                          "xyz": [msg, ...] }
-```
+`agent.cube_client` is the HTTP boundary around Cube.
 
-`get_checkpointer()` returns a **lazy process-level singleton** `MemorySaver`. All sessions
-share the same instance; thread isolation is provided by `thread_id`.
+### Contents
 
-`make_checkpointer()` creates a fresh `MemorySaver` and is intended for test injection —
-each test gets an isolated, empty checkpointer.
+- Exceptions:
+  - `CubeServiceError`
+  - `CubeQueryError`
+- Protocol:
+  - `SupportsCubeQueries`
+- Implementation:
+  - `CubeClient`
+- Helper:
+  - `_response_error_text`
 
-`app/main.py` generates a UUID `thread_id` once per Streamlit session and stores it in
-`st.session_state`. It is passed to `stream_question` on every subsequent message.
+### Responsibilities
 
----
+- Call Cube `/meta` to list cube metadata.
+- Derive a compact schema for one cube from metadata.
+- Call Cube `/load` with a query payload.
+- Add bearer-token authorization headers.
+- Retry transient service failures with tenacity.
+- Distinguish invalid Cube queries from service-level failures.
 
-## Answer Assembly (`agent/graph`)
+### Protocol use
 
-After the graph finishes, `answer_question` and `stream_question` assemble the answer from
-two sources in the final state.
-
-### `cube_results` — current-turn scoping
-
-`cube_results` accumulates across turns because `MemorySaver` persists the whole state.
-Before each invocation, `_prev_results_count` records how many results already exist in the
-checkpoint. After invocation, only the new slice is returned:
-
-```python
-prev_count = _prev_results_count(graph, config)   # e.g. 1 result from turn 1
-state = graph.invoke(...)
-results = state["cube_results"][prev_count:]       # only turn 2 results
-```
-
-### `_extract_text` — current-turn scoping
-
-The function finds the index of the **last `HumanMessage`** in the message list (which
-includes all prior turns). Everything from that index onward is the current turn.
-
-```
-[HumanMessage(t1), AIMessage(t1_answer),
- HumanMessage(t2), AIMessage(t2_answer)]
-                   ▲
-             last HumanMessage → current turn starts here
-```
-
-It returns the last `AIMessage` in the current turn that has no `tool_calls`.
-
-### Answer shape
-
-Both `answer_question` and `stream_question` produce:
-
-```python
-{
-    "text":    str,              # LLM prose answer
-    "results": list[QueryResult] # all query+data pairs from this turn; [] if no Cube call
-}
-```
-
-`QueryResult = {"query": dict, "data": list[dict]}`. Multiple results appear when the agent
-calls `query_cube` more than once in a single turn (e.g. two independent metrics).
+`SupportsCubeQueries` lets tests inject fake clients and keeps `agent.tools` independent from
+the concrete HTTP implementation.
 
 ---
 
-## System Prompt (`agent/prompt.py`)
+## `agent.memory`
 
-The prompt encodes the agent's constraints as an ordered rule list:
+`agent.memory` owns the checkpointer used by LangGraph.
 
-| Rule | Purpose |
-|---|---|
-| 1. Call `list_cubes` only if schema not in history | Prevent the LLM from guessing metric names; avoid redundant schema fetches on follow-up questions |
-| 2. Use only known member names | Prevent hallucinated Cube members |
-| 3. Refuse predictions/forecasts | Hard boundary — no LLM guessing |
-| 4. State queried members in every answer | Auditability for the user |
-| 5. No SQL workarounds | Keep all data access through Cube |
-| 6. Stop on tool error | Prevent retry loops when Cube is down |
+### Contents
+
+- `make_checkpointer()`
+- `get_checkpointer()`
+
+### Responsibilities
+
+- Create isolated `MemorySaver` instances for tests.
+- Provide one lazy process-level singleton for production.
+
+### Limitations
+
+`MemorySaver` is in-process only:
+
+- history is lost on process restart
+- sessions routed to different workers do not share memory
+- no cross-process persistence exists yet
 
 ---
 
-## Limitations
+## `agent.prompt`
 
-| Limitation | Reason |
-|---|---|
-| Memory is lost on process restart | `MemorySaver` is in-memory only; no persistent store (Redis, SQLite) is wired up |
-| All sessions share the same process memory | On a multi-worker deployment, sessions routed to different workers lose their history |
-| Single Cube data source | `make_tools` creates one client pointing at one Cube instance; multi-source queries are not supported |
-| No LLM token streaming | `graph.stream` surfaces tool-call events (schema fetch, data query) as live status updates, but the final LLM answer still appears all at once — token-by-token streaming requires `astream_events` and async plumbing |
-| `list_cubes` still called on first turn of each session | The schema is not pre-loaded; the first question always pays one `/meta` round-trip. Subsequent questions reuse the schema already in history. |
+`agent.prompt` contains `SYSTEM_PROMPT`.
+
+### Responsibilities
+
+- Tell the LLM to use Cube tools before answering data questions.
+- Prevent invented metric or dimension names.
+- Refuse forecasts and predictions.
+- Require audited answers that state queried members.
+- Stop on tool error payloads.
+- Keep data access within Cube rather than SQL workarounds.
+
+Prompt changes affect agent behavior directly and should be tested with representative
+questions, not treated as copy-only changes.
+
+---
+
+## Testing Seams
+
+The package is designed for dependency injection:
+
+- pass `model=` to avoid real LLM calls
+- pass `cube_client=` to avoid real Cube calls
+- pass `checkpointer=make_checkpointer()` to isolate tests
+
+The most important behavior to preserve in tests:
+
+- `answer_question` returns current-turn text and current-turn results
+- `stream_question` emits complete tool call args and matching tool result ids
+- `query_cube` results are captured as structured `cube_results`
+- tool errors remain JSON payloads rather than uncaught exceptions
+
+---
+
+## Maintenance Rules
+
+- Keep `agent.graph` thin. New behavior usually belongs in `nodes`, `streaming`, `tools`, or
+  `extraction`.
+- Keep `agent.extraction` pure. It should not call the LLM, Streamlit, or Cube.
+- Keep `agent.streaming` UI-agnostic. It emits dictionaries; Streamlit formatting belongs in
+  `app/main.py`.
+- Keep `agent.tools` as the only place where LangChain tool schemas are defined.
+- Keep `agent.cube_client` as the only place that knows Cube HTTP endpoints.
