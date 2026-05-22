@@ -55,24 +55,102 @@ _TOOL_RESULT_FORMATTERS = {
 }
 
 
+def append_reasoning_token(blocks: list[dict], content: str) -> None:
+    if not content:
+        return
+    if blocks and blocks[-1]["type"] == "text":
+        blocks[-1]["content"] += content
+    else:
+        blocks.append({"type": "text", "content": content})
+
+
+def append_tool_call_block(blocks: list[dict], event: dict) -> None:
+    blocks.append({
+        "type": "tool",
+        "id": event.get("id", ""),
+        "tool": event["tool"],
+        "args": event.get("args", {}),
+        "result": None,
+        "status": "running",
+    })
+
+
+def apply_tool_result(blocks: list[dict], event: dict) -> None:
+    for block in blocks:
+        if block["type"] == "tool" and block.get("id") == event.get("id"):
+            block["result"] = event["content"]
+            block["status"] = "done"
+            return
+
+
 def render_reasoning_blocks(blocks: list[dict]) -> None:
     for block in blocks:
         if block["type"] == "text":
-            st.write(block["content"])
+            text = block["content"].strip()
+            if text:
+                st.write(text)
         elif block["type"] == "tool":
             with st.expander(f"🛠 {block['tool']}", expanded=False):
                 st.write("**Arguments**")
                 st.json(block["args"])
                 st.write("**Result**")
-                formatter = _TOOL_RESULT_FORMATTERS.get(block["tool"], _fmt_default)
-                formatter(block["tool"], block["args"], block["result"])
+                if block.get("status") == "running" or block.get("result") is None:
+                    st.write("Running...")
+                else:
+                    formatter = _TOOL_RESULT_FORMATTERS.get(block["tool"], _fmt_default)
+                    formatter(block["tool"], block["args"], block["result"])
+
+
+def render_reasoning_details(blocks: list[dict]) -> None:
+    if blocks:
+        with st.expander("reasoning details", expanded=False):
+            render_reasoning_blocks(blocks)
+
+
+def build_final_reasoning_blocks(events: list[dict], final_text: str) -> list[dict]:
+    # Split buffered stream: final_text is a suffix of all token content.
+    all_token_text = "".join(e["content"] for e in events if e["type"] == "token")
+    preceding_token_len = max(0, len(all_token_text) - len(final_text))
+
+    tool_results_by_id = {
+        e["id"]: e["content"] for e in events if e["type"] == "tool_result"
+    }
+
+    reasoning_blocks: list[dict] = []
+    current_text: list[str] = []
+    token_pos = 0
+    for event in events:
+        if event["type"] == "token":
+            if token_pos < preceding_token_len:
+                take = min(len(event["content"]), preceding_token_len - token_pos)
+                current_text.append(event["content"][:take])
+            token_pos += len(event["content"])
+        elif event["type"] == "tool_call":
+            if current_text:
+                text = "".join(current_text).strip()
+                if text:
+                    reasoning_blocks.append({"type": "text", "content": text})
+                current_text = []
+            reasoning_blocks.append({
+                "type": "tool",
+                "id": event.get("id", ""),
+                "tool": event["tool"],
+                "args": event.get("args", {}),
+                "result": tool_results_by_id.get(event.get("id", ""), ""),
+                "status": "done",
+            })
+
+    if current_text:
+        text = "".join(current_text).strip()
+        if text:
+            reasoning_blocks.append({"type": "text", "content": text})
+
+    return reasoning_blocks
 
 
 def render_answer(answer: dict) -> None:
     reasoning_blocks = answer.get("reasoning_blocks", [])
-    if reasoning_blocks:
-        with st.expander("reasoning", expanded=False):
-            render_reasoning_blocks(reasoning_blocks)
+    render_reasoning_details(reasoning_blocks)
     st.write(answer["text"])
 
 
@@ -93,19 +171,29 @@ if prompt := st.chat_input("Ask: What is the total revenue per month?"):
     with st.chat_message("assistant"):
         placeholder = st.empty()
         all_events: list[dict] = []
+        live_reasoning_blocks: list[dict] = []
         generating = [False]
+
+        def render_live_reasoning() -> None:
+            reasoning_placeholder.empty()
+            with reasoning_placeholder.container():
+                render_reasoning_details(live_reasoning_blocks)
 
         def event_stream():
             for event in stream_question(question, thread_id=st.session_state.thread_id):
                 if event["type"] == "tool_call":
                     all_events.append(event)
+                    append_tool_call_block(live_reasoning_blocks, event)
+                    render_live_reasoning()
                     status.update(label=f"calling tool(s) {event['tool']} ...", expanded=True)
                     generating[0] = False
-                    yield f"\n\ntool call: {event['tool']}\n\n"
                 elif event["type"] == "tool_result":
                     all_events.append(event)
+                    apply_tool_result(live_reasoning_blocks, event)
+                    render_live_reasoning()
                 elif event["type"] == "token":
                     all_events.append({"type": "token", "content": event["content"]})
+                    append_reasoning_token(live_reasoning_blocks, event["content"])
                     if not generating[0]:
                         status.update(label="generating...", expanded=True)
                         generating[0] = True
@@ -114,55 +202,19 @@ if prompt := st.chat_input("Ask: What is the total revenue per month?"):
                     answer_box.append(event["answer"])
 
         with placeholder.container():
+            reasoning_placeholder = st.empty()
             status = st.status("Working...", expanded=True)
             with status:
                 st.write_stream(event_stream())
 
         if answer_box:
             final_text = answer_box[0].get("text", "")
-
-            # Split buffered stream: final_text is a suffix of all token content.
-            all_token_text = "".join(e["content"] for e in all_events if e["type"] == "token")
-            preceding_token_len = max(0, len(all_token_text) - len(final_text))
-
-            tool_results_by_id = {
-                e["id"]: e["content"] for e in all_events if e["type"] == "tool_result"
-            }
-
-            reasoning_blocks: list[dict] = []
-            current_text: list[str] = []
-            token_pos = 0
-            for event in all_events:
-                if event["type"] == "token":
-                    if token_pos < preceding_token_len:
-                        take = min(len(event["content"]), preceding_token_len - token_pos)
-                        current_text.append(event["content"][:take])
-                    token_pos += len(event["content"])
-                elif event["type"] == "tool_call":
-                    if current_text:
-                        text = "".join(current_text).strip()
-                        if text:
-                            reasoning_blocks.append({"type": "text", "content": text})
-                        current_text = []
-                    reasoning_blocks.append({
-                        "type": "tool",
-                        "tool": event["tool"],
-                        "args": event.get("args", {}),
-                        "result": tool_results_by_id.get(event.get("id", ""), ""),
-                    })
-
-            if current_text:
-                text = "".join(current_text).strip()
-                if text:
-                    reasoning_blocks.append({"type": "text", "content": text})
-
+            reasoning_blocks = build_final_reasoning_blocks(all_events, final_text)
             answer_box[0]["reasoning_blocks"] = reasoning_blocks
 
             placeholder.empty()
             with placeholder.container():
-                if reasoning_blocks:
-                    with st.expander("reasoning details", expanded=False):
-                        render_reasoning_blocks(reasoning_blocks)
+                render_reasoning_details(reasoning_blocks)
                 st.write(final_text)
 
     if answer_box:
