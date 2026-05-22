@@ -6,7 +6,10 @@ cubes:
     data_source: default
     description: "Products sold on Olist. One row per product. Category names are in Portuguese; join to product_category_name_translation for English equivalents."
 
-    joins: []
+    joins:
+      - name: product_category_name_translation
+        sql: "{CUBE.product_category_name} = {product_category_name_translation.product_category_name}"
+        relationship: many_to_one
 
     dimensions:
       - name: product_id

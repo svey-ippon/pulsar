@@ -2,6 +2,8 @@ from pathlib import Path
 
 import yaml
 
+## TODO - MOST (not all) TESTS HERE CAN BE REPLACED BY `npx cubejs-cli validate`
+# TODO - see `docs/future_improvemnts/cube_schema_validation`
 
 ROOT = Path(__file__).resolve().parents[1]
 CUBE_MODEL_DIR = ROOT / "cube/model/cubes"
@@ -46,6 +48,28 @@ def test_order_items_cube_points_to_marts_and_defines_total_revenue():
         "type": "sum",
         "description": "Merchandise revenue: sum of item price, excluding freight and payment adjustments.",
     }
+
+
+def test_all_join_targets_declare_a_primary_key():
+    cubes: dict[str, dict] = {}
+    for path in CUBE_MODEL_DIR.glob("*.yml"):
+        cube = load_cube(str(path.relative_to(ROOT)))
+        cubes[cube["name"]] = cube
+
+    for cube_name, cube in cubes.items():
+        for join in cube.get("joins") or []:
+            target_name = join["name"]
+            target = cubes.get(target_name)
+            assert target is not None, (
+                f"{cube_name} joins '{target_name}' but no matching cube file found"
+            )
+            has_pk = any(
+                d.get("primary_key") is True
+                for d in target.get("dimensions") or []
+            )
+            assert has_pk, (
+                f"{cube_name} joins '{target_name}' but '{target_name}' has no primary_key dimension"
+            )
 
 
 def test_all_cube_models_have_meta_summary():

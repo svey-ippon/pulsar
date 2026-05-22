@@ -46,11 +46,11 @@ def render_chart(rows: list[dict]) -> None:
     ]
 
     if time_cols and numeric_value_cols:
-        st.plotly_chart(px.line(df, x=time_cols[0], y=numeric_value_cols[0], markers=True), use_container_width=True)
+        st.plotly_chart(px.line(df, x=time_cols[0], y=numeric_value_cols[0], markers=True), width='stretch')
     elif numeric_value_cols:
-        st.plotly_chart(px.bar(df, x=df.columns[0], y=numeric_value_cols[0]), use_container_width=True)
+        st.plotly_chart(px.bar(df, x=df.columns[0], y=numeric_value_cols[0]), width='stretch')
     else:
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width='stretch')
 
 
 def render_results(results: list[dict]) -> None:

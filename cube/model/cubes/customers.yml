@@ -41,6 +41,11 @@ cubes:
     measures:
       - name: count
         type: count
-        description: "Number of customer records. Because customer_id is order-scoped, this equals the number of orders placed, not unique buyers. Use customer_unique_id for true unique buyer counts."
+        description: "Number of customer records. Because customer_id is order-scoped, this equals the number of orders placed, not unique buyers."
+
+      - name: unique_customer_count
+        sql: "{CUBE}.\"CUSTOMER_UNIQUE_ID\""
+        type: count_distinct
+        description: "Number of distinct physical customers (stable across orders). Use this instead of count when you need to count unique buyers."
 
     pre_aggregations: []
