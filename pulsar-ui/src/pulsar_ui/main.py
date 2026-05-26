@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.ui import run_app
+from pulsar_ui.ui import run_app
 
 
 run_app()

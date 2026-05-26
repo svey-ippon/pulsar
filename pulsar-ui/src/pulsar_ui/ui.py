@@ -5,13 +5,13 @@ import uuid
 import streamlit as st
 
 from pulsar_agent.graph import stream_question
-from app.reasoning import (
+from pulsar_ui.reasoning import (
     append_reasoning_token,
     append_tool_call_block,
     apply_tool_result,
     build_final_reasoning_blocks,
 )
-from app.rendering import render_answer, render_reasoning_blocks
+from pulsar_ui.rendering import render_answer, render_reasoning_blocks
 
 
 def ensure_session_state() -> None:

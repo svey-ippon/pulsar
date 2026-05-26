@@ -18,7 +18,7 @@ This is a `uv` workspace with two packages:
 | Package | Path | Role |
 |---|---|---|
 | `pulsar-agent` | `pulsar-agent/` | LangGraph ReAct agent — no Streamlit dependency |
-| `pulsar-app` | `.` (root) | Streamlit UI — depends on `pulsar-agent` |
+| `pulsar-ui` | `pulsar-ui/` | Streamlit UI — depends on `pulsar-agent` |
 
 `snow-preparation/` is a separate standalone `uv` project for loading the Olist dataset into
 Snowflake.
@@ -46,7 +46,7 @@ docker compose up -d
 CUBE_API_URL=http://localhost:4000/cubejs-api/v1 \
 CUBE_API_TOKEN=<jwt-from-cubejs-api-secret> \
 ANTHROPIC_API_KEY=<anthropic-key> \
-uv run streamlit run app/main.py
+uv run streamlit run pulsar-ui/src/pulsar_ui/main.py
 ```
 
 `CUBE_API_TOKEN` must be a JWT signed from `CUBEJS_API_SECRET` — not the raw secret.
@@ -61,6 +61,9 @@ uv run pytest
 
 # Agent tests only (no Streamlit, no Cube YAML)
 uv run pytest pulsar-agent/tests/
+
+# UI tests only
+uv run pytest pulsar-ui/tests/
 ```
 
 ---
@@ -74,4 +77,6 @@ uv run pytest pulsar-agent/tests/
 | [`pulsar-agent/doc/data-flow.md`](pulsar-agent/doc/data-flow.md) | End-to-end walkthrough: question → answer |
 | [`pulsar-agent/doc/design/schema-discovery.md`](pulsar-agent/doc/design/schema-discovery.md) | Two-level `list_cubes` / `get_cube_schema` design |
 | [`pulsar-agent/doc/design/streaming-and-reasoning.md`](pulsar-agent/doc/design/streaming-and-reasoning.md) | Token streaming, reasoning text, extended thinking |
+| [`pulsar-ui/README.md`](pulsar-ui/README.md) | UI package — running, dev setup, package layout |
+| [`pulsar-ui/doc/architecture.md`](pulsar-ui/doc/architecture.md) | Module internals, session state, reasoning blocks lifecycle |
 | [`docs/cube-dev.md`](docs/cube-dev.md) | Validating and running Cube models locally |

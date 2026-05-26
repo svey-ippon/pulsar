@@ -15,20 +15,23 @@ The agent uses Claude Sonnet 4.6 to classify questions, discover the schema dyna
 ## Commands
 
 ```bash
-# Install Python deps (root project)
+# Install Python deps
 uv sync --group dev
 
 # Run all tests
-uv run pytest tests -v
+uv run pytest
 
-# Run a focused test file
-uv run pytest tests/test_agent_graph.py -v
+# Run agent tests only
+uv run pytest pulsar-agent/tests/ -v
+
+# Run UI tests only
+uv run pytest pulsar-ui/tests/ -v
 
 # Start Cube (from cube/)
 docker compose up -d
 
 # Run Streamlit (from repo root)
-CUBE_API_URL=http://localhost:4000/cubejs-api/v1 CUBE_API_TOKEN=<jwt> ANTHROPIC_API_KEY=<key> uv run streamlit run app/main.py
+CUBE_API_URL=http://localhost:4000/cubejs-api/v1 CUBE_API_TOKEN=<jwt> ANTHROPIC_API_KEY=<key> uv run streamlit run pulsar-ui/src/pulsar_ui/main.py
 
 # Load Olist data into Snowflake (from snow-preparation/)
 uv run python main.py
@@ -44,26 +47,32 @@ This repo is a `uv` workspace with two packages:
 
 ```
 repos_pulsar/
-├── pyproject.toml          ← workspace root — package "pulsar-app" (app/ + tests/)
+├── pyproject.toml          ← workspace root (coordinator + infra tests)
 ├── pulsar-agent/
 │   ├── pyproject.toml      ← workspace member — package "pulsar-agent"
 │   ├── src/
 │   │   └── pulsar_agent/   ← Python source (src layout, hatchling)
 │   └── tests/              ← agent unit tests (graph, tools, cube client)
-├── app/                    ← part of pulsar-app
-├── tests/                  ← app + cross-package tests
+├── pulsar-ui/
+│   ├── pyproject.toml      ← workspace member — package "pulsar-ui"
+│   ├── src/
+│   │   └── pulsar_ui/      ← Python source (src layout, hatchling)
+│   ├── tests/              ← UI unit tests (rendering, reasoning blocks)
+│   └── doc/                ← UI architecture documentation
+├── tests/                  ← infra tests (Cube YAML, cross-package imports)
 └── snow-preparation/       ← separate standalone uv project (not in workspace)
 ```
 
 Dependency direction (one-way, enforced by packaging):
 
 ```
-pulsar-app  →  pulsar-agent
+pulsar-ui  →  pulsar-agent
 ```
 
 - `pulsar-agent` has **no Streamlit dependency** and can be installed, tested, and eventually deployed independently.
-- `pulsar-app` depends on `pulsar-agent` via `[tool.uv.sources] pulsar-agent = { workspace = true }`.
-- Import name stays `agent` (`from pulsar_agent.graph import stream_question`); distribution name is `pulsar-agent`.
+- `pulsar-ui` depends on `pulsar-agent` via `[tool.uv.sources] pulsar-agent = { workspace = true }`.
+- Import name: `from pulsar_agent.graph import stream_question`; distribution name: `pulsar-agent`.
+- Import name: `from pulsar_ui.ui import run_app`; distribution name: `pulsar-ui`.
 
 This boundary is the seam that will become a network call (FastAPI/SSE) when graduating to MVP.
 
@@ -81,10 +90,10 @@ This boundary is the seam that will become a network call (FastAPI/SSE) when gra
 | `pulsar-agent/src/pulsar_agent/graph.py` | Thin orchestrator: `build_graph`, `answer_question`, `stream_question` | Write SQL or invent metrics |
 | `pulsar-agent/src/pulsar_agent/prompt.py` | System prompt (8 rules for the LLM) | — |
 | `pulsar-agent/src/pulsar_agent/memory.py` | MemorySaver checkpointer (singleton + test factory) | — |
-| `app/main.py` | Entry point — calls `run_app()` | Contain business logic |
-| `app/ui.py` | Session state, chat loop, streaming event handler | Contain business logic |
-| `app/rendering.py` | `render_answer`, `render_reasoning_blocks`, `render_reasoning_details` | — |
-| `app/reasoning.py` | Reasoning block management (`append_*`, `apply_*`, `build_final_*`) | — |
+| `pulsar-ui/src/pulsar_ui/main.py` | Entry point — calls `run_app()` | Contain business logic |
+| `pulsar-ui/src/pulsar_ui/ui.py` | Session state, chat loop, streaming event handler | Contain business logic |
+| `pulsar-ui/src/pulsar_ui/rendering.py` | `render_answer`, `render_reasoning_blocks`, `render_reasoning_details` | — |
+| `pulsar-ui/src/pulsar_ui/reasoning.py` | Reasoning block management (`append_*`, `apply_*`, `build_final_*`) | — |
 
 ### Key design rules
 
@@ -185,14 +194,14 @@ All cube YAML files live in `cube/model/cubes/`. Each maps a single `ECOMMERCE_D
 - `order_payments.payment_value` = total paid by customer (includes freight/adjustments)
 - `customers.count` = number of orders, not unique buyers; use `customer_unique_id` for unique buyers
 
-### UI (app/)
+### UI (pulsar-ui/)
 
-The UI is split into four modules:
+The UI is split into four modules in `pulsar-ui/src/pulsar_ui/`:
 
-#### app/main.py
-Thin entry point — just calls `run_app()` from `app/ui.py`.
+#### main.py
+Thin entry point — just calls `run_app()` from `pulsar_ui.ui`.
 
-#### app/ui.py
+#### ui.py
 - Streamlit chat interface; one `thread_id` (UUID) per session for cross-turn memory.
 - `run_app()` — sets up page config, renders sidebar, history, and chat input.
 - `stream_assistant_response(question)` — consumes `stream_question` events and builds live reasoning blocks in a `st.status` area:
@@ -202,7 +211,7 @@ Thin entry point — just calls `run_app()` from `app/ui.py`.
   - `answer` → builds final `reasoning_blocks` via `build_final_reasoning_blocks`; replaces live UI with final rendering.
 - Clear conversation button resets `thread_id` and message history.
 
-#### app/rendering.py
+#### rendering.py
 - **`render_reasoning_blocks(blocks)`** — renders a list of reasoning blocks:
   - `{"type": "text", "content": str}` → `st.write(content)`
   - `{"type": "tool", "tool": str, "args": dict, "result": str|None, "status": str}` → collapsible `st.expander` showing arguments and formatted result.
@@ -210,7 +219,7 @@ Thin entry point — just calls `run_app()` from `app/ui.py`.
 - **`render_reasoning_details(blocks)`** — wraps `render_reasoning_blocks` in a collapsed `st.status` labelled "reasoning details".
 - **`render_answer(answer)`** — renders `reasoning_blocks` (if present) then the final text.
 
-#### app/reasoning.py
+#### reasoning.py
 Pure functions for building and mutating reasoning block lists (no Streamlit imports):
 - **`append_reasoning_token(blocks, content)`** — appends content to the last text block, or creates a new one.
 - **`append_tool_call_block(blocks, event)`** — adds a new tool block in `"running"` state.
@@ -219,18 +228,20 @@ Pure functions for building and mutating reasoning block lists (no Streamlit imp
 
 ## Testing
 
-Tests are split by ownership — agent tests live with the agent package, app/infra tests stay at the workspace root.
+Tests are split by package ownership.
 
 **`pulsar-agent/tests/`** — run in isolation with `uv run pytest pulsar-agent/tests/`:
 - `test_agent_graph.py` — graph build, text extraction, refusal and happy-path behaviour using `FakeCubeClient` (no env vars needed); also tests streaming event shapes (`tool_call`, `tool_result`, `token`, `answer`).
 - `test_agent_tools.py` — tool wrapping, Pydantic validation, structured error JSON for each error path; covers all three tools including `get_cube_schema` and `list_cubes` summary extraction/fallback.
 - `test_cube_client.py` — HTTP client unit tests: retries, error classification, 4xx vs 5xx handling.
 
-**`tests/`** — app and cross-package tests:
+**`pulsar-ui/tests/`** — run in isolation with `uv run pytest pulsar-ui/tests/`:
+- `test_app_main.py` — `pulsar_ui.rendering` and `pulsar_ui.reasoning` unit tests (mocked Streamlit): reasoning block rendering, running tool display, `build_final_reasoning_blocks` exclusion of final answer text.
+
+**`tests/`** — infrastructure and cross-package tests:
 - `test_cube_model.py` — static contract: all cubes read from MARTS, primary keys set, `total_revenue` measure definition exact-matched, all cubes have `meta.summary` ≤120 chars.
-- `test_app_main.py` — `app/rendering.py` and `app/reasoning.py` unit tests (mocked Streamlit): reasoning block rendering, running tool display, `build_final_reasoning_blocks` exclusion of final answer text.
 - `test_project_imports.py` — import path verification from non-root directories.
 
-Run the full workspace suite from the root: `uv run pytest` (discovers both `tests/` and `pulsar-agent/tests/`).
+Run the full workspace suite from the root: `uv run pytest` (discovers `tests/`, `pulsar-agent/tests/`, `pulsar-ui/tests/`).
 
-Add a focused regression test before changing `pulsar-agent/src/pulsar_agent/graph.py`, `pulsar-agent/src/pulsar_agent/nodes.py`, `pulsar-agent/src/pulsar_agent/tools.py`, or any Cube YAML.
+Add a focused regression test before changing `pulsar-agent/src/pulsar_agent/graph.py`, `pulsar-agent/src/pulsar_agent/nodes.py`, `pulsar-agent/src/pulsar_agent/tools.py`, `pulsar-ui/src/pulsar_ui/reasoning.py`, or any Cube YAML.

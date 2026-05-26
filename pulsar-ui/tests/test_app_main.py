@@ -92,14 +92,14 @@ class FakeStreamlit(ModuleType):
 def load_rendering(monkeypatch):
     fake_streamlit = FakeStreamlit()
     monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
-    sys.modules.pop("app.rendering", None)
-    module = importlib.import_module("app.rendering")
+    sys.modules.pop("pulsar_ui.rendering", None)
+    module = importlib.import_module("pulsar_ui.rendering")
     return module, fake_streamlit
 
 
 def load_reasoning():
-    sys.modules.pop("app.reasoning", None)
-    return importlib.import_module("app.reasoning")
+    sys.modules.pop("pulsar_ui.reasoning", None)
+    return importlib.import_module("pulsar_ui.reasoning")
 
 
 def test_render_answer_does_not_render_results_block(monkeypatch):
