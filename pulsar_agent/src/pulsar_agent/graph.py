@@ -7,14 +7,14 @@ from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import START, StateGraph
 
-from agent.cube_client import SupportsCubeQueries
-from agent.extraction import extract_text as _extract_text
-from agent.extraction import prev_results_count as _prev_results_count
-from agent.memory import get_checkpointer
-from agent.nodes import make_agent_node, make_tool_node, should_continue
-from agent.state import AgentState
-from agent.streaming import stream_agent_events
-from agent.tools import make_tools
+from pulsar_agent.cube_client import SupportsCubeQueries
+from pulsar_agent.extraction import extract_text as _extract_text
+from pulsar_agent.extraction import prev_results_count as _prev_results_count
+from pulsar_agent.memory import get_checkpointer
+from pulsar_agent.nodes import make_agent_node, make_tool_node, should_continue
+from pulsar_agent.state import AgentState
+from pulsar_agent.streaming import stream_agent_events
+from pulsar_agent.tools import make_tools
 
 
 def build_graph(

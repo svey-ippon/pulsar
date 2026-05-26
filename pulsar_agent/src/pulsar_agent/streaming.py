@@ -5,7 +5,7 @@ from typing import Any, Generator, cast
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
-from agent.extraction import content_text, extract_text
+from pulsar_agent.extraction import content_text, extract_text
 
 
 def stream_agent_events(

@@ -21,15 +21,15 @@ stream_question(question, thread_id=st.session_state.thread_id)
 
 The `thread_id` lets LangGraph reload prior messages for the same Streamlit session.
 
-`stream_question` lives in `agent.graph`. It builds the graph, creates a `RunnableConfig`,
+`stream_question` lives in `pulsar_agent.graph`. It builds the graph, creates a `RunnableConfig`,
 records the number of already-persisted `cube_results`, then delegates streaming to
-`agent.streaming.stream_agent_events`.
+`pulsar_agent.streaming.stream_agent_events`.
 
 ---
 
 ## Step 2: The Graph Runs the ReAct Loop
 
-The graph state is defined in `agent.state`:
+The graph state is defined in `pulsar_agent.state`:
 
 ```python
 {
@@ -44,7 +44,7 @@ The loop is:
 agent node → tools node → agent node → ... → final answer
 ```
 
-The agent node in `agent.nodes` sends the system prompt plus the message history to the
+The agent node in `pulsar_agent.nodes` sends the system prompt plus the message history to the
 tool-bound LLM. The LLM either:
 
 - emits text content
@@ -55,7 +55,7 @@ tool-bound LLM. The LLM either:
 
 ## Step 3: The LLM Discovers and Queries Cube
 
-The tools are defined in `agent.tools` and backed by `agent.cube_client`.
+The tools are defined in `pulsar_agent.tools` and backed by `pulsar_agent.cube_client`.
 
 Typical sequence:
 
@@ -86,7 +86,7 @@ This is appended to `state["cube_results"]`.
 
 ## Step 4: Streaming Events Are Adapted for the UI
 
-`agent.streaming.stream_agent_events` converts LangGraph chunks into stable application events:
+`pulsar_agent.streaming.stream_agent_events` converts LangGraph chunks into stable application events:
 
 ```python
 {"type": "token", "content": str}
@@ -147,7 +147,7 @@ The final `answer` event contains:
 }
 ```
 
-`text` is extracted by `agent.extraction.extract_text` from the latest AI message in the
+`text` is extracted by `pulsar_agent.extraction.extract_text` from the latest AI message in the
 current turn that has no tool calls.
 
 `results` is sliced from `cube_results`:
@@ -165,7 +165,7 @@ structured `results` field is still returned by the agent API for tests and futu
 
 ## Error Flow
 
-Cube failures are converted into JSON tool outputs by `agent.tools`:
+Cube failures are converted into JSON tool outputs by `pulsar_agent.tools`:
 
 ```json
 {"error": "Cube service unavailable. Please try again later."}
@@ -189,14 +189,14 @@ app.main
 app.ui.run_app
   │
   ▼
-agent.graph.stream_question
+pulsar_agent.graph.stream_question
   │
   ├── build_graph
-  │     ├── agent.nodes.make_agent_node
-  │     ├── agent.nodes.make_tool_node
+  │     ├── pulsar_agent.nodes.make_agent_node
+  │     ├── pulsar_agent.nodes.make_tool_node
   │     └── agent.tools.make_tools
   │
-  └── agent.streaming.stream_agent_events
+  └── pulsar_agent.streaming.stream_agent_events
         ├── token events
         ├── tool_call events
         ├── tool_result events

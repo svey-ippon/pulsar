@@ -8,8 +8,8 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.graph import END
 
-from agent.prompt import SYSTEM_PROMPT
-from agent.state import AgentState, QueryResult
+from pulsar_agent.prompt import SYSTEM_PROMPT
+from pulsar_agent.state import AgentState, QueryResult
 
 
 def make_agent_node(llm_with_tools: Any) -> Callable[[AgentState, RunnableConfig], dict]:

@@ -15,13 +15,3 @@ Local URL: http://localhost:4000
 Create `cube/.env` from `cube/example.env`, set local Snowflake values, and do not commit `cube/.env`.
 
 Cube reads the Olist mart tables from `ECOMMERCE_DB.MARTS`.
-
-## First POC Metric
-
-The first implemented metric is:
-
-```text
-order_items.total_revenue = sum(ECOMMERCE_DB.MARTS.ORDER_ITEMS.price)
-```
-
-This is merchandise revenue and excludes freight and payment adjustments.

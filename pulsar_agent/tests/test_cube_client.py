@@ -1,7 +1,7 @@
 import requests
 import pytest
 
-from agent.cube_client import CubeClient, CubeQueryError, CubeServiceError
+from pulsar_agent.cube_client import CubeClient, CubeQueryError, CubeServiceError
 
 
 class FakeResponse:

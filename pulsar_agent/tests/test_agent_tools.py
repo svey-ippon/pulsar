@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 
-from agent.cube_client import CubeQueryError, CubeServiceError
-from agent.tools import make_tools
+from pulsar_agent.cube_client import CubeQueryError, CubeServiceError
+from pulsar_agent.tools import make_tools
 
 
 class FakeCubeClient:

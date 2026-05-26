@@ -4,7 +4,7 @@ import uuid
 
 import streamlit as st
 
-from agent.graph import stream_question
+from pulsar_agent.graph import stream_question
 from app.reasoning import (
     append_reasoning_token,
     append_tool_call_block,

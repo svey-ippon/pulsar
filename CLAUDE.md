@@ -38,57 +38,122 @@ uv run python main.py
 
 ## Architecture
 
+### Workspace layout
+
+This repo is a `uv` workspace with two packages:
+
+```
+repos_pulsar/
+├── pyproject.toml          ← workspace root — package "pulsar-app" (app/ + tests/)
+├── pulsar_agent/
+│   ├── pyproject.toml      ← workspace member — package "pulsar-agent"
+│   ├── src/
+│   │   └── pulsar_agent/   ← Python source (src layout, hatchling)
+│   └── tests/              ← agent unit tests (graph, tools, cube client)
+├── app/                    ← part of pulsar-app
+├── tests/                  ← app + cross-package tests
+└── snow-preparation/       ← separate standalone uv project (not in workspace)
+```
+
+Dependency direction (one-way, enforced by packaging):
+
+```
+pulsar-app  →  pulsar-agent
+```
+
+- `pulsar-agent` has **no Streamlit dependency** and can be installed, tested, and eventually deployed independently.
+- `pulsar-app` depends on `pulsar-agent` via `[tool.uv.sources] pulsar-agent = { workspace = true }`.
+- Import name stays `agent` (`from pulsar_agent.graph import stream_question`); distribution name is `pulsar-agent`.
+
+This boundary is the seam that will become a network call (FastAPI/SSE) when graduating to MVP.
+
 ### Layer responsibilities (strict)
 
 | Layer | Job | Must not |
 |---|---|---|
 | `cube/model/cubes/*.yml` | Define governed metrics and dimensions | Run transformations; query raw tables |
-| `agent/cube_client.py` | HTTP client for Cube REST API (`/meta`, `/load`) | Connect to Snowflake |
-| `agent/tools.py` | LangChain tool factory (`list_cubes`, `query_cube`) | Contain business logic |
-| `agent/graph.py` | ReAct agent: classify question → refuse or query Cube | Write SQL or invent metrics |
-| `agent/prompt.py` | System prompt (6 rules for the LLM) | — |
-| `agent/memory.py` | MemorySaver checkpointer (singleton + test factory) | — |
-| `app/main.py` | Render chat, streaming events, charts, and raw data | Contain business logic |
+| `pulsar_agent/src/pulsar_agent/cube_client.py` | HTTP client for Cube REST API (`/meta`, `/load`) | Connect to Snowflake |
+| `pulsar_agent/src/pulsar_agent/tools.py` | LangChain tool factory (`list_cubes`, `get_cube_schema`, `query_cube`) | Contain business logic |
+| `pulsar_agent/src/pulsar_agent/state.py` | `AgentState` and `QueryResult` TypedDicts | — |
+| `pulsar_agent/src/pulsar_agent/nodes.py` | Agent node, tool node, routing predicate | — |
+| `pulsar_agent/src/pulsar_agent/extraction.py` | Text extraction helpers (`extract_text`, `prev_results_count`) | — |
+| `pulsar_agent/src/pulsar_agent/streaming.py` | `stream_agent_events` generator | — |
+| `pulsar_agent/src/pulsar_agent/graph.py` | Thin orchestrator: `build_graph`, `answer_question`, `stream_question` | Write SQL or invent metrics |
+| `pulsar_agent/src/pulsar_agent/prompt.py` | System prompt (8 rules for the LLM) | — |
+| `pulsar_agent/src/pulsar_agent/memory.py` | MemorySaver checkpointer (singleton + test factory) | — |
+| `app/main.py` | Entry point — calls `run_app()` | Contain business logic |
+| `app/ui.py` | Session state, chat loop, streaming event handler | Contain business logic |
+| `app/rendering.py` | `render_answer`, `render_reasoning_blocks`, `render_reasoning_details` | — |
+| `app/reasoning.py` | Reasoning block management (`append_*`, `apply_*`, `build_final_*`) | — |
 
 ### Key design rules
 
 - **All data access goes through Cube.** Neither the agent nor the UI holds Snowflake credentials.
 - **Cube models must point at `ECOMMERCE_DB.MARTS.*`**, never at raw tables. The static test `tests/test_cube_model.py` enforces this.
 - **Predictions/forecasts are refused immediately** — the system prompt instructs the LLM to refuse before calling any tool.
+- **Ambiguous questions are surfaced to the user** — if two schema members could answer the same question with different semantics, the LLM must stop and ask, not guess silently.
 - **Metrics not in the semantic layer are refused** — the LLM must not invent SQL or workarounds.
 - **Successful answers include the Cube query dict** for auditability.
 
-### agent/graph.py internals
+### pulsar_agent/ internals
 
-The agent is a LangGraph `StateGraph` using the ReAct pattern:
+#### pulsar_agent/src/pulsar_agent/state.py
 
-- **`AgentState`**: `messages` (accumulates with `add_messages`) + `cube_results` (accumulates with `operator.add`)
-- **`QueryResult`**: `{"query": dict, "data": list[dict]}` — one per `query_cube` call per turn
-- **Agent node**: sends system prompt + message history to Claude Sonnet 4.6; if the response has tool calls → routes to tools node; otherwise → END
-- **Tools node**: executes `list_cubes` or `query_cube`, parses results, appends `QueryResult` to state
-- **Checkpointer**: `MemorySaver` keyed by `thread_id` — cross-turn memory within a session; lost on process restart
+- **`QueryResult`**: `{"query": dict, "data": list[dict]}` — one per `query_cube` call per turn.
+- **`AgentState`**: `messages` (accumulates with `add_messages`) + `cube_results` (accumulates with `operator.add`).
 
-`answer_question(question, thread_id)` — blocking entry point used by tests.
-`stream_question(question, thread_id)` — generator yielding `{"type": "tool_call" | "token" | "answer"}` events for the UI.
+#### pulsar_agent/src/pulsar_agent/nodes.py
 
-### agent/tools.py internals
+- **`make_agent_node(llm_with_tools)`** — returns the agent node function; uses `.stream()` on the LLM (not `.invoke()`) so token chunks are emitted during execution and captured by LangGraph's streaming.
+- **`make_tool_node(tools_by_name)`** — executes each tool call in the last AI message; appends `QueryResult` to state for every successful `query_cube` response.
+- **`should_continue(state)`** — routes to `"tools"` if the last message has tool calls, else `END`.
+
+#### pulsar_agent/src/pulsar_agent/extraction.py
+
+- **`content_text(content)`** — normalises LangChain message content (str or list-of-blocks) to a plain string.
+- **`extract_text(messages)`** — returns the final non-tool-call AI text from the current turn.
+- **`prev_results_count(graph, config)`** — reads the checkpoint to know how many `cube_results` existed before the current turn (used to slice new results).
+
+#### pulsar_agent/src/pulsar_agent/streaming.py
+
+- **`stream_agent_events(graph, question, config, prev_results_count)`** — drives the graph with `stream_mode=["values", "messages"]` and yields four event types:
+  - `{"type": "tool_call",   "tool": str, "args": dict, "id": str}`
+  - `{"type": "tool_result", "id": str,   "content": str}`
+  - `{"type": "token",       "content": str}`
+  - `{"type": "answer",      "answer": {"text": str, "results": list}}`
+
+#### pulsar_agent/src/pulsar_agent/graph.py
+
+Thin orchestration module — imports from all sub-modules above:
+
+- **`build_graph(...)`** — assembles the `StateGraph`, wires nodes and edges, compiles with checkpointer.
+- **`answer_question(question, thread_id, ...)`** — blocking entry point for tests; returns `{"text": str, "results": list[QueryResult]}`.
+- **`stream_question(question, thread_id, ...)`** — generator; delegates to `stream_agent_events`.
+
+The `_extract_text` name is re-exported from `pulsar_agent.graph` (imported from `pulsar_agent.extraction`) for backwards compatibility with tests.
+
+**Checkpointer**: `MemorySaver` keyed by `thread_id` — cross-turn memory within a session; lost on process restart.
+
+### pulsar_agent/src/pulsar_agent/tools.py internals
 
 `make_tools(cube_client)` returns three LangChain tools:
 
-- **`list_cubes()`** — calls `/meta`; returns `[{name, title, summary}]` for all cubes (lightweight orientation); extracts `meta.summary` from each cube, falling back to the first sentence of `description` if absent; catches `CubeServiceError`
-- **`get_cube_schema(cube_name)`** — validated by `GetCubeSchemaArgs` (Pydantic); calls `client.get_cube_schema()`; returns `{name, title, description, measures, dimensions}` for one cube; on unknown cube name returns structured error JSON; catches `CubeServiceError`
-- **`query_cube(measures, dimensions, filters, time_dimensions, limit)`** — validated by `QueryCubeArgs` (Pydantic); calls `/load`; returns rows as JSON string; catches both `CubeServiceError` (stop + report) and `CubeQueryError` 400 (hint to retry with corrected args); default limit 500, max 5000
+- **`list_cubes()`** — calls `/meta`; returns `[{name, title, summary}]` for all cubes (lightweight orientation); extracts `meta.summary` from each cube, falling back to the first sentence of `description` if absent; catches `CubeServiceError`.
+- **`get_cube_schema(cube_name)`** — validated by `GetCubeSchemaArgs` (Pydantic); calls `client.get_cube_schema()`; returns `{name, title, description, measures, dimensions}` for one cube; on unknown cube name returns structured error JSON with a hint; catches `CubeServiceError`.
+- **`query_cube(measures, dimensions, filters, time_dimensions, limit)`** — validated by `QueryCubeArgs` (Pydantic); calls `/load`; returns rows as JSON string; catches both `CubeServiceError` (stop + report) and `CubeQueryError` 400 (hint to retry with corrected args); default limit 500, max 5000.
 
 Error responses are structured JSON so the LLM can react correctly (retry vs. stop).
 
-### System prompt rules (agent/prompt.py)
+### System prompt rules (pulsar_agent/src/pulsar_agent/prompt.py)
 
 1. Two-step schema discovery: call `list_cubes` to see all cube summaries, then call `get_cube_schema(cube_name)` on the relevant cube(s) before querying. Reuse schema already in conversation history.
 2. Use only member names from the `get_cube_schema` response — no invention.
-3. Refuse predictions, forecasts, projections, and "next month" questions.
-4. Every answer must state which measures/dimensions were queried.
-5. If a metric is not in the semantic layer, say so — no SQL workarounds.
-6. On tool error JSON, stop immediately and report service unavailable.
+3. **Ambiguity check**: if the schema offers two or more members that could answer the question with meaningfully different results, stop and ask the user to choose — do not pick one silently.
+4. Refuse predictions, forecasts, and projections. State clearly; attempt no workaround.
+5. Every answer must state which measures/dimensions were queried.
+6. Before enriching results with own knowledge (translations, labels, mappings), verify first whether the data is available in the semantic layer; query it if so; disclose when using own knowledge.
+7. If a metric is not in the semantic layer, say so — no SQL workarounds.
+8. On tool error JSON: if a `"hint"` key is present, follow it and retry; if no `"hint"`, the service is unavailable — stop immediately and report.
 
 ### Environment and secrets
 
@@ -120,24 +185,52 @@ All cube YAML files live in `cube/model/cubes/`. Each maps a single `ECOMMERCE_D
 - `order_payments.payment_value` = total paid by customer (includes freight/adjustments)
 - `customers.count` = number of orders, not unique buyers; use `customer_unique_id` for unique buyers
 
-### UI (app/main.py)
+### UI (app/)
 
-- Streamlit chat interface; one `thread_id` (UUID) per session for cross-turn memory
-- Streaming: tool calls → `st.status` label updates; tokens → `st.write_stream`; final answer → `render_answer()`
-- Auto-visualization in `render_chart()`:
-  - Column with `.month`/`.day`/`.year` suffix + numeric → line chart (time series)
-  - Numeric columns only → bar chart (categorical)
-  - Otherwise → `st.dataframe` (raw table)
-- Each result has an expandable section showing the exact Cube query dict
-- Clear conversation button resets `thread_id` and message history
+The UI is split into four modules:
+
+#### app/main.py
+Thin entry point — just calls `run_app()` from `app/ui.py`.
+
+#### app/ui.py
+- Streamlit chat interface; one `thread_id` (UUID) per session for cross-turn memory.
+- `run_app()` — sets up page config, renders sidebar, history, and chat input.
+- `stream_assistant_response(question)` — consumes `stream_question` events and builds live reasoning blocks in a `st.status` area:
+  - `tool_call` → adds a "running" tool block; updates status label.
+  - `tool_result` → fills in the tool block result (marks as done).
+  - `token` → appends text to the live reasoning blocks; updates status to "generating...".
+  - `answer` → builds final `reasoning_blocks` via `build_final_reasoning_blocks`; replaces live UI with final rendering.
+- Clear conversation button resets `thread_id` and message history.
+
+#### app/rendering.py
+- **`render_reasoning_blocks(blocks)`** — renders a list of reasoning blocks:
+  - `{"type": "text", "content": str}` → `st.write(content)`
+  - `{"type": "tool", "tool": str, "args": dict, "result": str|None, "status": str}` → collapsible `st.expander` showing arguments and formatted result.
+  - Tool result format: `list_cubes`/`get_cube_schema` → `st.json`; `query_cube` list → `st.dataframe`; other → `st.write`.
+- **`render_reasoning_details(blocks)`** — wraps `render_reasoning_blocks` in a collapsed `st.status` labelled "reasoning details".
+- **`render_answer(answer)`** — renders `reasoning_blocks` (if present) then the final text.
+
+#### app/reasoning.py
+Pure functions for building and mutating reasoning block lists (no Streamlit imports):
+- **`append_reasoning_token(blocks, content)`** — appends content to the last text block, or creates a new one.
+- **`append_tool_call_block(blocks, event)`** — adds a new tool block in `"running"` state.
+- **`apply_tool_result(blocks, event)`** — finds the matching tool block by id and marks it `"done"` with its result.
+- **`build_final_reasoning_blocks(events, final_text)`** — reconstructs the ordered reasoning sequence from the raw event stream, excluding the final answer text (which is rendered separately).
 
 ## Testing
 
-- `tests/test_cube_model.py` — static contract: all cubes read from MARTS, primary keys set, `total_revenue` measure definition exact-matched, all cubes have `meta.summary` ≤120 chars.
-- `tests/test_agent_graph.py` — graph build, answer extraction, refusal and happy-path behaviour using `FakeCubeClient` (no env vars needed).
-- `tests/test_agent_tools.py` — tool wrapping, Pydantic validation, structured error JSON for each error path; covers all three tools including `get_cube_schema` and `list_cubes` summary extraction/fallback.
-- `tests/test_cube_client.py` — HTTP client unit tests: retries, error classification, 4xx vs 5xx handling.
-- `tests/test_app_main.py` — Streamlit rendering (mocked): chart type selection, empty data, raw table fallback.
-- `tests/test_project_imports.py` — import path verification from non-root directories.
+Tests are split by ownership — agent tests live with the agent package, app/infra tests stay at the workspace root.
 
-Add a focused regression test before changing `agent/graph.py`, `agent/tools.py`, or any Cube YAML.
+**`pulsar_agent/tests/`** — run in isolation with `uv run pytest pulsar_agent/tests/`:
+- `test_agent_graph.py` — graph build, text extraction, refusal and happy-path behaviour using `FakeCubeClient` (no env vars needed); also tests streaming event shapes (`tool_call`, `tool_result`, `token`, `answer`).
+- `test_agent_tools.py` — tool wrapping, Pydantic validation, structured error JSON for each error path; covers all three tools including `get_cube_schema` and `list_cubes` summary extraction/fallback.
+- `test_cube_client.py` — HTTP client unit tests: retries, error classification, 4xx vs 5xx handling.
+
+**`tests/`** — app and cross-package tests:
+- `test_cube_model.py` — static contract: all cubes read from MARTS, primary keys set, `total_revenue` measure definition exact-matched, all cubes have `meta.summary` ≤120 chars.
+- `test_app_main.py` — `app/rendering.py` and `app/reasoning.py` unit tests (mocked Streamlit): reasoning block rendering, running tool display, `build_final_reasoning_blocks` exclusion of final answer text.
+- `test_project_imports.py` — import path verification from non-root directories.
+
+Run the full workspace suite from the root: `uv run pytest` (discovers both `tests/` and `pulsar_agent/tests/`).
+
+Add a focused regression test before changing `pulsar_agent/src/pulsar_agent/graph.py`, `pulsar_agent/src/pulsar_agent/nodes.py`, `pulsar_agent/src/pulsar_agent/tools.py`, or any Cube YAML.

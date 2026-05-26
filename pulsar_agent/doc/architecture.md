@@ -1,13 +1,13 @@
 # Agent Module Architecture
 
-The `agent/` package contains the LangGraph-based data agent used by the Streamlit UI.
+The `pulsar_agent/src/pulsar_agent/` package contains the LangGraph-based data agent used by the Streamlit UI.
 It turns a user question into a sequence of LLM messages, Cube tool calls, tool results,
 and a final answer.
 
 The public API is intentionally small:
 
 ```python
-from agent.graph import answer_question, build_graph, stream_question
+from pulsar_agent.graph import answer_question, build_graph, stream_question
 ```
 
 - `stream_question(...)` is the UI entry point. It yields incremental events for Streamlit.
@@ -20,16 +20,16 @@ from agent.graph import answer_question, build_graph, stream_question
 
 | Module | Responsibility |
 |---|---|
-| `agent.graph` | Public orchestration API. Builds the graph and exposes `answer_question` / `stream_question`. |
-| `agent.state` | Shared typed state for LangGraph: message history and captured Cube query results. |
-| `agent.nodes` | LangGraph node factories and routing logic for the ReAct loop. |
-| `agent.streaming` | Adapter from LangGraph stream chunks to UI-facing events. |
-| `agent.extraction` | Pure helpers that extract final answer text and current-turn result slices. |
-| `agent.tools` | LangChain tool definitions backed by a Cube query client. |
-| `agent.cube_client` | HTTP client and protocol for Cube `/meta` and `/load` operations. |
-| `agent.memory` | In-process LangGraph checkpointer factories. |
-| `agent.prompt` | System prompt that constrains the agent's behavior. |
-| `agent.__init__` | Empty package marker. No runtime behavior. |
+| `pulsar_agent.graph` | Public orchestration API. Builds the graph and exposes `answer_question` / `stream_question`. |
+| `pulsar_agent.state` | Shared typed state for LangGraph: message history and captured Cube query results. |
+| `pulsar_agent.nodes` | LangGraph node factories and routing logic for the ReAct loop. |
+| `pulsar_agent.streaming` | Adapter from LangGraph stream chunks to UI-facing events. |
+| `pulsar_agent.extraction` | Pure helpers that extract final answer text and current-turn result slices. |
+| `pulsar_agent.tools` | LangChain tool definitions backed by a Cube query client. |
+| `pulsar_agent.cube_client` | HTTP client and protocol for Cube `/meta` and `/load` operations. |
+| `pulsar_agent.memory` | In-process LangGraph checkpointer factories. |
+| `pulsar_agent.prompt` | System prompt that constrains the agent's behavior. |
+| `pulsar_agent.__init__` | Empty package marker. No runtime behavior. |
 
 ---
 
@@ -38,7 +38,7 @@ from agent.graph import answer_question, build_graph, stream_question
 ```text
 app.ui
   │
-  └── agent.graph.stream_question(question, thread_id)
+  └── pulsar_agent.graph.stream_question(question, thread_id)
         │
         ├── build_graph()
         │     ├── make_tools()              → LangChain tools
@@ -46,7 +46,7 @@ app.ui
         │     ├── make_tool_node()          → Cube tool execution node
         │     └── get_checkpointer()        → MemorySaver
         │
-        └── agent.streaming.stream_agent_events()
+        └── pulsar_agent.streaming.stream_agent_events()
               ├── token       events        → streamed prose / reasoning text
               ├── tool_call   events        → completed tool call name, args, id
               ├── tool_result events        → raw tool result content
@@ -73,9 +73,9 @@ or produces a final answer. Tool calls are executed by the tools node, converted
 
 ---
 
-## `agent.graph`
+## `pulsar_agent.graph`
 
-`agent.graph` is the public integration layer. It should stay small and mostly declarative.
+`pulsar_agent.graph` is the public integration layer. It should stay small and mostly declarative.
 
 ### Contents
 
@@ -90,20 +90,20 @@ or produces a final answer. Tool calls are executed by the tools node, converted
 - Bind tools to the LLM.
 - Wire the LangGraph `StateGraph` with the agent node, tools node, and conditional edge.
 - Create a `RunnableConfig` with the caller's `thread_id`.
-- Delegate answer extraction to `agent.extraction`.
-- Delegate stream adaptation to `agent.streaming`.
+- Delegate answer extraction to `pulsar_agent.extraction`.
+- Delegate stream adaptation to `pulsar_agent.streaming`.
 
 ### Deliberate non-responsibilities
 
-- It does not implement tool execution logic. That lives in `agent.nodes`.
-- It does not parse streamed chunks. That lives in `agent.streaming`.
-- It does not know Cube HTTP details. That lives in `agent.cube_client`.
+- It does not implement tool execution logic. That lives in `pulsar_agent.nodes`.
+- It does not parse streamed chunks. That lives in `pulsar_agent.streaming`.
+- It does not know Cube HTTP details. That lives in `pulsar_agent.cube_client`.
 
 ---
 
-## `agent.state`
+## `pulsar_agent.state`
 
-`agent.state` defines the shared graph state.
+`pulsar_agent.state` defines the shared graph state.
 
 ```python
 class QueryResult(TypedDict):
@@ -131,9 +131,9 @@ recording the previous result count before graph execution and slicing the final
 
 ---
 
-## `agent.nodes`
+## `pulsar_agent.nodes`
 
-`agent.nodes` contains the executable graph nodes and routing decision.
+`pulsar_agent.nodes` contains the executable graph nodes and routing decision.
 
 ### Contents
 
@@ -179,9 +179,9 @@ Routes the graph:
 
 ---
 
-## `agent.streaming`
+## `pulsar_agent.streaming`
 
-`agent.streaming` converts raw LangGraph stream chunks into stable application events.
+`pulsar_agent.streaming` converts raw LangGraph stream chunks into stable application events.
 
 ### Contents
 
@@ -213,9 +213,9 @@ tool calls from partial JSON deltas. This avoids UI events with incomplete argum
 
 ---
 
-## `agent.extraction`
+## `pulsar_agent.extraction`
 
-`agent.extraction` contains pure helpers for answer assembly.
+`pulsar_agent.extraction` contains pure helpers for answer assembly.
 
 ### Contents
 
@@ -250,9 +250,9 @@ This keeps follow-up questions from re-rendering previous turn results.
 
 ---
 
-## `agent.tools`
+## `pulsar_agent.tools`
 
-`agent.tools` defines the LLM-callable Cube tools.
+`pulsar_agent.tools` defines the LLM-callable Cube tools.
 
 ### Contents
 
@@ -295,9 +295,9 @@ This keeps the LangGraph loop alive and lets the LLM produce a user-facing failu
 
 ---
 
-## `agent.cube_client`
+## `pulsar_agent.cube_client`
 
-`agent.cube_client` is the HTTP boundary around Cube.
+`pulsar_agent.cube_client` is the HTTP boundary around Cube.
 
 ### Contents
 
@@ -322,14 +322,14 @@ This keeps the LangGraph loop alive and lets the LLM produce a user-facing failu
 
 ### Protocol use
 
-`SupportsCubeQueries` lets tests inject fake clients and keeps `agent.tools` independent from
+`SupportsCubeQueries` lets tests inject fake clients and keeps `pulsar_agent.tools` independent from
 the concrete HTTP implementation.
 
 ---
 
-## `agent.memory`
+## `pulsar_agent.memory`
 
-`agent.memory` owns the checkpointer used by LangGraph.
+`pulsar_agent.memory` owns the checkpointer used by LangGraph.
 
 ### Contents
 
@@ -351,9 +351,9 @@ the concrete HTTP implementation.
 
 ---
 
-## `agent.prompt`
+## `pulsar_agent.prompt`
 
-`agent.prompt` contains `SYSTEM_PROMPT`.
+`pulsar_agent.prompt` contains `SYSTEM_PROMPT`.
 
 ### Responsibilities
 
@@ -388,10 +388,10 @@ The most important behavior to preserve in tests:
 
 ## Maintenance Rules
 
-- Keep `agent.graph` thin. New behavior usually belongs in `nodes`, `streaming`, `tools`, or
+- Keep `pulsar_agent.graph` thin. New behavior usually belongs in `nodes`, `streaming`, `tools`, or
   `extraction`.
-- Keep `agent.extraction` pure. It should not call the LLM, Streamlit, or Cube.
-- Keep `agent.streaming` UI-agnostic. It emits dictionaries; Streamlit formatting belongs in
+- Keep `pulsar_agent.extraction` pure. It should not call the LLM, Streamlit, or Cube.
+- Keep `pulsar_agent.streaming` UI-agnostic. It emits dictionaries; Streamlit formatting belongs in
   `app.ui` and `app.rendering`.
-- Keep `agent.tools` as the only place where LangChain tool schemas are defined.
-- Keep `agent.cube_client` as the only place that knows Cube HTTP endpoints.
+- Keep `pulsar_agent.tools` as the only place where LangChain tool schemas are defined.
+- Keep `pulsar_agent.cube_client` as the only place that knows Cube HTTP endpoints.

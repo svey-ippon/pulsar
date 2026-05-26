@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 
-from agent.graph import _extract_text, answer_question, build_graph, stream_question
-from agent.memory import make_checkpointer
+from pulsar_agent.graph import _extract_text, answer_question, build_graph, stream_question
+from pulsar_agent.memory import make_checkpointer
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ def test_supported_revenue_question_returns_results_with_data_and_query():
     mock_graph = MagicMock()
     mock_graph.invoke.return_value = _revenue_state()
 
-    with patch("agent.graph.build_graph", return_value=mock_graph):
+    with patch("pulsar_agent.graph.build_graph", return_value=mock_graph):
         answer = answer_question("What is the total revenue per month?", cube_client=FakeCubeClient())
 
     assert len(answer["results"]) == 1
@@ -133,7 +133,7 @@ def test_refusal_question_returns_empty_results():
     mock_graph = MagicMock()
     mock_graph.invoke.return_value = _refusal_state("I cannot predict future revenue.")
 
-    with patch("agent.graph.build_graph", return_value=mock_graph):
+    with patch("pulsar_agent.graph.build_graph", return_value=mock_graph):
         answer = answer_question("Predict next month's revenue", cube_client=FakeCubeClient())
 
     assert answer["results"] == []
@@ -150,7 +150,7 @@ def test_unsupported_question_returns_empty_results():
         "cube_results": [],
     }
 
-    with patch("agent.graph.build_graph", return_value=mock_graph):
+    with patch("pulsar_agent.graph.build_graph", return_value=mock_graph):
         answer = answer_question("What can you do?", cube_client=FakeCubeClient())
 
     assert answer["results"] == []
@@ -176,7 +176,7 @@ def test_answer_question_returns_all_results_when_query_cube_called_twice():
         ],
     }
 
-    with patch("agent.graph.build_graph", return_value=mock_graph):
+    with patch("pulsar_agent.graph.build_graph", return_value=mock_graph):
         answer = answer_question("Revenue per month and per state", cube_client=FakeCubeClient())
 
     assert len(answer["results"]) == 2
@@ -192,7 +192,7 @@ def test_answer_question_does_not_require_env_vars_when_model_and_client_are_inj
     mock_graph = MagicMock()
     mock_graph.invoke.return_value = _refusal_state()
 
-    with patch("agent.graph.build_graph", return_value=mock_graph):
+    with patch("pulsar_agent.graph.build_graph", return_value=mock_graph):
         answer = answer_question("Predict revenue", cube_client=FakeCubeClient(), model=MagicMock())
 
     assert answer is not None

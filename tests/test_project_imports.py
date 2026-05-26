@@ -12,7 +12,7 @@ def test_agent_package_imports_when_process_starts_from_app_directory():
     env.pop("PYTHONPATH", None)
 
     result = subprocess.run(
-        [sys.executable, "-c", "from agent.graph import answer_question; print(answer_question.__name__)"],
+        [sys.executable, "-c", "from pulsar_agent.graph import answer_question; print(answer_question.__name__)"],
         cwd=ROOT / "app",
         env=env,
         capture_output=True,

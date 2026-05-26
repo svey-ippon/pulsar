@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, ConfigDict, Field
 
-from agent.cube_client import CubeClient, CubeQueryError, CubeServiceError, SupportsCubeQueries
+from pulsar_agent.cube_client import CubeClient, CubeQueryError, CubeServiceError, SupportsCubeQueries
 
 logger = logging.getLogger(__name__)
 
