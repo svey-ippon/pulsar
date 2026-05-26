@@ -1,18 +1,27 @@
-# Agent Module Architecture
+# pulsar-agent — Architecture
 
-The `pulsar_agent/src/pulsar_agent/` package contains the LangGraph-based data agent used by the Streamlit UI.
-It turns a user question into a sequence of LLM messages, Cube tool calls, tool results,
-and a final answer.
+`pulsar-agent` is a LangGraph ReAct agent that turns a natural-language question into a sequence
+of LLM messages, Cube semantic-layer tool calls, and a final answer.
 
-The public API is intentionally small:
+It is a standalone `uv` workspace package with no Streamlit dependency. See the
+[README](../README.md) for installation and quick-start instructions.
+
+**Related docs:**
+- [Data flow walkthrough](data-flow.md) — step-by-step: question in, answer out
+- [Schema discovery design](design/schema-discovery.md) — `list_cubes` / `get_cube_schema` two-level convention
+- [Streaming and reasoning](design/streaming-and-reasoning.md) — why Claude reasons as plain tokens
+
+---
+
+## Public API
 
 ```python
 from pulsar_agent.graph import answer_question, build_graph, stream_question
 ```
 
-- `stream_question(...)` is the UI entry point. It yields incremental events for Streamlit.
-- `answer_question(...)` is the synchronous entry point used by tests and simple callers.
-- `build_graph(...)` wires the LangGraph state machine.
+- `stream_question(...)` is the primary entry point. It yields incremental events for any UI consumer.
+- `answer_question(...)` is the blocking entry point used by tests and scripts.
+- `build_graph(...)` wires the LangGraph state machine; useful for advanced injection.
 
 ---
 

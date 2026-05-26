@@ -1,7 +1,7 @@
 # Data Flow: Question to Answer
 
-This document follows one user question from Streamlit through the LangGraph agent and back to
-the UI.
+End-to-end walkthrough of one user question through the full stack.
+For module internals see [architecture.md](architecture.md).
 
 ---
 
@@ -194,7 +194,7 @@ pulsar_agent.graph.stream_question
   ├── build_graph
   │     ├── pulsar_agent.nodes.make_agent_node
   │     ├── pulsar_agent.nodes.make_tool_node
-  │     └── agent.tools.make_tools
+  │     └── pulsar_agent.tools.make_tools
   │
   └── pulsar_agent.streaming.stream_agent_events
         ├── token events

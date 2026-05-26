@@ -1,62 +1,77 @@
-# Data Agent POC
+# Pulsar — Data Agent POC
 
-This repository contains the first thin slice of a self-hosted data-agent stack:
+Self-hosted natural-language analytics over a Brazilian e-commerce dataset (Olist).
 
-```text
-Streamlit -> LangGraph -> Cube Core -> Snowflake
+```
+Streamlit  →  pulsar-agent (LangGraph)  →  Cube Core (Docker)  →  Snowflake
 ```
 
-The first supported question is:
+Ask questions in plain language; the agent queries the Cube semantic layer and returns
+governed, auditable answers backed by Snowflake data.
 
-```text
-What is the total revenue per month?
-```
+---
 
-Revenue is defined as `sum(order_items.price)`, excluding freight and payment adjustments.
+## Workspace layout
+
+This is a `uv` workspace with two packages:
+
+| Package | Path | Role |
+|---|---|---|
+| `pulsar-agent` | `pulsar_agent/` | LangGraph ReAct agent — no Streamlit dependency |
+| `pulsar-app` | `.` (root) | Streamlit UI — depends on `pulsar-agent` |
+
+`snow-preparation/` is a separate standalone `uv` project for loading the Olist dataset into
+Snowflake.
+
+---
 
 ## Prerequisites
 
-- Olist data loaded into Snowflake with `snow-preparation/main.py`.
-- Cube configured with Snowflake credentials in `cube/.env`.
-- Python dependencies installed with `uv sync --group dev`.
+1. Olist data loaded into Snowflake — run `snow-preparation/main.py` (see its own README).
+2. Cube configured with Snowflake credentials in `cube/.env` (see `cube/example.env`).
+3. Python dependencies installed: `uv sync --group dev`.
 
-## Install Python Dependencies
+---
+
+## Quick start
 
 ```bash
+# 1. Install dependencies
 uv sync --group dev
-```
 
-## Run Cube
-
-```bash
-cd cube
+# 2. Start Cube (from cube/)
 docker compose up -d
+
+# 3. Run the Streamlit app
+CUBE_API_URL=http://localhost:4000/cubejs-api/v1 \
+CUBE_API_TOKEN=<jwt-from-cubejs-api-secret> \
+ANTHROPIC_API_KEY=<anthropic-key> \
+uv run streamlit run app/main.py
 ```
 
-## Run Streamlit
+`CUBE_API_TOKEN` must be a JWT signed from `CUBEJS_API_SECRET` — not the raw secret.
 
-Three environment variables are required:
+---
 
-- `CUBE_API_URL` — Cube REST API base URL.
-- `CUBE_API_TOKEN` — valid Cube bearer JWT derived from `CUBEJS_API_SECRET` (not the raw secret). Do not commit.
-- `ANTHROPIC_API_KEY` — Anthropic API key for the Claude LLM. Do not commit.
+## Tests
 
 ```bash
-export CUBE_API_TOKEN="replace-with-valid-local-cube-jwt"
-export ANTHROPIC_API_KEY="replace-with-anthropic-api-key"
-CUBE_API_URL=http://localhost:4000/cubejs-api/v1 uv run streamlit run app/main.py
+# Full workspace suite (43 tests)
+uv run pytest
+
+# Agent tests only (no Streamlit, no Cube YAML)
+uv run pytest pulsar_agent/tests/
 ```
 
-Ask:
+---
 
-```text
-What is the total revenue per month?
-```
+## Documentation
 
-The app displays answer text, a monthly line chart, raw rows, and the Cube query metadata.
-
-## Run Tests
-
-```bash
-uv run pytest tests -v
-```
+| Doc | Content |
+|---|---|
+| [`pulsar_agent/README.md`](pulsar_agent/README.md) | Agent package — public API, dev setup, package layout |
+| [`pulsar_agent/doc/architecture.md`](pulsar_agent/doc/architecture.md) | Module internals, ReAct loop, maintenance rules |
+| [`pulsar_agent/doc/data-flow.md`](pulsar_agent/doc/data-flow.md) | End-to-end walkthrough: question → answer |
+| [`pulsar_agent/doc/design/schema-discovery.md`](pulsar_agent/doc/design/schema-discovery.md) | Two-level `list_cubes` / `get_cube_schema` design |
+| [`pulsar_agent/doc/design/streaming-and-reasoning.md`](pulsar_agent/doc/design/streaming-and-reasoning.md) | Token streaming, reasoning text, extended thinking |
+| [`docs/cube-dev.md`](docs/cube-dev.md) | Validating and running Cube models locally |
