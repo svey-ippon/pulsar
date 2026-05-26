@@ -45,7 +45,7 @@ This repo is a `uv` workspace with two packages:
 ```
 repos_pulsar/
 ├── pyproject.toml          ← workspace root — package "pulsar-app" (app/ + tests/)
-├── pulsar_agent/
+├── pulsar-agent/
 │   ├── pyproject.toml      ← workspace member — package "pulsar-agent"
 │   ├── src/
 │   │   └── pulsar_agent/   ← Python source (src layout, hatchling)
@@ -72,15 +72,15 @@ This boundary is the seam that will become a network call (FastAPI/SSE) when gra
 | Layer | Job | Must not |
 |---|---|---|
 | `cube/model/cubes/*.yml` | Define governed metrics and dimensions | Run transformations; query raw tables |
-| `pulsar_agent/src/pulsar_agent/cube_client.py` | HTTP client for Cube REST API (`/meta`, `/load`) | Connect to Snowflake |
-| `pulsar_agent/src/pulsar_agent/tools.py` | LangChain tool factory (`list_cubes`, `get_cube_schema`, `query_cube`) | Contain business logic |
-| `pulsar_agent/src/pulsar_agent/state.py` | `AgentState` and `QueryResult` TypedDicts | — |
-| `pulsar_agent/src/pulsar_agent/nodes.py` | Agent node, tool node, routing predicate | — |
-| `pulsar_agent/src/pulsar_agent/extraction.py` | Text extraction helpers (`extract_text`, `prev_results_count`) | — |
-| `pulsar_agent/src/pulsar_agent/streaming.py` | `stream_agent_events` generator | — |
-| `pulsar_agent/src/pulsar_agent/graph.py` | Thin orchestrator: `build_graph`, `answer_question`, `stream_question` | Write SQL or invent metrics |
-| `pulsar_agent/src/pulsar_agent/prompt.py` | System prompt (8 rules for the LLM) | — |
-| `pulsar_agent/src/pulsar_agent/memory.py` | MemorySaver checkpointer (singleton + test factory) | — |
+| `pulsar-agent/src/pulsar_agent/cube_client.py` | HTTP client for Cube REST API (`/meta`, `/load`) | Connect to Snowflake |
+| `pulsar-agent/src/pulsar_agent/tools.py` | LangChain tool factory (`list_cubes`, `get_cube_schema`, `query_cube`) | Contain business logic |
+| `pulsar-agent/src/pulsar_agent/state.py` | `AgentState` and `QueryResult` TypedDicts | — |
+| `pulsar-agent/src/pulsar_agent/nodes.py` | Agent node, tool node, routing predicate | — |
+| `pulsar-agent/src/pulsar_agent/extraction.py` | Text extraction helpers (`extract_text`, `prev_results_count`) | — |
+| `pulsar-agent/src/pulsar_agent/streaming.py` | `stream_agent_events` generator | — |
+| `pulsar-agent/src/pulsar_agent/graph.py` | Thin orchestrator: `build_graph`, `answer_question`, `stream_question` | Write SQL or invent metrics |
+| `pulsar-agent/src/pulsar_agent/prompt.py` | System prompt (8 rules for the LLM) | — |
+| `pulsar-agent/src/pulsar_agent/memory.py` | MemorySaver checkpointer (singleton + test factory) | — |
 | `app/main.py` | Entry point — calls `run_app()` | Contain business logic |
 | `app/ui.py` | Session state, chat loop, streaming event handler | Contain business logic |
 | `app/rendering.py` | `render_answer`, `render_reasoning_blocks`, `render_reasoning_details` | — |
@@ -95,26 +95,26 @@ This boundary is the seam that will become a network call (FastAPI/SSE) when gra
 - **Metrics not in the semantic layer are refused** — the LLM must not invent SQL or workarounds.
 - **Successful answers include the Cube query dict** for auditability.
 
-### pulsar_agent/ internals
+### pulsar-agent/ internals
 
-#### pulsar_agent/src/pulsar_agent/state.py
+#### pulsar-agent/src/pulsar_agent/state.py
 
 - **`QueryResult`**: `{"query": dict, "data": list[dict]}` — one per `query_cube` call per turn.
 - **`AgentState`**: `messages` (accumulates with `add_messages`) + `cube_results` (accumulates with `operator.add`).
 
-#### pulsar_agent/src/pulsar_agent/nodes.py
+#### pulsar-agent/src/pulsar_agent/nodes.py
 
 - **`make_agent_node(llm_with_tools)`** — returns the agent node function; uses `.stream()` on the LLM (not `.invoke()`) so token chunks are emitted during execution and captured by LangGraph's streaming.
 - **`make_tool_node(tools_by_name)`** — executes each tool call in the last AI message; appends `QueryResult` to state for every successful `query_cube` response.
 - **`should_continue(state)`** — routes to `"tools"` if the last message has tool calls, else `END`.
 
-#### pulsar_agent/src/pulsar_agent/extraction.py
+#### pulsar-agent/src/pulsar_agent/extraction.py
 
 - **`content_text(content)`** — normalises LangChain message content (str or list-of-blocks) to a plain string.
 - **`extract_text(messages)`** — returns the final non-tool-call AI text from the current turn.
 - **`prev_results_count(graph, config)`** — reads the checkpoint to know how many `cube_results` existed before the current turn (used to slice new results).
 
-#### pulsar_agent/src/pulsar_agent/streaming.py
+#### pulsar-agent/src/pulsar_agent/streaming.py
 
 - **`stream_agent_events(graph, question, config, prev_results_count)`** — drives the graph with `stream_mode=["values", "messages"]` and yields four event types:
   - `{"type": "tool_call",   "tool": str, "args": dict, "id": str}`
@@ -122,7 +122,7 @@ This boundary is the seam that will become a network call (FastAPI/SSE) when gra
   - `{"type": "token",       "content": str}`
   - `{"type": "answer",      "answer": {"text": str, "results": list}}`
 
-#### pulsar_agent/src/pulsar_agent/graph.py
+#### pulsar-agent/src/pulsar_agent/graph.py
 
 Thin orchestration module — imports from all sub-modules above:
 
@@ -134,7 +134,7 @@ The `_extract_text` name is re-exported from `pulsar_agent.graph` (imported from
 
 **Checkpointer**: `MemorySaver` keyed by `thread_id` — cross-turn memory within a session; lost on process restart.
 
-### pulsar_agent/src/pulsar_agent/tools.py internals
+### pulsar-agent/src/pulsar_agent/tools.py internals
 
 `make_tools(cube_client)` returns three LangChain tools:
 
@@ -144,7 +144,7 @@ The `_extract_text` name is re-exported from `pulsar_agent.graph` (imported from
 
 Error responses are structured JSON so the LLM can react correctly (retry vs. stop).
 
-### System prompt rules (pulsar_agent/src/pulsar_agent/prompt.py)
+### System prompt rules (pulsar-agent/src/pulsar_agent/prompt.py)
 
 1. Two-step schema discovery: call `list_cubes` to see all cube summaries, then call `get_cube_schema(cube_name)` on the relevant cube(s) before querying. Reuse schema already in conversation history.
 2. Use only member names from the `get_cube_schema` response — no invention.
@@ -221,7 +221,7 @@ Pure functions for building and mutating reasoning block lists (no Streamlit imp
 
 Tests are split by ownership — agent tests live with the agent package, app/infra tests stay at the workspace root.
 
-**`pulsar_agent/tests/`** — run in isolation with `uv run pytest pulsar_agent/tests/`:
+**`pulsar-agent/tests/`** — run in isolation with `uv run pytest pulsar-agent/tests/`:
 - `test_agent_graph.py` — graph build, text extraction, refusal and happy-path behaviour using `FakeCubeClient` (no env vars needed); also tests streaming event shapes (`tool_call`, `tool_result`, `token`, `answer`).
 - `test_agent_tools.py` — tool wrapping, Pydantic validation, structured error JSON for each error path; covers all three tools including `get_cube_schema` and `list_cubes` summary extraction/fallback.
 - `test_cube_client.py` — HTTP client unit tests: retries, error classification, 4xx vs 5xx handling.
@@ -231,6 +231,6 @@ Tests are split by ownership — agent tests live with the agent package, app/in
 - `test_app_main.py` — `app/rendering.py` and `app/reasoning.py` unit tests (mocked Streamlit): reasoning block rendering, running tool display, `build_final_reasoning_blocks` exclusion of final answer text.
 - `test_project_imports.py` — import path verification from non-root directories.
 
-Run the full workspace suite from the root: `uv run pytest` (discovers both `tests/` and `pulsar_agent/tests/`).
+Run the full workspace suite from the root: `uv run pytest` (discovers both `tests/` and `pulsar-agent/tests/`).
 
-Add a focused regression test before changing `pulsar_agent/src/pulsar_agent/graph.py`, `pulsar_agent/src/pulsar_agent/nodes.py`, `pulsar_agent/src/pulsar_agent/tools.py`, or any Cube YAML.
+Add a focused regression test before changing `pulsar-agent/src/pulsar_agent/graph.py`, `pulsar-agent/src/pulsar_agent/nodes.py`, `pulsar-agent/src/pulsar_agent/tools.py`, or any Cube YAML.

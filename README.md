@@ -17,7 +17,7 @@ This is a `uv` workspace with two packages:
 
 | Package | Path | Role |
 |---|---|---|
-| `pulsar-agent` | `pulsar_agent/` | LangGraph ReAct agent — no Streamlit dependency |
+| `pulsar-agent` | `pulsar-agent/` | LangGraph ReAct agent — no Streamlit dependency |
 | `pulsar-app` | `.` (root) | Streamlit UI — depends on `pulsar-agent` |
 
 `snow-preparation/` is a separate standalone `uv` project for loading the Olist dataset into
@@ -60,7 +60,7 @@ uv run streamlit run app/main.py
 uv run pytest
 
 # Agent tests only (no Streamlit, no Cube YAML)
-uv run pytest pulsar_agent/tests/
+uv run pytest pulsar-agent/tests/
 ```
 
 ---
@@ -69,9 +69,9 @@ uv run pytest pulsar_agent/tests/
 
 | Doc | Content |
 |---|---|
-| [`pulsar_agent/README.md`](pulsar_agent/README.md) | Agent package — public API, dev setup, package layout |
-| [`pulsar_agent/doc/architecture.md`](pulsar_agent/doc/architecture.md) | Module internals, ReAct loop, maintenance rules |
-| [`pulsar_agent/doc/data-flow.md`](pulsar_agent/doc/data-flow.md) | End-to-end walkthrough: question → answer |
-| [`pulsar_agent/doc/design/schema-discovery.md`](pulsar_agent/doc/design/schema-discovery.md) | Two-level `list_cubes` / `get_cube_schema` design |
-| [`pulsar_agent/doc/design/streaming-and-reasoning.md`](pulsar_agent/doc/design/streaming-and-reasoning.md) | Token streaming, reasoning text, extended thinking |
+| [`pulsar-agent/README.md`](pulsar-agent/README.md) | Agent package — public API, dev setup, package layout |
+| [`pulsar-agent/doc/architecture.md`](pulsar-agent/doc/architecture.md) | Module internals, ReAct loop, maintenance rules |
+| [`pulsar-agent/doc/data-flow.md`](pulsar-agent/doc/data-flow.md) | End-to-end walkthrough: question → answer |
+| [`pulsar-agent/doc/design/schema-discovery.md`](pulsar-agent/doc/design/schema-discovery.md) | Two-level `list_cubes` / `get_cube_schema` design |
+| [`pulsar-agent/doc/design/streaming-and-reasoning.md`](pulsar-agent/doc/design/streaming-and-reasoning.md) | Token streaming, reasoning text, extended thinking |
 | [`docs/cube-dev.md`](docs/cube-dev.md) | Validating and running Cube models locally |

@@ -73,7 +73,7 @@ All three can be bypassed by injecting `model=` and `cube_client=` — no env va
 uv sync --group dev
 
 # Run agent tests only (no Streamlit, no Cube YAML)
-uv run pytest pulsar_agent/tests/
+uv run pytest pulsar-agent/tests/
 
 # Run the full workspace suite
 uv run pytest
@@ -84,7 +84,7 @@ uv run pytest
 ## Package layout
 
 ```
-pulsar_agent/
+pulsar-agent/
 ├── README.md               ← this file
 ├── pyproject.toml          ← package definition (hatchling, src layout)
 ├── src/

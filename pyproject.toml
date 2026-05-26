@@ -1,5 +1,5 @@
 [project]
-name = "pulsar-app"
+name = "pulsar-project"
 version = "0.1.0"
 description = "Streamlit UI for the Pulsar data-agent POC"
 requires-python = ">=3.12"
@@ -18,14 +18,14 @@ dev = [
 ]
 
 [tool.uv.workspace]
-members = ["pulsar_agent"]
+members = ["pulsar-agent"]
 
 [tool.uv.sources]
 pulsar-agent = { workspace = true }
 
 [tool.pytest.ini_options]
 # Run both the app tests and the agent tests from the workspace root
-testpaths = ["tests", "pulsar_agent/tests"]
+testpaths = ["tests", "pulsar-agent/tests"]
 
 [tool.pyright]
 venvPath = "."

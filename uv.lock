@@ -13,7 +13,7 @@ resolution-markers = [
 [manifest]
 members = [
     "pulsar-agent",
-    "pulsar-app",
+    "pulsar-project",
 ]
 
 [[package]]
@@ -1017,7 +1017,7 @@ wheels = [
 [[package]]
 name = "pulsar-agent"
 version = "0.1.0"
-source = { editable = "pulsar_agent" }
+source = { editable = "pulsar-agent" }
 dependencies = [
     { name = "langchain" },
     { name = "langchain-anthropic" },
@@ -1046,7 +1046,7 @@ requires-dist = [
 dev = [{ name = "pytest", specifier = ">=8.2" }]
 
 [[package]]
-name = "pulsar-app"
+name = "pulsar-project"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -1067,7 +1067,7 @@ dev = [
 requires-dist = [
     { name = "pandas", specifier = ">=2.2" },
     { name = "plotly", specifier = ">=5.22" },
-    { name = "pulsar-agent", editable = "pulsar_agent" },
+    { name = "pulsar-agent", editable = "pulsar-agent" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "streamlit", specifier = ">=1.35" },
 ]
