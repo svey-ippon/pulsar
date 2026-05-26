@@ -8,7 +8,8 @@ Module responsibilities, session state lifecycle, and reasoning block pipeline f
 
 ```
 pulsar-ui/src/pulsar_ui/
-├── main.py        ← Streamlit entry point — calls run_app()
+├── __main__.py    ← `python -m pulsar_ui` / `pulsar-ui` console script launcher
+├── main.py        ← Streamlit script — calls run_app()
 ├── ui.py          ← Session state, chat loop, streaming event handler
 ├── rendering.py   ← Pure rendering functions (no state mutations)
 └── reasoning.py   ← Pure reasoning block builders (no Streamlit imports)
@@ -129,10 +130,17 @@ Memory is lost on:
 ## Running the App
 
 ```bash
+# Via console script (recommended — path-independent, Docker-friendly)
 CUBE_API_URL=http://localhost:4000/cubejs-api/v1 \
 CUBE_API_TOKEN=<jwt> \
 ANTHROPIC_API_KEY=<key> \
-uv run streamlit run pulsar-ui/src/pulsar_ui/main.py
+uv run pulsar-ui
+
+# Or equivalently
+python -m pulsar_ui
+
+# Extra Streamlit args are forwarded (e.g. custom port)
+uv run pulsar-ui --server.port=8502
 ```
 
 `CUBE_API_TOKEN` must be a JWT signed from `CUBEJS_API_SECRET`, not the raw secret.

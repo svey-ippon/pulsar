@@ -10,6 +10,9 @@ dependencies = [
     "streamlit>=1.35",
 ]
 
+[project.scripts]
+pulsar-ui = "pulsar_ui.__main__:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

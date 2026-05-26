@@ -31,7 +31,7 @@ uv run pytest pulsar-ui/tests/ -v
 docker compose up -d
 
 # Run Streamlit (from repo root)
-CUBE_API_URL=http://localhost:4000/cubejs-api/v1 CUBE_API_TOKEN=<jwt> ANTHROPIC_API_KEY=<key> uv run streamlit run pulsar-ui/src/pulsar_ui/main.py
+CUBE_API_URL=http://localhost:4000/cubejs-api/v1 CUBE_API_TOKEN=<jwt> ANTHROPIC_API_KEY=<key> uv run pulsar-ui
 
 # Load Olist data into Snowflake (from snow-preparation/)
 uv run python main.py

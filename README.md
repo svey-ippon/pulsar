@@ -46,7 +46,7 @@ docker compose up -d
 CUBE_API_URL=http://localhost:4000/cubejs-api/v1 \
 CUBE_API_TOKEN=<jwt-from-cubejs-api-secret> \
 ANTHROPIC_API_KEY=<anthropic-key> \
-uv run streamlit run pulsar-ui/src/pulsar_ui/main.py
+uv run pulsar-ui
 ```
 
 `CUBE_API_TOKEN` must be a JWT signed from `CUBEJS_API_SECRET` — not the raw secret.

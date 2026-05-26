@@ -20,7 +20,7 @@ docker compose up -d
 CUBE_API_URL=http://localhost:4000/cubejs-api/v1 \
 CUBE_API_TOKEN=<jwt-from-cubejs-api-secret> \
 ANTHROPIC_API_KEY=<anthropic-key> \
-uv run streamlit run pulsar-ui/src/pulsar_ui/main.py
+uv run pulsar-ui
 ```
 
 `CUBE_API_TOKEN` must be a JWT signed from `CUBEJS_API_SECRET` — not the raw secret.
@@ -60,7 +60,8 @@ pulsar-ui/
 ├── pyproject.toml          ← package definition (hatchling, src layout)
 ├── src/
 │   └── pulsar_ui/          ← Python source
-│       ├── main.py         ← entry point — calls run_app()
+│       ├── __main__.py     ← `python -m pulsar_ui` / `pulsar-ui` console script
+│       ├── main.py         ← Streamlit script — calls run_app()
 │       ├── ui.py           ← session state, chat loop, streaming event handler
 │       ├── rendering.py    ← render_answer, render_reasoning_blocks
 │       └── reasoning.py    ← pure reasoning block builders (no Streamlit imports)
