@@ -1,0 +1,33 @@
+# Python artefacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments — Docker installs its own
+.venv/
+
+# Dev / CI
+.pytest_cache/
+.mypy_cache/
+.pyright/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Secrets — never in the build context
+cube/.env
+.env
+
+# Git / IDE
+.git/
+.gitignore
+.worktrees/
+.claude/
+
+# Docs and non-runtime assets
+docs/
+*.excalidraw
+*.md
+
+# snow-preparation is a separate project, not needed in the image
+snow-preparation/

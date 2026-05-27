@@ -27,11 +27,14 @@ uv run pytest pulsar-agent/tests/ -v
 # Run UI tests only
 uv run pytest pulsar-ui/tests/ -v
 
-# Start Cube (from cube/)
-docker compose up -d
+# Start Cube alone (from cube/)
+cd cube && docker compose up -d
 
-# Run Streamlit (from repo root)
+# Run Streamlit locally (from repo root)
 CUBE_API_URL=http://localhost:4000/cubejs-api/v1 CUBE_API_TOKEN=<jwt> ANTHROPIC_API_KEY=<key> uv run pulsar-ui
+
+# Run the full stack with Docker Compose (from repo root)
+docker compose up -d   # requires cube/.env and .env — see docs/deployment.md
 
 # Load Olist data into Snowflake (from snow-preparation/)
 uv run python main.py

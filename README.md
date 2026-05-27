@@ -25,22 +25,14 @@ Snowflake.
 
 ---
 
-## Prerequisites
-
-1. Olist data loaded into Snowflake — run `snow-preparation/main.py` (see its own README).
-2. Cube configured with Snowflake credentials in `cube/.env` (see `cube/example.env`).
-3. Python dependencies installed: `uv sync --group dev`.
-
----
-
-## Quick start
+## Quick start — local dev
 
 ```bash
 # 1. Install dependencies
 uv sync --group dev
 
 # 2. Start Cube (from cube/)
-docker compose up -d
+cd cube && docker compose up -d && cd ..
 
 # 3. Run the Streamlit app
 CUBE_API_URL=http://localhost:4000/cubejs-api/v1 \
@@ -50,6 +42,19 @@ uv run pulsar-ui
 ```
 
 `CUBE_API_TOKEN` must be a JWT signed from `CUBEJS_API_SECRET` — not the raw secret.
+
+## Quick start — Docker Compose
+
+```bash
+# Copy and fill in secrets
+cp cube/example.env cube/.env   # Snowflake credentials + CUBEJS_API_SECRET
+cp .env.example .env            # CUBE_API_TOKEN + ANTHROPIC_API_KEY
+
+docker compose up -d
+# UI → http://localhost:8501   Cube Playground → http://localhost:4000
+```
+
+See [`docs/deployment.md`](docs/deployment.md) for details.
 
 ---
 
@@ -70,13 +75,26 @@ uv run pytest pulsar-ui/tests/
 
 ## Documentation
 
+### Workspace
+
 | Doc | Content |
 |---|---|
-| [`pulsar-agent/README.md`](pulsar-agent/README.md) | Agent package — public API, dev setup, package layout |
+| [`docs/deployment.md`](docs/deployment.md) | Docker Compose setup, env vars, CI smoke test |
+| [`docs/cube-dev.md`](docs/cube-dev.md) | Cube model conventions, validation, adding cubes |
+
+### Agent (`pulsar-agent/`)
+
+| Doc | Content |
+|---|---|
+| [`pulsar-agent/README.md`](pulsar-agent/README.md) | Public API, dev setup, package layout |
 | [`pulsar-agent/doc/architecture.md`](pulsar-agent/doc/architecture.md) | Module internals, ReAct loop, maintenance rules |
 | [`pulsar-agent/doc/data-flow.md`](pulsar-agent/doc/data-flow.md) | End-to-end walkthrough: question → answer |
 | [`pulsar-agent/doc/design/schema-discovery.md`](pulsar-agent/doc/design/schema-discovery.md) | Two-level `list_cubes` / `get_cube_schema` design |
 | [`pulsar-agent/doc/design/streaming-and-reasoning.md`](pulsar-agent/doc/design/streaming-and-reasoning.md) | Token streaming, reasoning text, extended thinking |
-| [`pulsar-ui/README.md`](pulsar-ui/README.md) | UI package — running, dev setup, package layout |
+
+### UI (`pulsar-ui/`)
+
+| Doc | Content |
+|---|---|
+| [`pulsar-ui/README.md`](pulsar-ui/README.md) | Running, dev setup, package layout |
 | [`pulsar-ui/doc/architecture.md`](pulsar-ui/doc/architecture.md) | Module internals, session state, reasoning blocks lifecycle |
-| [`docs/cube-dev.md`](docs/cube-dev.md) | Validating and running Cube models locally |
