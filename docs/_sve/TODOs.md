@@ -1,7 +1,5 @@
 # UI FIX
 
-Bug, reasoning box also as the last message appended. Duplicate
-
 Quand l'agent s'emballe (question difficile, essaye des query mais se prend un mur), pas moyen de l'arrêter depuis l'UI ...
 
 # PROMPT FIX
