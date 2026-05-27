@@ -1,3 +1,13 @@
+# UI FIX
+
+Bug, reasoning box also as the last message appended. Duplicate
+
+Quand l'agent s'emballe (question difficile, essaye des query mais se prend un mur), pas moyen de l'arrêter depuis l'UI ...
+
+# PROMPT FIX
+
+après 4 requêtes qui sortent des erreurs "Cube rejected the query." ne pass s'acharner, exposer le raisonnement et les limites
+
 # QUESTIONS EVALUATION
 -> j'en suis à M2
 

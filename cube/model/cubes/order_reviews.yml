@@ -5,9 +5,16 @@ cubes:
     sql_table: ECOMMERCE_DB.MARTS.ORDER_REVIEWS
     data_source: default
     description: >
-      Customer satisfaction surveys sent after order delivery (or estimated
-      delivery date). One row per review. The survey asks customers to rate
-      their experience 1–5. Comments are written in Portuguese.
+      Grain: order_id — one row per review. A review covers the entire order,
+      not individual items or product categories.
+      Reachable from: orders (many_to_one join defined here).
+      Cross-grain limitation: there is no join path from this cube to
+      order_items, products, or product_category_name_translation. Combining
+      avg_review_score or review_count with product-level dimensions (e.g.
+      product category) is not feasible in a single query — it would require
+      a cross-grain join that silently biases avg_review_score by the number
+      of items per order in each category.
+      Comments are written in Portuguese.
 
     joins:
       - name: orders

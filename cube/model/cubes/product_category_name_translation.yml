@@ -4,7 +4,12 @@ cubes:
       summary: "Lookup table: Portuguese product_category_name → English product_category_name_english."
     sql_table: ECOMMERCE_DB.MARTS.PRODUCT_CATEGORY_NAME_TRANSLATION
     data_source: default
-    description: "Lookup table translating Portuguese product category names to English. Join to products on product_category_name."
+    description: >
+      Grain: product_category_name — one row per category (lookup table).
+      Reachable only via: products → order_items chain.
+      Not reachable from order_reviews — combining category dimensions with
+      review measures requires a cross-grain join that does not exist in this
+      semantic layer. See order_reviews description for details.
 
     joins: []
 

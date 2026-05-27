@@ -32,7 +32,7 @@ FROM ECOMMERCE_DB.MARTS.ORDERS;
 ---
 
 ### S2 — Customers in São Paulo state
-**Question:** How many customers are based in São Paulo state (SP) ?
+**Question:** How many customers are based in São Paulo state ?
 **Should ask or warn about ambiguity**: customers means distinct `customer_unique_id`
 
 **Reasoning expected:** `CUSTOMERS` table → filter `customer_state = 'SP'` → distinct `customer_unique_id` count.
@@ -47,7 +47,10 @@ FROM ECOMMERCE_DB.MARTS.CUSTOMERS
 WHERE customer_state = 'SP';
 ```
 
-**Capability tested:** Filter resolution (state abbreviation), disambiguation of what is a customer.
+**Capability tested:**
+- model knowledge of brazilian state abbreviation
+- Filter resolution (state abbreviation)
+- disambiguation of what is a customer.
 
 ---
 
@@ -89,19 +92,19 @@ FROM ECOMMERCE_DB.MARTS.ORDER_REVIEWS;
 ---
 
 ### S5 — Total revenue
-**Question:** What is the total payment value collected across all orders?
+**Question:** What is the total value collected across all orders?
 
-**Reasoning expected:** Question deliberately says "payment value" → `ORDER_PAYMENTS.payment_value` sum. A weaker system might wrongly use `order_items.price` (which excludes freight). Either is defensible, but choosing `payment_value` matches the wording.
+**Reasoning expected:** Question deliberately says "total value" → diasambiguation first  → `ORDER_PAYMENTS.payment_value` sum.
 
 **Expected output:** Single monetary value.
-**Expected key value:** ~R$ 16,008,872.
+**Expected key value:** ~$ 16,008,872
 
 ```sql
 SELECT ROUND(SUM(payment_value), 2) AS total_payment_value
 FROM ECOMMERCE_DB.MARTS.ORDER_PAYMENTS;
 ```
 
-**Capability tested:** Column choice when multiple candidates exist (`price` vs `payment_value` vs `freight_value`).
+**Capability tested:** Disambiguation when multiple candidates exist (`price` vs `payment_value` vs `freight_value`).
 
 ---
 
@@ -158,7 +161,7 @@ ORDER BY 1;
 
 ---
 
-### M3 — Share of payments in installments
+### M3a — Share of payments in installments
 **Question:** What share of payments are paid in more than one installment?
 
 **Reasoning expected:** `ORDER_PAYMENTS` only — conditional aggregation comparing `payment_installments > 1` against total. Note: per payment record, not per order (a single order can have multiple payment rows). A good system might flag this ambiguity.
@@ -174,6 +177,24 @@ FROM ECOMMERCE_DB.MARTS.ORDER_PAYMENTS;
 ```
 
 **Capability tested:** Conditional aggregation, granularity awareness.
+
+### M3b — Number of orders with more than one installment
+**Question:** How many orders are paid in more than one installment?
+
+**Reasoning expected:** filter on `order_payments.payment_installments > 1`, measure `orders.count`. handles the join fan-out via `COUNT(DISTINCT order_id)` — the agent must not try to compute this in two steps if the layer supports it.
+
+**Expected output:** Single number.
+**Expected key value:** ~51,170 orders (~52% of all orders).
+
+```sql
+SELECT COUNT(DISTINCT o.order_id) AS order_count
+FROM ECOMMERCE_DB.MARTS.ORDERS o
+INNER JOIN ECOMMERCE_DB.MARTS.ORDER_PAYMENTS op
+    ON o.order_id = op.order_id
+WHERE op.payment_installments > 1;
+```
+
+**Capability tested:** Cross-cube filter (dimension from one cube, measure from another); relies on `payment_installments` being exposed as a dimension. Cube deduplicates automatically via `COUNT(DISTINCT primary_key)` — no manual two-step required.
 
 ---
 
@@ -201,6 +222,20 @@ LIMIT 10;
 
 **Capability tested:** Ambiguity handling. Score positively if the system asks; score negatively if it silently picks one definition.
 
+
+### M4 custom - "Best seller state" (metric not in semantic layer)
+
+**question:** what are our best seller states (top 3), best meaning the most revenue per seller, in 2017, for states with more than 5 sellers?
+
+**expected**:  
+ability to query the semantic layer :
+  - measures: total revenue + sellers
+  - dimension (group by) : seller_state
+  - filter sellers.count gt 5
+  - time dimension order_purchase_timestamp in 2017
+
+then to 'post-query' in the agent: divide total revenue / seller count → sort descending by that ratio
+
 ---
 
 ### M5 — Average review score per category (min 50 reviews)
@@ -210,30 +245,7 @@ LIMIT 10;
 
 **Expected output:** ~70 rows: `category`, `avg_score`, `review_count`, sorted by `avg_score` desc.
 
-```sql
-WITH order_category AS (
-    SELECT DISTINCT
-        oi.order_id,
-        t.product_category_name_english AS category
-    FROM ECOMMERCE_DB.MARTS.ORDER_ITEMS oi
-    JOIN ECOMMERCE_DB.MARTS.PRODUCTS p
-        ON oi.product_id = p.product_id
-    JOIN ECOMMERCE_DB.MARTS.PRODUCT_CATEGORY_NAME_TRANSLATION t
-        ON p.product_category_name = t.product_category_name
-)
-SELECT
-    oc.category,
-    ROUND(AVG(r.review_score), 2) AS avg_score,
-    COUNT(DISTINCT r.review_id) AS review_count
-FROM ECOMMERCE_DB.MARTS.ORDER_REVIEWS r
-JOIN order_category oc
-    ON r.order_id = oc.order_id
-GROUP BY oc.category
-HAVING COUNT(DISTINCT r.review_id) >= 50
-ORDER BY avg_score DESC;
-```
-
-**Capability tested:** Handling fan-out / many-to-many joins; CTE usage.
+VOIR LE MARKDOWN QUI DETAILLE çA
 
 ---
 

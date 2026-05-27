@@ -91,7 +91,7 @@ This boundary is the seam that will become a network call (FastAPI/SSE) when gra
 | `pulsar-agent/src/pulsar_agent/extraction.py` | Text extraction helpers (`extract_text`, `prev_results_count`) | — |
 | `pulsar-agent/src/pulsar_agent/streaming.py` | `stream_agent_events` generator | — |
 | `pulsar-agent/src/pulsar_agent/graph.py` | Thin orchestrator: `build_graph`, `answer_question`, `stream_question` | Write SQL or invent metrics |
-| `pulsar-agent/src/pulsar_agent/prompt.py` | System prompt (8 rules for the LLM) | — |
+| `pulsar-agent/src/pulsar_agent/prompt.py` | System prompt (12 rules in 4 phases: schema discovery, pre-query analysis, execution, response) | — |
 | `pulsar-agent/src/pulsar_agent/memory.py` | MemorySaver checkpointer (singleton + test factory) | — |
 | `pulsar-ui/src/pulsar_ui/main.py` | Entry point — calls `run_app()` | Contain business logic |
 | `pulsar-ui/src/pulsar_ui/ui.py` | Session state, chat loop, streaming event handler | Contain business logic |
@@ -103,7 +103,9 @@ This boundary is the seam that will become a network call (FastAPI/SSE) when gra
 - **All data access goes through Cube.** Neither the agent nor the UI holds Snowflake credentials.
 - **Cube models must point at `ECOMMERCE_DB.MARTS.*`**, never at raw tables. The static test `tests/test_cube_model.py` enforces this.
 - **Predictions/forecasts are refused immediately** — the system prompt instructs the LLM to refuse before calling any tool.
-- **Ambiguous questions are surfaced to the user** — if two schema members could answer the same question with different semantics, the LLM must stop and ask, not guess silently.
+- **Ambiguity is surfaced in two forms**: (1) schema-level — two members that would answer the same question with different results; (2) conceptual — grain mismatches or implicit attribution choices (e.g. assigning an order-level metric to an item-level dimension). Both require the LLM to stop and ask, not guess silently.
+- **Feasibility is classified before every query** — Green (single query, no fan-out risk → act), Amber (2 independent queries to reconcile in-context → expose plan, ask confirmation), Red (missing join path, cross-grain bias, or logic too complex → explain and stop).
+- **Every answer ends with a `⚠ Limits & approximations` section** — bullet points covering implicit conventions, fan-out concerns, and scope assumptions not explicitly requested. Omitted only for pure refusals.
 - **Metrics not in the semantic layer are refused** — the LLM must not invent SQL or workarounds.
 - **Successful answers include the Cube query dict** for auditability.
 
@@ -158,14 +160,30 @@ Error responses are structured JSON so the LLM can react correctly (retry vs. st
 
 ### System prompt rules (pulsar-agent/src/pulsar_agent/prompt.py)
 
+The prompt is structured in four phases:
+
+**Phase 1 — Schema Discovery**
 1. Two-step schema discovery: call `list_cubes` to see all cube summaries, then call `get_cube_schema(cube_name)` on the relevant cube(s) before querying. Reuse schema already in conversation history.
 2. Use only member names from the `get_cube_schema` response — no invention.
-3. **Ambiguity check**: if the schema offers two or more members that could answer the question with meaningfully different results, stop and ask the user to choose — do not pick one silently.
-4. Refuse predictions, forecasts, and projections. State clearly; attempt no workaround.
-5. Every answer must state which measures/dimensions were queried.
-6. Before enriching results with own knowledge (translations, labels, mappings), verify first whether the data is available in the semantic layer; query it if so; disclose when using own knowledge.
+
+**Phase 2 — Pre-Query Analysis** (every time, before acting)
+3. **Schema ambiguity**: if the schema offers two or more members that would answer the question with meaningfully different results, stop and ask the user to choose — do not pick one silently.
+4. **Conceptual ambiguity**: check for grain mismatches or implicit attribution choices independently of the schema (e.g. a measure recorded at session grain grouped by a user-level dimension). Surface the assumption and ask the user to confirm.
+5. **Feasibility classification**:
+   - *Green* — single query, no fan-out risk → query immediately.
+   - *Amber* — max 2 independent queries to reconcile in-context → lay out the plan and ask confirmation.
+   - *Red* — missing join path, cross-grain aggregation that would silently bias results, logic not expressible in the semantic layer, or more than 2 independent queries needed → explain precisely and stop.
+
+**Phase 3 — Execution**
+6. Refuse predictions, forecasts, and projections. State clearly; attempt no workaround.
 7. If a metric is not in the semantic layer, say so — no SQL workarounds.
 8. On tool error JSON: if a `"hint"` key is present, follow it and retry; if no `"hint"`, the service is unavailable — stop immediately and report.
+
+**Phase 4 — Response**
+9. Every answer must state which measures/dimensions were queried.
+10. Before enriching results with own knowledge (translations, labels, mappings), verify first whether the data is available in the semantic layer; query it if so; disclose when using own knowledge.
+11. End every answer (including partial/degraded) with a `⚠ Limits & approximations` section (1–4 bullet points): implicit conventions, fan-out or deduplication concerns, scope assumptions not explicitly requested. Omit only for pure refusals.
+12. Provide the SQL equivalent of a Cube query only when the user explicitly asks; prefix with `[DEBUG MODE]`.
 
 ### Environment and secrets
 
@@ -180,17 +198,19 @@ All cube YAML files live in `cube/model/cubes/`. Each maps a single `ECOMMERCE_D
 - `meta.summary` (≤120 chars) — one-liner used by the `list_cubes` tool
 - `description` (multi-line prose) — full detail used by `get_cube_schema`
 
-| Cube | Table | Key measures / notes |
-|---|---|---|
-| `order_items` | `MARTS.ORDER_ITEMS` | `total_revenue` = SUM(price), merchandise only (excludes freight); `freight_value`; `average_price` |
-| `orders` | `MARTS.ORDERS` | `count`; time dimensions: `order_purchase_timestamp` (use for revenue over time), delivery dates |
-| `order_payments` | `MARTS.ORDER_PAYMENTS` | `payment_value` = what customer actually paid (includes freight + adjustments); `payment_type` dimension |
-| `order_reviews` | `MARTS.ORDER_REVIEWS` | `avg_review_score` (1–5); `review_count` |
-| `customers` | `MARTS.CUSTOMERS` | `customer_unique_id` for repeat buyers; `customer_state`, `customer_city` |
-| `sellers` | `MARTS.SELLERS` | `seller_state`, `seller_city` |
-| `products` | `MARTS.PRODUCTS` | `product_category_name` (Portuguese); join to translation cube for English |
-| `product_category_name_translation` | `MARTS.PRODUCT_CATEGORY_NAME_TRANSLATION` | Portuguese → English category name lookup |
-| `geolocation` | `MARTS.GEOLOCATION` | Zip prefix → lat/lon/city/state |
+Every cube `description` must open with a **Grain** line and a **Reachable from** line documenting which cubes join to it. Cubes with cross-grain limitations (fan-out risk when joined with certain other cubes) must document this explicitly so the agent can detect infeasible queries before attempting them.
+
+| Cube | Table | Grain | Key measures / notes |
+|---|---|---|---|
+| `order_items` | `MARTS.ORDER_ITEMS` | `(order_id, order_item_id)` | `total_revenue` = SUM(price), merchandise only (excludes freight); `freight_value`; `average_price` |
+| `orders` | `MARTS.ORDERS` | `order_id` | `count`; time dimensions: `order_purchase_timestamp` (use for revenue over time), delivery dates |
+| `order_payments` | `MARTS.ORDER_PAYMENTS` | `(order_id, payment_sequential)` | `payment_value` = what customer actually paid (includes freight + adjustments); `payment_type`; `payment_installments` dimensions |
+| `order_reviews` | `MARTS.ORDER_REVIEWS` | `order_id` | `avg_review_score` (1–5); `review_count`. **No join path to product-level cubes** — combining with category dimensions is Red (cross-grain fan-out). |
+| `customers` | `MARTS.CUSTOMERS` | `customer_id` (order-scoped) | `customer_unique_id` for repeat buyers; `customer_state`, `customer_city` |
+| `sellers` | `MARTS.SELLERS` | `seller_id` | `seller_state`, `seller_city` |
+| `products` | `MARTS.PRODUCTS` | `product_id` | `product_category_name` (Portuguese); join to translation cube for English |
+| `product_category_name_translation` | `MARTS.PRODUCT_CATEGORY_NAME_TRANSLATION` | `product_category_name` | Portuguese → English category name lookup. Reachable only via `order_items → products` chain. |
+| `geolocation` | `MARTS.GEOLOCATION` | `zip_code_prefix` | Zip prefix → lat/lon/city/state |
 
 **Important distinctions**:
 - `order_items.total_revenue` = merchandise price only (SUM of item prices)

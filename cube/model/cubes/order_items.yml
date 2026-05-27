@@ -5,10 +5,14 @@ cubes:
     sql_table: ECOMMERCE_DB.MARTS.ORDER_ITEMS
     data_source: default
     description: >
-      Items purchased within each order. One row per (order, item) pair.
+      Grain: (order_id, order_item_id) — one row per item within an order.
       An order can contain multiple items of the same product; freight is split
       proportionally across items. Sum freight_value across items to get
       order-level freight.
+      Reachable from: orders, products, sellers (many_to_one joins defined here).
+      Cross-grain note: combining measures from this cube with order_reviews
+      dimensions in a single query creates a one-to-many fan-out (one review
+      per order × N items per order) that silently biases any aggregation.
 
     joins:
       - name: orders

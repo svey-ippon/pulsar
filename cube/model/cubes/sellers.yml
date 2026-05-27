@@ -4,7 +4,10 @@ cubes:
       summary: "Seller profiles, one row per seller. Geographic dimensions: seller_state, seller_city."
     sql_table: ECOMMERCE_DB.MARTS.SELLERS
     data_source: default
-    description: "Sellers that fulfil orders on Olist. One row per seller. Use to filter or group metrics by seller location."
+    description: >
+      Grain: seller_id — one row per seller.
+      Reachable via: order_items → sellers join.
+      Use to filter or group metrics by seller location.
 
     joins: []
 

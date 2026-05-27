@@ -5,10 +5,13 @@ cubes:
     sql_table: ECOMMERCE_DB.MARTS.ORDERS
     data_source: default
     description: >
-      Core order dataset. One row per order. Links to customers, order_items,
-      order_payments, and order_reviews. Use order_purchase_timestamp to analyse
-      orders by when they were placed; use order_delivered_customer_date for
-      delivery performance analysis.
+      Grain: order_id — one row per order.
+      Reachable from: customers (many_to_one join defined here).
+      order_items, order_payments, and order_reviews each define their own join
+      TO this cube. Cross-cube queries using orders.count with dimensions from
+      those cubes work correctly — Cube deduplicates via COUNT(DISTINCT order_id).
+      Use order_purchase_timestamp to analyse orders by when they were placed;
+      use order_delivered_customer_date for delivery performance analysis.
 
     joins:
       - name: customers

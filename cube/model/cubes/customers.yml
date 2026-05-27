@@ -5,8 +5,9 @@ cubes:
     sql_table: ECOMMERCE_DB.MARTS.CUSTOMERS
     data_source: default
     description: >
-      Customer location and identity data. Note: customer_id is order-scoped —
-      the same physical customer gets a new customer_id for each order.
+      Grain: customer_id — one row per order-customer pair (customer_id is
+      order-scoped; the same physical customer gets a new customer_id per order).
+      Reachable from: orders (via orders → customers join).
       Use customer_unique_id to count distinct returning customers across orders.
 
     joins: []

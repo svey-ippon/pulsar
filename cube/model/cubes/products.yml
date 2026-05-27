@@ -4,7 +4,13 @@ cubes:
       summary: "Product catalog, one row per product. Category names are in Portuguese; join translation cube for English."
     sql_table: ECOMMERCE_DB.MARTS.PRODUCTS
     data_source: default
-    description: "Products sold on Olist. One row per product. Category names are in Portuguese; join to product_category_name_translation for English equivalents."
+    description: >
+      Grain: product_id — one row per product.
+      Reachable from: product_category_name_translation (many_to_one join defined here).
+      Accessible via order_items (order_items → products join). Not directly
+      reachable from order_reviews — see order_reviews cross-grain limitation.
+      Category names are in Portuguese; join to product_category_name_translation
+      for English equivalents.
 
     joins:
       - name: product_category_name_translation

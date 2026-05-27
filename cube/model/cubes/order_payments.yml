@@ -1,14 +1,15 @@
 cubes:
   - name: order_payments
     meta:
-      summary: "Payments per order, one row per payment method used. payment_value includes freight and adjustments."
+      summary: "Payments transaction per order, one row per payment method used. payment_value includes freight and adjustments."
     sql_table: ECOMMERCE_DB.MARTS.ORDER_PAYMENTS
     data_source: default
     description: >
-      Payment transactions for each order. One row per payment method used.
+      Grain: (order_id, payment_sequential) — one row per payment method per order.
       An order may have multiple rows if the customer split payment across
       methods (e.g. credit card + voucher); sum payment_value across rows
       to get the true order total, which includes freight and adjustments.
+      Reachable from: orders (many_to_one join defined here).
 
     joins:
       - name: orders
@@ -30,6 +31,11 @@ cubes:
         sql: "{CUBE}.\"PAYMENT_TYPE\""
         type: string
         description: "Payment method chosen by the customer (credit_card, boleto, voucher, debit_card, etc.)."
+
+      - name: payment_installments
+        sql: "{CUBE}.\"PAYMENT_INSTALLMENTS\""
+        type: number
+        description: "Number of installments chosen by the customer for this payment row. 1 means paid in full; greater than 1 means split into multiple monthly payments."
 
     measures:
       - name: count
