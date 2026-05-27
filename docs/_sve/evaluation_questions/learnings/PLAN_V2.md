@@ -475,8 +475,68 @@ Cette requête combine **CTE multiples**, **window function** (`ROW_NUMBER`), **
 1. **Tous les cubes en `public: false`** — invisibles depuis la SQL API et la REST API directement.
 2. **Toutes les expositions passent par des views** — gouvernance et chemins de join contrôlés.
 3. **Primary keys déclarées partout** — obligatoire pour les joins et les pré-agrégations.
-4. **Joins déclarés du côté "fact"** vers le côté "dim" (many_to_one).
+4. **Joins déclarés du côté "fact"** vers le côté "dim" (many_to_one) — avec une exception assumée pour `orders` qui déclare aussi des joins inverses vers ses faits enfants (voir la section "Choix de joins bidirectionnels" ci-dessous).
 5. **Une view exploratoire wide** (`olist_explorer`) + **4 views métier ciblées** maximisant la couverture en mode standard.
+
+### Choix de joins bidirectionnels — justification
+
+#### La règle Cube
+
+Le graphe de joins de Cube est **directionnel** : déclarer `order_reviews → orders` permet de naviguer **depuis** `order_reviews` **vers** `orders`, mais **pas l'inverse**. Cube ne traverse pas les joins en sens inverse automatiquement. La doc officielle énonce :
+
+> *"Join graph is directed and a → b join is different from b → a."*
+
+Et donne une règle de prudence générale :
+
+> *"As a rule of thumb, it's not recommended to define bidirectional joins in the data model (i.e., having both cubes define a join to each other) by default. However, it can still be useful for some valid analytical use cases."*
+
+#### Le risque que la règle cherche à éviter
+
+Quand un join est déclaré dans les deux sens, le graphe peut contenir **plusieurs chemins** entre deux cubes (un cas appelé "diamond subgraph") :
+
+- chemin 1 : `orders → order_items → products`
+- chemin 2 : `orders → order_reviews → orders → order_items → products` (avec des joins inverses qui créent une boucle)
+
+Dans cette situation, Cube doit choisir un chemin et **peut en choisir un que tu n'attendais pas**, donnant des résultats SQL surprenants. C'est précisément ce que rapporte l'issue [cube-js/cube#8499](https://github.com/cube-js/cube/issues/8499), où une view définit un `join_path` que Cube ignore en faveur d'un chemin plus court mais incorrect.
+
+#### Pourquoi notre cas relève de l'exception
+
+Trois éléments rendent le bidirectionnel **sûr et nécessaire** dans notre modèle :
+
+**1. Notre schéma est une étoile claire centrée sur `orders`**
+
+```
+                customers
+                    ▲
+                    │ many_to_one
+                    │
+                  orders
+              ┌─────┼─────┐
+   one_to_many│     │     │one_to_many
+              ▼     ▼     ▼
+        order_items reviews payments
+```
+
+`orders` est le **fait central**, les autres faits (`order_items`, `order_reviews`, `order_payments`) sont des "satellites" liés uniquement via `order_id`. Il n'y a **pas de cycle réel** dans le graphe métier — un order et ses items/reviews/payments forment un arbre, pas un graphe.
+
+**2. Nos views fixent toujours le `join_path` explicitement**
+
+Toutes les views utilisent `join_path: orders.order_items` ou équivalent. Cube est forcé de suivre ce chemin — il ne peut pas "court-circuiter" en passant par une autre route. Le risque de chemin ambigu est neutralisé par la déclaration explicite.
+
+**3. Nos views centrées orders ont besoin de la traversée inverse**
+
+`orders_overview` doit pouvoir afficher des dimensions de `order_reviews` et `customers` à côté du `count` d'orders, en gardant tous les orders (y compris ceux sans review). Cela nécessite un LEFT JOIN de `orders` vers `order_reviews`, donc le join doit être déclaré dans `orders.yml`.
+
+L'alternative (faire partir la view de `order_reviews` et "remonter" vers `orders`) filtrerait implicitement aux orders ayant une review — incorrect pour Q1 ("How many orders?") et pour toutes les questions de volume.
+
+#### Garde-fous à respecter
+
+Notre choix de bidirectionnalité reste sûr **tant que** :
+
+- ✅ Les joins inverses sont déclarés uniquement sur `orders` (le fait central), jamais entre faits satellites.
+- ✅ Toutes les views fixent un `join_path` explicite.
+- ✅ La `primary_key` de chaque cube est correctement déclarée — c'est elle qui permet à Cube de dédupliquer en `COUNT(DISTINCT pk)` quand un `one_to_many` multiplie les lignes.
+- ⚠️ Tests d'intégrité réguliers : vérifier que `MEASURE(orders.count)` reste stable quelles que soient les dimensions ajoutées dans la requête. Si la valeur change, c'est qu'un fan-out s'est glissé.
 
 ### Structure de fichiers
 
@@ -486,7 +546,8 @@ model/
 │   ├── orders/
 │   │   ├── orders.yml
 │   │   ├── order_items.yml
-│   │   └── order_reviews.yml
+│   │   ├── order_reviews.yml
+│   │   └── order_payments.yml
 │   ├── catalog/
 │   │   ├── products.yml
 │   │   ├── sellers.yml
@@ -495,10 +556,12 @@ model/
 │       └── customers.yml
 └── views/
     ├── exploration/
-    │   └── olist_explorer.yml      # ← view large pour l'agent
+    │   └── olist_explorer.yml          # view wide pour mode advanced
     └── metrics/
-        ├── reviews_by_category.yml # ← view métier ciblée
-        └── revenue_by_category.yml
+        ├── orders_overview.yml         # ┐
+        ├── payments_overview.yml       # │ views métier
+        ├── catalog_sales.yml           # │ pour mode standard
+        └── reviews_overview.yml        # ┘
 ```
 
 ### Définition des cubes
@@ -516,6 +579,23 @@ cubes:
       - name: customers
         sql: "{CUBE}.customer_id = {customers.customer_id}"
         relationship: many_to_one
+
+      # ─── Joins inverses (bidirectionnels) ───
+      # Permettent aux views centrées orders de naviguer vers les faits
+      # enfants (items, reviews, payments). Voir la note "Choix de joins
+      # bidirectionnels" plus bas pour la justification.
+
+      - name: order_items
+        sql: "{CUBE}.order_id = {order_items.order_id}"
+        relationship: one_to_many
+
+      - name: order_reviews
+        sql: "{CUBE}.order_id = {order_reviews.order_id}"
+        relationship: one_to_many
+
+      - name: order_payments
+        sql: "{CUBE}.order_id = {order_payments.order_id}"
+        relationship: one_to_many
 
     dimensions:
       - name: order_id
