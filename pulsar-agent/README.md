@@ -33,7 +33,8 @@ Yields events in order:
 |---|---|
 | `tool_call` | `{"type": "tool_call", "tool": str, "args": dict, "id": str}` |
 | `tool_result` | `{"type": "tool_result", "id": str, "content": str}` |
-| `token` | `{"type": "token", "content": str}` |
+| `reasoning_token` | `{"type": "reasoning_token", "content": str}` |
+| `answer_token` | `{"type": "answer_token", "content": str}` |
 | `answer` | `{"type": "answer", "answer": {"text": str, "results": list}}` |
 
 ### `answer_question`

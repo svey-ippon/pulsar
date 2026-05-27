@@ -199,7 +199,8 @@ Routes the graph:
 ### Output event shapes
 
 ```python
-{"type": "token", "content": str}
+{"type": "reasoning_token", "content": str}
+{"type": "answer_token", "content": str}
 {"type": "tool_call", "tool": str, "args": dict, "id": str}
 {"type": "tool_result", "id": str, "content": str}
 {"type": "answer", "answer": {"text": str, "results": list[QueryResult]}}

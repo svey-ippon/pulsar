@@ -89,15 +89,17 @@ This is appended to `state["cube_results"]`.
 `pulsar_agent.streaming.stream_agent_events` converts LangGraph chunks into stable application events:
 
 ```python
-{"type": "token", "content": str}
+{"type": "reasoning_token", "content": str}
+{"type": "answer_token", "content": str}
 {"type": "tool_call", "tool": str, "args": dict, "id": str}
 {"type": "tool_result", "id": str, "content": str}
 {"type": "answer", "answer": dict}
 ```
 
-Important detail: `tool_call` events are emitted from completed `AIMessage.tool_calls`, not from
-partial streamed JSON fragments. This ensures Streamlit receives complete tool arguments and ids
-that match the later `tool_result` events.
+Important detail: text chunks are emitted only after the completed `AIMessage` is known.
+Text from an `AIMessage` with tool calls becomes `reasoning_token`; text from the final
+`AIMessage` without tool calls becomes `answer_token`. `tool_call` events are also emitted
+from completed `AIMessage.tool_calls`, not from partial streamed JSON fragments.
 
 ---
 

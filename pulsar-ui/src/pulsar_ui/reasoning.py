@@ -29,24 +29,16 @@ def apply_tool_result(blocks: list[dict], event: dict) -> None:
             return
 
 
-def build_final_reasoning_blocks(events: list[dict], final_text: str) -> list[dict]:
-    # Split buffered stream: final_text is a suffix of all token content.
-    all_token_text = "".join(e["content"] for e in events if e["type"] == "token")
-    preceding_token_len = max(0, len(all_token_text) - len(final_text))
-
+def build_final_reasoning_blocks(events: list[dict], final_text: str = "") -> list[dict]:
     tool_results_by_id = {
         e["id"]: e["content"] for e in events if e["type"] == "tool_result"
     }
 
     reasoning_blocks: list[dict] = []
     current_text: list[str] = []
-    token_pos = 0
     for event in events:
-        if event["type"] == "token":
-            if token_pos < preceding_token_len:
-                take = min(len(event["content"]), preceding_token_len - token_pos)
-                current_text.append(event["content"][:take])
-            token_pos += len(event["content"])
+        if event["type"] == "reasoning_token":
+            current_text.append(event["content"])
         elif event["type"] == "tool_call":
             if current_text:
                 text = "".join(current_text).strip()

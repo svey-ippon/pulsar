@@ -4,7 +4,6 @@ views:
       View focused on sales at item grain: revenue, categories, sellers.
       Grain: (order_id, order_item_id).
       Covers questions about top categories, best sellers, and revenue by product.
-      Note: total_revenue is merchandise price only, excluding freight.
     meta:
       summary: "Sales by item: revenue, English categories, sellers. Grain (order_id, order_item_id)."
 

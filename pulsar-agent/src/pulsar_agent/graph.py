@@ -62,12 +62,13 @@ def stream_question(
     model: Any = None,
     checkpointer: Any = None,
 ) -> Generator[dict[str, Any], None, None]:
-    """Yield tool-call, token, tool-result, and answer events.
+    """Yield tool-call, text-token, tool-result, and answer events.
 
     Yields dicts with shape:
       {"type": "tool_call",   "tool": str, "args": dict, "id": str}
       {"type": "tool_result", "id": str,   "content": str}
-      {"type": "token",       "content": str}
+      {"type": "reasoning_token", "content": str}
+      {"type": "answer_token",    "content": str}
       {"type": "answer",      "answer": dict}
     """
     graph = build_graph(cube_client=cube_client, model=model, checkpointer=checkpointer)

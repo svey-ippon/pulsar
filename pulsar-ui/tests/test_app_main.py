@@ -125,16 +125,16 @@ def test_render_answer_with_reasoning_blocks_shows_text_and_tool_calls(monkeypat
 
     blocks = [
         {"type": "text", "content": "Let me check the schema."},
-        {"type": "tool", "tool": "list_cubes", "args": {}, "result": "[]"},
-        {"type": "tool", "tool": "query_cube", "args": {"measures": ["m"]}, "result": '[{"m": 1}]'},
+        {"type": "tool", "tool": "list_views", "args": {}, "result": "[]"},
+        {"type": "tool", "tool": "query_view", "args": {"measures": ["m"]}, "result": '[{"m": 1}]'},
     ]
     module.render_answer({"text": "Here is the answer.", "results": [], "reasoning_blocks": blocks})
 
     assert "Here is the answer." in fake_streamlit.writes
-    assert "🛠 list_cubes" in fake_streamlit.expander_labels
-    assert "🛠 query_cube" in fake_streamlit.expander_labels
-    # st.json called for: list_cubes args {}, list_cubes result [], query_cube args {"measures": ["m"]}
-    # query_cube result is a list → st.dataframe, not st.json
+    assert "🛠 list_views" in fake_streamlit.expander_labels
+    assert "🛠 query_view" in fake_streamlit.expander_labels
+    # st.json called for: list_views args {}, list_views result [], query_view args {"measures": ["m"]}
+    # query_view result is a list → st.dataframe, not st.json
     assert fake_streamlit.json_values == [{}, [], {"measures": ["m"]}]
     assert len(fake_streamlit.dataframes) == 1
 
@@ -145,14 +145,14 @@ def test_render_reasoning_blocks_shows_running_tool_result(monkeypatch):
     module.render_reasoning_blocks([
         {
             "type": "tool",
-            "tool": "query_cube",
+            "tool": "query_view",
             "args": {"measures": ["m"]},
             "result": None,
             "status": "running",
         }
     ])
 
-    assert "🛠 query_cube" in fake_streamlit.expander_labels
+    assert "🛠 query_view" in fake_streamlit.expander_labels
     assert {"measures": ["m"]} in fake_streamlit.json_values
     assert "Running..." in fake_streamlit.writes
     assert fake_streamlit.dataframes == []
@@ -162,20 +162,20 @@ def test_build_final_reasoning_blocks_excludes_final_answer_text(monkeypatch):
     module = load_reasoning()
 
     events = [
-        {"type": "token", "content": "Let me check."},
-        {"type": "tool_call", "tool": "query_cube", "args": {"measures": ["m"]}, "id": "tc_1"},
+        {"type": "reasoning_token", "content": "Let me check."},
+        {"type": "tool_call", "tool": "query_view", "args": {"measures": ["m"]}, "id": "tc_1"},
         {"type": "tool_result", "id": "tc_1", "content": '[{"m": 1}]'},
-        {"type": "token", "content": "Final answer."},
+        {"type": "answer_token", "content": "Final answer."},
     ]
 
-    blocks = module.build_final_reasoning_blocks(events, final_text="Final answer.")
+    blocks = module.build_final_reasoning_blocks(events, final_text="A normalized final answer.")
 
     assert blocks == [
         {"type": "text", "content": "Let me check."},
         {
             "type": "tool",
             "id": "tc_1",
-            "tool": "query_cube",
+            "tool": "query_view",
             "args": {"measures": ["m"]},
             "result": '[{"m": 1}]',
             "status": "done",

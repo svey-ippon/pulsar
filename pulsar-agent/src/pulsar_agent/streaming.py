@@ -17,6 +17,7 @@ def stream_agent_events(
     last_state: dict[str, Any] | None = None
     seen_tool_call_ids: set[str] = set()
     seen_tool_result_ids: set[str] = set()
+    pending_agent_text: list[str] = []
 
     for chunk in graph.stream(  # type: ignore[call-overload]
         {"messages": [HumanMessage(content=question)]},  # type: ignore[arg-type]
@@ -32,6 +33,11 @@ def stream_agent_events(
             last_msg = state_chunk["messages"][-1] if state_chunk["messages"] else None
 
             if isinstance(last_msg, AIMessage) and last_msg.tool_calls:
+                text = "".join(pending_agent_text) or content_text(last_msg.content)
+                pending_agent_text = []
+                if text:
+                    yield {"type": "reasoning_token", "content": text}
+
                 for tool_call in last_msg.tool_calls:
                     tool_call_id = tool_call.get("id")
                     if tool_call_id is None or tool_call_id in seen_tool_call_ids:
@@ -44,6 +50,12 @@ def stream_agent_events(
                         "id": tool_call_id,
                     }
 
+            elif isinstance(last_msg, AIMessage):
+                text = "".join(pending_agent_text) or content_text(last_msg.content)
+                pending_agent_text = []
+                if text:
+                    yield {"type": "answer_token", "content": text}
+
             if isinstance(last_msg, ToolMessage):
                 for msg in state_chunk["messages"]:
                     if isinstance(msg, ToolMessage) and msg.tool_call_id not in seen_tool_result_ids:
@@ -55,10 +67,9 @@ def stream_agent_events(
             if metadata.get("langgraph_node") != "agent":
                 continue
 
-            tc_chunks = getattr(msg_chunk, "tool_call_chunks", None) or []
             content = content_text(msg_chunk.content)
-            if content and not tc_chunks and not getattr(msg_chunk, "tool_calls", None):
-                yield {"type": "token", "content": content}
+            if content:
+                pending_agent_text.append(content)
 
     if last_state is not None:
         yield {

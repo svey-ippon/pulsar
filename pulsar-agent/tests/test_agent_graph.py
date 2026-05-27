@@ -224,8 +224,42 @@ def test_stream_question_yields_structured_text_blocks():
         )
     )
 
-    assert [event["content"] for event in events if event["type"] == "token"] == ["Hello world"]
+    assert [event["content"] for event in events if event["type"] == "answer_token"] == ["Hello world"]
     assert events[-1] == {"type": "answer", "answer": {"text": "Hello world", "results": []}}
+
+
+def test_stream_question_classifies_tool_call_text_as_reasoning():
+    call_count = [0]
+
+    class FakeToolBoundModel:
+        def stream(self, messages, config):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                yield AIMessageChunk(
+                    content="Let me query.",
+                    tool_call_chunks=[
+                        {"name": "list_views", "args": "{}", "id": "tc_1", "index": 0}
+                    ],
+                )
+            else:
+                yield AIMessageChunk(content="Done.")
+
+    class FakeModel:
+        def bind_tools(self, tools):
+            return FakeToolBoundModel()
+
+    events = list(
+        stream_question(
+            "question",
+            cube_client=FakeCubeClient(),
+            model=FakeModel(),
+            checkpointer=make_checkpointer(),
+        )
+    )
+
+    assert [event["content"] for event in events if event["type"] == "reasoning_token"] == ["Let me query."]
+    assert [event["content"] for event in events if event["type"] == "answer_token"] == ["Done."]
+    assert events[-1]["answer"]["text"] == "Done."
 
 
 def test_stream_question_emits_complete_tool_call_args_and_matching_result():

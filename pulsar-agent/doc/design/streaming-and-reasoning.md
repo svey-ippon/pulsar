@@ -36,10 +36,11 @@ depending on where in the loop it was generated.
 
 ## How the UI Handles It
 
-The Streamlit app captures all token events during streaming and builds **reasoning blocks** — an
-ordered sequence of text fragments and tool call records. At the end of the stream, the final
-answer text is known, and `build_final_reasoning_blocks` removes it from the reasoning trace
-before storing the blocks in chat history.
+`stream_agent_events` buffers text chunks until LangGraph emits the complete `AIMessage` for the
+current agent step. If that message has tool calls, the buffered text is emitted as
+`reasoning_token`; if it is the final AI message without tool calls, the buffered text is emitted
+as `answer_token`. The Streamlit app uses those classified events to build **reasoning blocks** —
+an ordered sequence of text fragments and tool call records.
 
 This gives a clean separation:
 
@@ -47,7 +48,7 @@ This gives a clean separation:
 - The visible **answer area** shows only the final answer text.
 
 See `pulsar_agent.streaming.stream_agent_events` for how token and tool-call events are emitted,
-and `app.reasoning.build_final_reasoning_blocks` for how the final blocks are assembled.
+and `pulsar_ui.reasoning.build_final_reasoning_blocks` for how the final blocks are assembled.
 
 ---
 

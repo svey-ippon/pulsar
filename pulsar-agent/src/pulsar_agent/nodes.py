@@ -36,7 +36,7 @@ def make_tool_node(tools_by_name: dict[str, BaseTool]) -> Callable[[AgentState],
             new_messages.append(
                 ToolMessage(content=result_str, tool_call_id=tc["id"], name=tc["name"])
             )
-            if tc["name"] == "query_cube":
+            if tc["name"] == "query_view":
                 try:
                     parsed = json.loads(result_str)
                     if isinstance(parsed, list):

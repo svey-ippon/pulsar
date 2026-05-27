@@ -43,10 +43,11 @@ Owns the Streamlit session and the streaming loop.
 Consumes `pulsar_agent.graph.stream_question` events and drives the live Streamlit UI:
 
 ```
-tool_call  → append_tool_call_block  → render_live_blocks
-tool_result → apply_tool_result      → render_live_blocks
-token      → append_reasoning_token  → render_live_blocks
-answer     → build_final_reasoning_blocks → render final answer
+tool_call       → append_tool_call_block      → render_live_blocks
+tool_result     → apply_tool_result           → render_live_blocks
+reasoning_token → append_reasoning_token      → render_live_blocks
+answer_token    → render streamed answer text
+answer          → build_final_reasoning_blocks → render final answer
 ```
 
 Two Streamlit placeholders are updated in parallel during streaming:
@@ -84,7 +85,7 @@ Pure functions — no Streamlit imports. Safe to unit-test directly.
 | `append_reasoning_token(blocks, content)` | Appends to last text block or creates a new one |
 | `append_tool_call_block(blocks, event)` | Adds a tool block in `"running"` state |
 | `apply_tool_result(blocks, event)` | Finds block by `id`, sets result and `"done"` |
-| `build_final_reasoning_blocks(events, final_text)` | Reconstructs ordered blocks from raw event stream, excluding final answer text |
+| `build_final_reasoning_blocks(events, final_text)` | Reconstructs ordered blocks from classified reasoning events |
 
 ---
 
@@ -95,21 +96,21 @@ stream_question yields events
         │
         ├─ tool_call  ──→  append_tool_call_block  → live block (status: "running")
         ├─ tool_result ──→ apply_tool_result        → live block (status: "done", result set)
-        └─ token      ──→  append_reasoning_token   → live text block (accumulated)
+        ├─ reasoning_token ──→ append_reasoning_token → live text block (accumulated)
+        └─ answer_token    ──→ streamed answer text
                 │
                 ▼
         [after answer event]
         build_final_reasoning_blocks(all_events, final_text)
                 │
-                ├─ strips final_text suffix from token stream
+                ├─ keeps only reasoning_token text
                 ├─ reconstructs ordered [text, tool, text, tool, ...] sequence
                 └─ returns reasoning_blocks stored in chat history
 ```
 
-`build_final_reasoning_blocks` is the critical step: it separates reasoning tokens from the final
-answer text. The final text is identified as a suffix of all concatenated token content.
-See `pulsar_agent/doc/design/streaming-and-reasoning.md` for the agent-side explanation of why
-reasoning and answer text are mixed in the token stream.
+`pulsar_agent.streaming.stream_agent_events` is the critical step: it buffers streamed text until
+the complete `AIMessage` is known. Text from an `AIMessage` with tool calls is emitted as
+`reasoning_token`; text from the final `AIMessage` without tool calls is emitted as `answer_token`.
 
 ---
 

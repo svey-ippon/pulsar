@@ -29,9 +29,9 @@ def _fmt_default(_tool: str, _args: dict, content: str) -> None:
 
 
 _TOOL_RESULT_FORMATTERS = {
-    "list_cubes": _fmt_json,
-    "get_cube_schema": _fmt_json,
-    "query_cube": _fmt_query_cube,
+    "list_views": _fmt_json,
+    "describe_view": _fmt_json,
+    "query_view": _fmt_query_cube,
 }
 
 

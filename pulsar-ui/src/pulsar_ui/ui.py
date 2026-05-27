@@ -50,6 +50,7 @@ def stream_assistant_response(question: str) -> dict | None:
     placeholder = st.empty()
     all_events: list[dict] = []
     live_reasoning_blocks: list[dict] = []
+    answer_text_parts: list[str] = []
     generating = [False]
 
     with placeholder.container():
@@ -74,10 +75,18 @@ def stream_assistant_response(question: str) -> dict | None:
                 all_events.append(event)
                 apply_tool_result(live_reasoning_blocks, event)
                 render_live_blocks()
-            elif event["type"] == "token":
-                all_events.append({"type": "token", "content": event["content"]})
+            elif event["type"] == "reasoning_token":
+                all_events.append({"type": "reasoning_token", "content": event["content"]})
                 append_reasoning_token(live_reasoning_blocks, event["content"])
                 render_live_blocks()
+                if not generating[0]:
+                    status.update(label="generating...", state="running", expanded=False)
+                    generating[0] = True
+            elif event["type"] == "answer_token":
+                answer_text_parts.append(event["content"])
+                answer_placeholder.empty()
+                with answer_placeholder.container():
+                    st.write("".join(answer_text_parts))
                 if not generating[0]:
                     status.update(label="generating...", state="running", expanded=False)
                     generating[0] = True
