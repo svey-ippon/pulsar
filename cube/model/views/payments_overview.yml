@@ -1,0 +1,25 @@
+views:
+  - name: payments_overview
+    description: >
+      View focused on payments: amounts, methods, installments.
+      Grain: (order_id, payment_sequential).
+      Covers questions about payment methods, total collected value,
+      and the share of payments made in multiple installments.
+    meta:
+      summary: "Payments: amounts, methods, installments. Grain (order_id, payment_sequential)."
+
+    cubes:
+      - join_path: order_payments
+        includes:
+          - payment_type
+          - payment_installments
+          - is_multi_installment
+          - count
+          - payment_value
+          - count_multi_installment
+          - avg_installments
+
+      - join_path: order_payments.orders
+        includes:
+          - order_purchase_timestamp
+          - order_status

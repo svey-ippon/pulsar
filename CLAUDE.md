@@ -10,7 +10,7 @@ A self-hosted data-agent POC for natural-language analytics over a Brazilian e-c
 Streamlit → LangGraph (ReAct agent) → Cube Core (Docker) → Snowflake
 ```
 
-The agent uses Claude Sonnet 4.6 to classify questions, discover the schema dynamically via `list_cubes`, and call `query_cube` to answer questions about the Olist dataset. It supports any question answerable from the 9 Cube semantic models (revenue, reviews, payments, customer/seller geography, product categories, etc.). Predictions and questions outside the semantic layer are refused.
+The agent uses Claude Sonnet 4.6 to classify questions, discover the schema dynamically via `list_views`, and call `query_view` to answer questions about the Olist dataset. It operates in **standard mode**: 9 cubes (`public: false`) are exposed only through 4 business views (`orders_overview`, `payments_overview`, `catalog_sales`, `reviews_overview`). The agent routes questions to the appropriate view, queries it, and returns governed results. Predictions and questions outside the semantic layer are refused.
 
 ## Commands
 
@@ -83,9 +83,10 @@ This boundary is the seam that will become a network call (FastAPI/SSE) when gra
 
 | Layer | Job | Must not |
 |---|---|---|
-| `cube/model/cubes/*.yml` | Define governed metrics and dimensions | Run transformations; query raw tables |
-| `pulsar-agent/src/pulsar_agent/cube_client.py` | HTTP client for Cube REST API (`/meta`, `/load`) | Connect to Snowflake |
-| `pulsar-agent/src/pulsar_agent/tools.py` | LangChain tool factory (`list_cubes`, `get_cube_schema`, `query_cube`) | Contain business logic |
+| `cube/model/cubes/*.yml` | Define governed metrics and dimensions (`public: false`) | Run transformations; query raw tables |
+| `cube/model/views/*.yml` | Expose business views (4 views: `orders_overview`, `payments_overview`, `catalog_sales`, `reviews_overview`) | Contain cube logic |
+| `pulsar-agent/src/pulsar_agent/cube_client.py` | HTTP client for Cube REST API (`/meta`, `/load`); `list_views`, `get_view_schema`, `query_view` | Connect to Snowflake |
+| `pulsar-agent/src/pulsar_agent/tools.py` | LangChain tool factory (`list_views`, `describe_view`, `query_view`) | Contain business logic |
 | `pulsar-agent/src/pulsar_agent/state.py` | `AgentState` and `QueryResult` TypedDicts | — |
 | `pulsar-agent/src/pulsar_agent/nodes.py` | Agent node, tool node, routing predicate | — |
 | `pulsar-agent/src/pulsar_agent/extraction.py` | Text extraction helpers (`extract_text`, `prev_results_count`) | — |
@@ -113,13 +114,13 @@ This boundary is the seam that will become a network call (FastAPI/SSE) when gra
 
 #### pulsar-agent/src/pulsar_agent/state.py
 
-- **`QueryResult`**: `{"query": dict, "data": list[dict]}` — one per `query_cube` call per turn.
+- **`QueryResult`**: `{"query": dict, "data": list[dict]}` — one per `query_view` call per turn.
 - **`AgentState`**: `messages` (accumulates with `add_messages`) + `cube_results` (accumulates with `operator.add`).
 
 #### pulsar-agent/src/pulsar_agent/nodes.py
 
 - **`make_agent_node(llm_with_tools)`** — returns the agent node function; uses `.stream()` on the LLM (not `.invoke()`) so token chunks are emitted during execution and captured by LangGraph's streaming.
-- **`make_tool_node(tools_by_name)`** — executes each tool call in the last AI message; appends `QueryResult` to state for every successful `query_cube` response.
+- **`make_tool_node(tools_by_name)`** — executes each tool call in the last AI message; appends `QueryResult` to state for every successful `query_view` response.
 - **`should_continue(state)`** — routes to `"tools"` if the last message has tool calls, else `END`.
 
 #### pulsar-agent/src/pulsar_agent/extraction.py
@@ -150,11 +151,11 @@ The `_extract_text` name is re-exported from `pulsar_agent.graph` (imported from
 
 ### pulsar-agent/src/pulsar_agent/tools.py internals
 
-`make_tools(cube_client)` returns three LangChain tools:
+`make_tools(cube_client)` returns three LangChain tools (all operate on views, not raw cubes):
 
-- **`list_cubes()`** — calls `/meta`; returns `[{name, title, summary}]` for all cubes (lightweight orientation); extracts `meta.summary` from each cube, falling back to the first sentence of `description` if absent; catches `CubeServiceError`.
-- **`get_cube_schema(cube_name)`** — validated by `GetCubeSchemaArgs` (Pydantic); calls `client.get_cube_schema()`; returns `{name, title, description, measures, dimensions}` for one cube; on unknown cube name returns structured error JSON with a hint; catches `CubeServiceError`.
-- **`query_cube(measures, dimensions, filters, time_dimensions, limit)`** — validated by `QueryCubeArgs` (Pydantic); calls `/load`; returns rows as JSON string; catches both `CubeServiceError` (stop + report) and `CubeQueryError` 400 (hint to retry with corrected args); default limit 500, max 5000.
+- **`list_views()`** — calls `client.list_views()` (filters `/meta` to `type=="view"`); returns `[{name, summary}]` for all views (lightweight orientation); extracts `meta.summary` from each view, falling back to the first sentence of `description` if absent; catches `CubeServiceError`.
+- **`describe_view(view_name)`** — validated by `GetViewSchemaArgs` (Pydantic); calls `client.get_view_schema()`; returns `{name, title, description, measures, dimensions}` where each measure includes an `additive: bool` field and each dimension includes an `is_calculated: bool` field; on unknown view name returns structured error JSON with a hint; catches `CubeServiceError`.
+- **`query_view(view, measures, dimensions, filters, time_dimensions, order, limit)`** — validated by `QueryViewArgs` (Pydantic); `view` param is the view name; member names must be prefixed with the view name (e.g. `orders_overview.count`); calls `/load`; supports `order: dict[str, str]` for TOP-N queries; returns rows as JSON string; catches both `CubeServiceError` (stop + report) and `CubeQueryError` 400 (hint to retry with corrected args); default limit 1000, max 5000.
 
 Error responses are structured JSON so the LLM can react correctly (retry vs. stop).
 
@@ -163,16 +164,27 @@ Error responses are structured JSON so the LLM can react correctly (retry vs. st
 The prompt is structured in four phases:
 
 **Phase 1 — Schema Discovery**
-1. Two-step schema discovery: call `list_cubes` to see all cube summaries, then call `get_cube_schema(cube_name)` on the relevant cube(s) before querying. Reuse schema already in conversation history.
-2. Use only member names from the `get_cube_schema` response — no invention.
+1. Two-step schema discovery: call `list_views` to see all view summaries, then call `describe_view(view_name)` on the relevant view(s) before querying. Reuse schema already in conversation history.
+2. Use only member names from the `describe_view` response — no invention. Member names are always prefixed with the view name (e.g. `orders_overview.count`, not `orders.count`).
+
+**View Routing** — question category determines which view to use:
+- Order volume/status/delivery/satisfaction → `orders_overview`
+- Payment methods/amounts/installments → `payments_overview`
+- Revenue by category/seller/product → `catalog_sales`
+- Review scores/satisfaction → `reviews_overview`
+- Cross-grain (e.g. review by category) → Red, infeasible in standard mode
+
+**`describe_view` output interpretation**:
+- `additive=False` on a measure (avg, count_distinct) → never sum manually; use as-is.
+- `is_calculated=True` on a dimension → derived from SQL expression; safe for grouping.
 
 **Phase 2 — Pre-Query Analysis** (every time, before acting)
 3. **Schema ambiguity**: if the schema offers two or more members that would answer the question with meaningfully different results, stop and ask the user to choose — do not pick one silently.
 4. **Conceptual ambiguity**: check for grain mismatches or implicit attribution choices independently of the schema (e.g. a measure recorded at session grain grouped by a user-level dimension). Surface the assumption and ask the user to confirm.
 5. **Feasibility classification**:
-   - *Green* — single query, no fan-out risk → query immediately.
+   - *Green* — single query on one view, no fan-out risk → query immediately.
    - *Amber* — max 2 independent queries to reconcile in-context → lay out the plan and ask confirmation.
-   - *Red* — missing join path, cross-grain aggregation that would silently bias results, logic not expressible in the semantic layer, or more than 2 independent queries needed → explain precisely and stop.
+   - *Red* — missing join path in any view, cross-grain aggregation that would silently bias results, logic not expressible in the semantic layer, or more than 2 independent queries needed → explain precisely and stop.
 
 **Phase 3 — Execution**
 6. Refuse predictions, forecasts, and projections. State clearly; attempt no workaround.
@@ -180,7 +192,7 @@ The prompt is structured in four phases:
 8. On tool error JSON: if a `"hint"` key is present, follow it and retry; if no `"hint"`, the service is unavailable — stop immediately and report.
 
 **Phase 4 — Response**
-9. Every answer must state which measures/dimensions were queried.
+9. Every answer must state which measures/dimensions were queried and which view was used.
 10. Before enriching results with own knowledge (translations, labels, mappings), verify first whether the data is available in the semantic layer; query it if so; disclose when using own knowledge.
 11. End every answer (including partial/degraded) with a `⚠ Limits & approximations` section (1–4 bullet points): implicit conventions, fan-out or deduplication concerns, scope assumptions not explicitly requested. Omit only for pure refusals.
 12. Provide the SQL equivalent of a Cube query only when the user explicitly asks; prefix with `[DEBUG MODE]`.
@@ -194,28 +206,43 @@ The prompt is structured in four phases:
 
 ### Cube semantic models
 
-All cube YAML files live in `cube/model/cubes/`. Each maps a single `ECOMMERCE_DB.MARTS.*` table. Every cube must declare both:
-- `meta.summary` (≤120 chars) — one-liner used by the `list_cubes` tool
-- `description` (multi-line prose) — full detail used by `get_cube_schema`
+**Architecture**: all 9 cubes are `public: false` — they are invisible to the agent and to BI tools. The agent interacts exclusively with the 4 business views in `cube/model/views/`.
 
-Every cube `description` must open with a **Grain** line and a **Reachable from** line documenting which cubes join to it. Cubes with cross-grain limitations (fan-out risk when joined with certain other cubes) must document this explicitly so the agent can detect infeasible queries before attempting them.
+#### Business views (agent-facing)
+
+View files live in `cube/model/views/`. Each view must declare:
+- `meta.summary` (≤120 chars) — used by `list_views` tool
+- `description` (multi-line prose) — used by `describe_view` tool
+
+| View | Grain | Key members | Questions covered |
+|---|---|---|---|
+| `orders_overview` | `order_id` | `count`, `delivered_count`, `avg_delay_days`, `delivery_status`, `delay_days`, `is_delivered`, `avg_review_score`, `review_count`, `customer_state` | Order volume, delivery performance, satisfaction correlation |
+| `payments_overview` | `(order_id, payment_sequential)` | `payment_value`, `count`, `count_multi_installment`, `avg_installments`, `payment_type`, `is_multi_installment` | Payment methods, amounts, installments |
+| `catalog_sales` | `(order_id, order_item_id)` | `total_revenue`, `freight_value`, `count`, `product_category_name_english`, `sellers_seller_state`, `sellers_seller_id` | Revenue by category/seller/product |
+| `reviews_overview` | `order_id` | `avg_review_score`, `review_count`, `review_score`, `delivery_status`, `delay_days`, `customer_state` | Customer satisfaction, delivery correlation |
+
+#### Private cubes (implementation detail, not exposed to agent)
+
+All cube YAML files live in `cube/model/cubes/`. Each maps a single `ECOMMERCE_DB.MARTS.*` table and carries `public: false`. Every cube must declare both:
+- `meta.summary` (≤120 chars)
+- `description` (multi-line prose) with **Grain** and **Reachable from** lines
 
 | Cube | Table | Grain | Key measures / notes |
 |---|---|---|---|
-| `order_items` | `MARTS.ORDER_ITEMS` | `(order_id, order_item_id)` | `total_revenue` = SUM(price), merchandise only (excludes freight); `freight_value`; `average_price` |
-| `orders` | `MARTS.ORDERS` | `order_id` | `count`; time dimensions: `order_purchase_timestamp` (use for revenue over time), delivery dates |
-| `order_payments` | `MARTS.ORDER_PAYMENTS` | `(order_id, payment_sequential)` | `payment_value` = what customer actually paid (includes freight + adjustments); `payment_type`; `payment_installments` dimensions |
-| `order_reviews` | `MARTS.ORDER_REVIEWS` | `order_id` | `avg_review_score` (1–5); `review_count`. **No join path to product-level cubes** — combining with category dimensions is Red (cross-grain fan-out). |
-| `customers` | `MARTS.CUSTOMERS` | `customer_id` (order-scoped) | `customer_unique_id` for repeat buyers; `customer_state`, `customer_city` |
-| `sellers` | `MARTS.SELLERS` | `seller_id` | `seller_state`, `seller_city` |
-| `products` | `MARTS.PRODUCTS` | `product_id` | `product_category_name` (Portuguese); join to translation cube for English |
-| `product_category_name_translation` | `MARTS.PRODUCT_CATEGORY_NAME_TRANSLATION` | `product_category_name` | Portuguese → English category name lookup. Reachable only via `order_items → products` chain. |
-| `geolocation` | `MARTS.GEOLOCATION` | `zip_code_prefix` | Zip prefix → lat/lon/city/state |
+| `order_items` (`public: false`) | `MARTS.ORDER_ITEMS` | `(order_id, order_item_id)` | `total_revenue` = SUM(price), merchandise only (excludes freight); `freight_value`; `average_price` |
+| `orders` (`public: false`) | `MARTS.ORDERS` | `order_id` | `count`; `delivered_count`; calculated dims: `delivery_status`, `delay_days`, `is_delivered`; bidirectional joins to `order_items`, `order_reviews`, `order_payments` |
+| `order_payments` (`public: false`) | `MARTS.ORDER_PAYMENTS` | `(order_id, payment_sequential)` | `payment_value`; `count_multi_installment`; `avg_installments`; `is_multi_installment` |
+| `order_reviews` (`public: false`) | `MARTS.ORDER_REVIEWS` | `order_id` | `avg_review_score` (1–5); `review_count`. No join path to product-level cubes. |
+| `customers` (`public: false`) | `MARTS.CUSTOMERS` | `customer_id` (order-scoped) | `unique_customer_count` for repeat buyers; `customer_state`, `customer_city` |
+| `sellers` (`public: false`) | `MARTS.SELLERS` | `seller_id` | `seller_state`, `seller_city` |
+| `products` (`public: false`) | `MARTS.PRODUCTS` | `product_id` | `product_category_name` (Portuguese); join to translation cube for English |
+| `product_category_name_translation` (`public: false`) | `MARTS.PRODUCT_CATEGORY_NAME_TRANSLATION` | `product_category_name` | Portuguese → English category name lookup. Reachable only via `order_items → products` chain. |
+| `geolocation` (`public: false`) | `MARTS.GEOLOCATION` | `zip_code_prefix` | Zip prefix → lat/lon/city/state. Not currently exposed in any view. |
 
 **Important distinctions**:
-- `order_items.total_revenue` = merchandise price only (SUM of item prices)
-- `order_payments.payment_value` = total paid by customer (includes freight/adjustments)
-- `customers.count` = number of orders, not unique buyers; use `customer_unique_id` for unique buyers
+- `total_revenue` (via `catalog_sales`) = merchandise price only (SUM of item prices)
+- `payment_value` (via `payments_overview`) = total paid by customer (includes freight/adjustments)
+- `unique_customer_count` (via `orders_overview`) = distinct physical customers; plain `count` = number of orders
 
 ### UI (pulsar-ui/)
 
@@ -238,7 +265,7 @@ Thin entry point — just calls `run_app()` from `pulsar_ui.ui`.
 - **`render_reasoning_blocks(blocks)`** — renders a list of reasoning blocks:
   - `{"type": "text", "content": str}` → `st.write(content)`
   - `{"type": "tool", "tool": str, "args": dict, "result": str|None, "status": str}` → collapsible `st.expander` showing arguments and formatted result.
-  - Tool result format: `list_cubes`/`get_cube_schema` → `st.json`; `query_cube` list → `st.dataframe`; other → `st.write`.
+  - Tool result format: `list_views`/`describe_view` → `st.json`; `query_view` list → `st.dataframe`; other → `st.write`.
 - **`render_reasoning_details(blocks)`** — wraps `render_reasoning_blocks` in a collapsed `st.status` labelled "reasoning details".
 - **`render_answer(answer)`** — renders `reasoning_blocks` (if present) then the final text.
 
@@ -255,14 +282,14 @@ Tests are split by package ownership.
 
 **`pulsar-agent/tests/`** — run in isolation with `uv run pytest pulsar-agent/tests/`:
 - `test_agent_graph.py` — graph build, text extraction, refusal and happy-path behaviour using `FakeCubeClient` (no env vars needed); also tests streaming event shapes (`tool_call`, `tool_result`, `token`, `answer`).
-- `test_agent_tools.py` — tool wrapping, Pydantic validation, structured error JSON for each error path; covers all three tools including `get_cube_schema` and `list_cubes` summary extraction/fallback.
-- `test_cube_client.py` — HTTP client unit tests: retries, error classification, 4xx vs 5xx handling.
+- `test_agent_tools.py` — tool wrapping, Pydantic validation, structured error JSON for each error path; covers all three tools including `describe_view` (additive/is_calculated flags), `list_views` summary extraction/fallback, and `query_view` order parameter.
+- `test_cube_client.py` — HTTP client unit tests: `list_views`, `query_view`, `order` param inclusion/omission, error classification, 4xx vs 5xx handling.
 
 **`pulsar-ui/tests/`** — run in isolation with `uv run pytest pulsar-ui/tests/`:
 - `test_app_main.py` — `pulsar_ui.rendering` and `pulsar_ui.reasoning` unit tests (mocked Streamlit): reasoning block rendering, running tool display, `build_final_reasoning_blocks` exclusion of final answer text.
 
 **`tests/`** — infrastructure and cross-package tests:
-- `test_cube_model.py` — static contract: all cubes read from MARTS, primary keys set, `total_revenue` measure definition exact-matched, all cubes have `meta.summary` ≤120 chars.
+- `test_cube_model.py` — static contract: all cubes read from MARTS, all cubes `public: false`, primary keys set, `total_revenue` measure definition exact-matched, bidirectional joins in `orders`, new dimensions/measures in `orders` and `order_payments`, 4 view files with correct members.
 - `test_project_imports.py` — import path verification from non-root directories.
 
 Run the full workspace suite from the root: `uv run pytest` (discovers `tests/`, `pulsar-agent/tests/`, `pulsar-ui/tests/`).

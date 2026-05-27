@@ -1,0 +1,35 @@
+views:
+  - name: orders_overview
+    description: >
+      View focused on orders: volume, status, delivery performance and satisfaction.
+      Grain: order_id.
+      Covers questions about order counts, delivery performance, and the
+      correlation between delivery and customer satisfaction.
+    meta:
+      summary: "Orders: volume, status, delivery performance, satisfaction. Grain order_id."
+
+    cubes:
+      - join_path: orders
+        includes:
+          - order_id
+          - order_status
+          - order_purchase_timestamp
+          - order_delivered_customer_date
+          - delivery_status
+          - delay_days
+          - is_delivered
+          - count
+          - delivered_count
+          - avg_delay_days
+
+      - join_path: orders.customers
+        includes:
+          - customer_state
+          - customer_city
+          - unique_customer_count
+
+      - join_path: orders.order_reviews
+        includes:
+          - review_score
+          - avg_review_score
+          - review_count

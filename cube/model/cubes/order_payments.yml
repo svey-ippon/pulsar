@@ -1,5 +1,6 @@
 cubes:
   - name: order_payments
+    public: false
     meta:
       summary: "Payments transaction per order, one row per payment method used. payment_value includes freight and adjustments."
     sql_table: ECOMMERCE_DB.MARTS.ORDER_PAYMENTS
@@ -37,6 +38,11 @@ cubes:
         type: number
         description: "Number of installments chosen by the customer for this payment row. 1 means paid in full; greater than 1 means split into multiple monthly payments."
 
+      - name: is_multi_installment
+        sql: "({CUBE}.\"PAYMENT_INSTALLMENTS\" > 1)"
+        type: boolean
+        description: "True if the payment is split into more than one installment."
+
     measures:
       - name: count
         type: count
@@ -46,5 +52,19 @@ cubes:
         sql: "{CUBE}.\"PAYMENT_VALUE\""
         type: sum
         description: "Total transaction value including freight and adjustments. Unlike order_items.total_revenue, this reflects what the customer actually paid."
+
+      - name: count_multi_installment
+        sql: "{CUBE}.\"ORDER_ID\""
+        type: count
+        filters:
+          - sql: "{CUBE}.\"PAYMENT_INSTALLMENTS\" > 1"
+        description: "Number of payments made in multiple installments (more than one)."
+
+      - name: avg_installments
+        sql: "{CUBE}.\"PAYMENT_INSTALLMENTS\""
+        type: avg
+        description: >
+          Average number of installments per payment.
+          ⚠️ Non-additive — do not sum.
 
     pre_aggregations: []

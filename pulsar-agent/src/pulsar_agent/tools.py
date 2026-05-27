@@ -18,7 +18,7 @@ _UNAVAILABLE = json.dumps({"error": "Cube service unavailable. Please try again 
 class CubeFilter(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    member: str = Field(description="Cube member name returned by get_cube_schema().")
+    member: str = Field(description="View member name returned by describe_view().")
     operator: str = Field(description='Cube filter operator, e.g. "equals", "gte", "lte", "contains".')
     values: list[str | int | float | bool] = Field(description="Filter values.")
 
@@ -26,7 +26,7 @@ class CubeFilter(BaseModel):
 class CubeTimeDimension(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
-    dimension: str = Field(description="Cube time dimension name returned by get_cube_schema().")
+    dimension: str = Field(description="View time dimension name returned by describe_view().")
     granularity: str = Field(
         default="",
         description='Optional grouping granularity such as "day", "week", "month", or "year". Omit for date-only filters; never pass null.',
@@ -38,23 +38,28 @@ class CubeTimeDimension(BaseModel):
     )
 
 
-class QueryCubeArgs(BaseModel):
+class GetViewSchemaArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    measures: list[str] = Field(description='Metric names, e.g. ["order_items.total_revenue"].')
-    dimensions: list[str] = Field(default_factory=list, description='Grouping axes, e.g. ["customers.customer_state"].')
+    view_name: str = Field(description="Exact view name as returned by list_views().")
+
+
+class QueryViewArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    view: str = Field(description="View name (must match a name returned by list_views()).")
+    measures: list[str] = Field(description='Metric names prefixed with view name, e.g. ["orders_overview.count"].')
+    dimensions: list[str] = Field(default_factory=list, description='Grouping axes, e.g. ["orders_overview.delivery_status"].')
     filters: list[CubeFilter] = Field(default_factory=list, description="Optional Cube filters.")
     time_dimensions: list[CubeTimeDimension] = Field(
         default_factory=list,
         description="Optional Cube time dimensions. Use dateRange for date filters and granularity only for time grouping.",
     )
-    limit: int = Field(default=500, ge=1, le=5000, description="Maximum rows returned.")
-
-
-class GetCubeSchemaArgs(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    cube_name: str = Field(description="Exact cube name as returned by list_cubes().")
+    order: dict[str, str] = Field(
+        default_factory=dict,
+        description='Sort order dict, e.g. {"catalog_sales.total_revenue": "desc"}.',
+    )
+    limit: int = Field(default=1000, ge=1, le=5000, description="Maximum rows returned.")
 
 
 def _dump_models(value: Any) -> Any:
@@ -68,9 +73,9 @@ def _dump_models(value: Any) -> Any:
 def _validation_error(exc: Any) -> str:
     return json.dumps(
         {
-            "error": "Invalid query_cube tool arguments.",
+            "error": "Invalid query_view tool arguments.",
             "details": exc.errors(),
-            "hint": "Fix the arguments and call query_cube again. Omit optional fields instead of passing null values.",
+            "hint": "Fix the arguments and call query_view again. Omit optional fields instead of passing null values.",
         }
     )
 
@@ -86,105 +91,130 @@ def _extract_summary(cube: dict) -> str:
 
 
 def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]:
-    """Return the three Cube tools, bound to *cube_client* or a default client built from env vars."""
+    """Return the three Cube view tools, bound to *cube_client* or a default client built from env vars."""
     client: SupportsCubeQueries = cube_client or CubeClient(
         base_url=os.environ["CUBE_API_URL"],
         token=os.environ["CUBE_API_TOKEN"],
     )
 
     @tool
-    def list_cubes() -> str:
-        """Return a lightweight list of all available cubes with one-line summaries.
+    def list_views() -> str:
+        """Return a lightweight list of all available semantic views with one-line summaries.
 
-        Each entry contains: name, title, summary.
-        Call this first to identify which cube(s) are relevant to the question,
-        then call get_cube_schema(cube_name) for full measure and dimension details
-        before calling query_cube.
+        Each entry: {"name": str, "summary": str}
+
+        The summary describes what each view covers and its grain (the entity that each row
+        represents, e.g. order_id, or a composite like order_id × payment_sequential).
+        Use it to select the view whose grain and subject matter best fit the question.
+
+        Call this first before any query. Then call describe_view(view_name) to get the
+        full list of measures and dimensions available in the selected view.
         """
         try:
-            meta = client.list_cubes()
+            meta = client.list_views()
             result = [
                 {
-                    "name": cube["name"],
-                    "title": cube.get("title", cube["name"]),
-                    "summary": _extract_summary(cube),
+                    "name": view["name"],
+                    "summary": _extract_summary(view),
                 }
-                for cube in meta.get("cubes", [])
+                for view in meta.get("cubes", [])
             ]
             return json.dumps(result)
         except CubeServiceError:
-            logger.error("Cube unavailable during list_cubes", exc_info=True)
+            logger.error("Cube unavailable during list_views", exc_info=True)
             return _UNAVAILABLE
 
-    @tool(args_schema=GetCubeSchemaArgs)
-    def get_cube_schema(cube_name: str) -> str:
-        """Return the full schema for a single cube: description, all measures, and all dimensions.
+    @tool(args_schema=GetViewSchemaArgs)
+    def describe_view(view_name: str) -> str:
+        """Return the full schema for a single view: description, all measures, and all dimensions.
 
-        Each measure and dimension entry contains: name, type, description.
-        Call this after list_cubes() has identified the relevant cube, and before
-        calling query_cube. Use only the member names this tool returns.
+        Output format:
+          {
+            "name": str,
+            "description": str,
+            "measures": [{"name": str, "type": str, "description": str, "additive": bool}, ...],
+            "dimensions": [{"name": str, "type": str, "description": str, "is_calculated": bool}, ...]
+          }
+
+        Interpreting the output before building a query:
+          - additive (measure): True → the measure can safely be summed or further aggregated across
+            any grouping (typical for count, sum). False → non-additive (avg, count_distinct, ratio)
+            — never re-sum or re-aggregate this value; use it as-is or select an additive alternative.
+          - is_calculated (dimension): True → the dimension is derived from a SQL expression
+            (CASE WHEN, date arithmetic, concatenation, etc.). It is safe to use for grouping and
+            filtering, but its values are computed — do not assume they match a raw source column.
+            False → the dimension maps directly to a source column.
+
+        Call this after list_views() has identified the relevant view, and before calling query_view.
+        Use only the member names this tool returns; never invent names.
 
         Args:
-            cube_name: Exact cube name as returned by list_cubes().
+            view_name: Exact view name as returned by list_views().
         """
         try:
-            schema = client.get_cube_schema(cube_name)
+            schema = client.get_view_schema(view_name)
             return json.dumps(schema)
         except ValueError as exc:
             return json.dumps({
                 "error": str(exc),
-                "hint": "Call list_cubes() to see available cube names, then retry get_cube_schema with a valid name.",
+                "hint": "Call list_views() to see available view names, then retry describe_view with a valid name.",
             })
         except CubeServiceError:
-            logger.error("Cube unavailable during get_cube_schema", exc_info=True)
+            logger.error("Cube unavailable during describe_view", exc_info=True)
             return _UNAVAILABLE
 
-    @tool(args_schema=QueryCubeArgs)
-    def query_cube(
+    @tool(args_schema=QueryViewArgs)
+    def query_view(
+        view: str,
         measures: list[str],
         dimensions: list[str] = [],
         filters: list[CubeFilter] = [],
         time_dimensions: list[CubeTimeDimension] = [],
-        limit: int = 500,
+        order: dict[str, str] = {},
+        limit: int = 1000,
     ) -> str:
-        """Query the semantic layer. Returns rows as a list of dicts.
+        """Query a semantic view. Returns rows as a list of dicts.
 
         Args:
-            measures: Metric names, e.g. ["order_items.total_revenue"]
-            dimensions: Grouping axes, e.g. ["customers.customer_state"]
-            filters: Row filters, e.g. [{"member": "customers.customer_city",
-                     "operator": "equals", "values": ["sao paulo"]}]
+            view: View name (must match a name returned by list_views()).
+            measures: Metric names prefixed with view name, e.g. ["orders_overview.count"].
+            dimensions: Grouping axes, e.g. ["orders_overview.delivery_status"].
+            filters: Row filters, e.g. [{"member": "orders_overview.order_status",
+                     "operator": "equals", "values": ["delivered"]}]
             time_dimensions: Time filter or grouping. Use dateRange for date filters.
                      Only include granularity when grouping by time; never pass null.
-            limit: Maximum rows returned (default 500)
+            order: Sort order dict, e.g. {"catalog_sales.total_revenue": "desc"}.
+            limit: Maximum rows returned (default 1000, max 5000).
 
-        Use only member names returned by get_cube_schema(). Never invent metric names.
+        Use only member names returned by describe_view(). Never invent metric names.
+        Member names are prefixed with the view name (e.g. "orders_overview.count", not "orders.count").
         """
         try:
             filter_args = _dump_models(filters)
             time_dimension_args = _dump_models(time_dimensions)
-            return json.dumps(client.query_cube(
+            return json.dumps(client.query_view(
                 measures=measures,
                 dimensions=dimensions,
                 filters=filter_args,
                 time_dimensions=time_dimension_args,
+                order=order or None,
                 limit=limit,
             ))
         except CubeQueryError as exc:
-            logger.warning("Cube rejected query_cube call: %s", exc)
+            logger.warning("Cube rejected query_view call: %s", exc)
             return json.dumps(
                 {
                     "error": "Cube rejected the query.",
                     "details": str(exc),
                     "status_code": exc.status_code,
                     "query": exc.query,
-                    "hint": "Inspect the error and call query_cube again with corrected arguments.",
+                    "hint": "Inspect the error and call query_view again with corrected arguments.",
                 }
             )
         except CubeServiceError:
-            logger.error("Cube unavailable during query_cube", exc_info=True)
+            logger.error("Cube unavailable during query_view", exc_info=True)
             return _UNAVAILABLE
 
-    query_cube.handle_validation_error = _validation_error
+    query_view.handle_validation_error = _validation_error
 
-    return [list_cubes, get_cube_schema, query_cube]
+    return [list_views, describe_view, query_view]

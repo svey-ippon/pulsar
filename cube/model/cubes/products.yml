@@ -1,5 +1,6 @@
 cubes:
   - name: products
+    public: false
     meta:
       summary: "Product catalog, one row per product. Category names are in Portuguese; join translation cube for English."
     sql_table: ECOMMERCE_DB.MARTS.PRODUCTS

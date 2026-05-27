@@ -1,5 +1,6 @@
 cubes:
   - name: sellers
+    public: false
     meta:
       summary: "Seller profiles, one row per seller. Geographic dimensions: seller_state, seller_city."
     sql_table: ECOMMERCE_DB.MARTS.SELLERS

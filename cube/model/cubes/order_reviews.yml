@@ -1,5 +1,6 @@
 cubes:
   - name: order_reviews
+    public: false
     meta:
       summary: "Post-delivery satisfaction surveys, one row per review. Provides avg_review_score (1-5) and review_count."
     sql_table: ECOMMERCE_DB.MARTS.ORDER_REVIEWS

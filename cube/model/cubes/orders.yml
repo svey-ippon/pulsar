@@ -1,5 +1,6 @@
 cubes:
   - name: orders
+    public: false
     meta:
       summary: "Customer orders, one row per order; grain is order_id. Links to items, payments, reviews, and customers."
     sql_table: ECOMMERCE_DB.MARTS.ORDERS
@@ -17,6 +18,18 @@ cubes:
       - name: customers
         sql: "{CUBE.customer_id} = {customers.customer_id}"
         relationship: many_to_one
+
+      - name: order_items
+        sql: "{CUBE}.\"ORDER_ID\" = {order_items.order_id}"
+        relationship: one_to_many
+
+      - name: order_reviews
+        sql: "{CUBE}.\"ORDER_ID\" = {order_reviews.order_id}"
+        relationship: one_to_many
+
+      - name: order_payments
+        sql: "{CUBE}.\"ORDER_ID\" = {order_payments.order_id}"
+        relationship: one_to_many
 
     dimensions:
       - name: order_id
@@ -60,9 +73,55 @@ cubes:
         type: time
         description: "Estimated delivery date shown to the customer at purchase time."
 
+      - name: delay_days
+        sql: >
+          DATEDIFF('day',
+            {CUBE}."ORDER_ESTIMATED_DELIVERY_DATE",
+            {CUBE}."ORDER_DELIVERED_CUSTOMER_DATE"
+          )
+        type: number
+        description: >
+          Delivery delay in days (positive = late, negative = early).
+          NULL if the order has not been delivered yet.
+
+      - name: delivery_status
+        sql: >
+          CASE
+            WHEN {CUBE}."ORDER_DELIVERED_CUSTOMER_DATE" IS NULL THEN 'not_delivered'
+            WHEN {CUBE}."ORDER_DELIVERED_CUSTOMER_DATE"
+                 <= {CUBE}."ORDER_ESTIMATED_DELIVERY_DATE" THEN 'on_time'
+            WHEN {CUBE}."ORDER_DELIVERED_CUSTOMER_DATE"
+                 <= DATEADD('day', 7, {CUBE}."ORDER_ESTIMATED_DELIVERY_DATE") THEN 'late'
+            ELSE 'very_late'
+          END
+        type: string
+        description: >
+          Calculated delivery status: 'on_time' (delivered on time or early),
+          'late' (up to 7 days late), 'very_late' (more than 7 days late),
+          'not_delivered' (not yet delivered). Use for Q16 (satisfaction vs delivery).
+
+      - name: is_delivered
+        sql: "({CUBE}.\"ORDER_DELIVERED_CUSTOMER_DATE\" IS NOT NULL)"
+        type: boolean
+        description: "True if the order has been delivered to the customer."
+
     measures:
       - name: count
         type: count
         description: "Number of distinct orders."
+
+      - name: avg_delay_days
+        sql: "{delay_days}"
+        type: avg
+        description: >
+          Average delivery delay in days (positive = average late).
+          ⚠️ Non-additive — do not sum across states or categories.
+
+      - name: delivered_count
+        sql: "{CUBE}.\"ORDER_ID\""
+        type: count
+        filters:
+          - sql: "{CUBE}.\"ORDER_DELIVERED_CUSTOMER_DATE\" IS NOT NULL"
+        description: "Number of orders that have been delivered to the customer."
 
     pre_aggregations: []

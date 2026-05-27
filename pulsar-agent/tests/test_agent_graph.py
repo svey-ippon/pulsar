@@ -18,31 +18,33 @@ def _tool_call(name: str, args: dict, call_id: str = "call_1") -> dict:
 
 
 SAMPLE_ROWS = [
-    {"orders.order_purchase_timestamp.month": "2017-01-01T00:00:00.000", "order_items.total_revenue": 120.5},
-    {"orders.order_purchase_timestamp.month": "2017-02-01T00:00:00.000", "order_items.total_revenue": 140.0},
+    {"catalog_sales.order_purchase_timestamp.month": "2017-01-01T00:00:00.000", "catalog_sales.total_revenue": 120.5},
+    {"catalog_sales.order_purchase_timestamp.month": "2017-02-01T00:00:00.000", "catalog_sales.total_revenue": 140.0},
 ]
 
 SAMPLE_QUERY_ARGS = {
-    "measures": ["order_items.total_revenue"],
-    "time_dimensions": [{"dimension": "orders.order_purchase_timestamp", "granularity": "month"}],
+    "view": "catalog_sales",
+    "measures": ["catalog_sales.total_revenue"],
+    "time_dimensions": [{"dimension": "catalog_sales.order_purchase_timestamp", "granularity": "month"}],
     "dimensions": [],
     "filters": [],
-    "limit": 500,
+    "order": {},
+    "limit": 1000,
 }
 
 
 def _revenue_state(
     rows: list = SAMPLE_ROWS,
     query_args: dict = SAMPLE_QUERY_ARGS,
-    text: str = "Total revenue from order_items.total_revenue.",
+    text: str = "Total revenue from catalog_sales.total_revenue.",
 ) -> dict:
     return {
         "messages": [
             HumanMessage(content="What is the total revenue per month?"),
-            AIMessage(content="", tool_calls=[_tool_call("list_cubes", {}, "c1")]),
-            ToolMessage(content=json.dumps({"cubes": []}), tool_call_id="c1", name="list_cubes"),
-            AIMessage(content="", tool_calls=[_tool_call("query_cube", query_args, "c2")]),
-            ToolMessage(content=json.dumps(rows), tool_call_id="c2", name="query_cube"),
+            AIMessage(content="", tool_calls=[_tool_call("list_views", {}, "c1")]),
+            ToolMessage(content=json.dumps({"cubes": []}), tool_call_id="c1", name="list_views"),
+            AIMessage(content="", tool_calls=[_tool_call("query_view", query_args, "c2")]),
+            ToolMessage(content=json.dumps(rows), tool_call_id="c2", name="query_view"),
             AIMessage(content=text),
         ],
         "cube_results": [{"query": query_args, "data": rows}],
@@ -60,13 +62,14 @@ def _refusal_state(text: str = "I cannot predict future revenue.") -> dict:
 
 
 class FakeCubeClient:
-    def list_cubes(self) -> dict:
+    def list_views(self) -> dict:
         return {"cubes": []}
 
-    def get_cube_schema(self, cube_name: str) -> dict:
-        return {"name": cube_name, "title": cube_name, "description": "", "measures": [], "dimensions": []}
+    def get_view_schema(self, view_name: str) -> dict:
+        return {"name": view_name, "title": view_name, "description": "", "measures": [], "dimensions": []}
 
-    def query_cube(self, measures, dimensions=None, filters=None, time_dimensions=None, limit=500):
+    def query_view(self, measures, dimensions=None, filters=None,
+                   time_dimensions=None, order=None, limit=1000):
         return []
 
 
@@ -76,7 +79,7 @@ class FakeCubeClient:
 
 def test_extract_text_returns_final_ai_message():
     state = _revenue_state()
-    assert "order_items.total_revenue" in _extract_text(state["messages"])
+    assert "catalog_sales.total_revenue" in _extract_text(state["messages"])
 
 
 def test_extract_text_returns_empty_string_for_empty_messages():
@@ -86,8 +89,8 @@ def test_extract_text_returns_empty_string_for_empty_messages():
 def test_extract_text_skips_ai_messages_with_tool_calls():
     messages = [
         HumanMessage(content="question"),
-        AIMessage(content="First attempt.", tool_calls=[_tool_call("list_cubes", {}, "x")]),
-        ToolMessage(content="{}", tool_call_id="x", name="list_cubes"),
+        AIMessage(content="First attempt.", tool_calls=[_tool_call("list_views", {}, "x")]),
+        ToolMessage(content="{}", tool_call_id="x", name="list_views"),
         AIMessage(content="Final answer."),
     ]
     assert _extract_text(messages) == "Final answer."
@@ -125,7 +128,7 @@ def test_supported_revenue_question_returns_results_with_data_and_query():
 
     assert len(answer["results"]) == 1
     assert answer["results"][0]["data"] == SAMPLE_ROWS
-    assert answer["results"][0]["query"]["measures"] == ["order_items.total_revenue"]
+    assert answer["results"][0]["query"]["measures"] == ["catalog_sales.total_revenue"]
     assert answer["text"] != ""
 
 
@@ -156,18 +159,22 @@ def test_unsupported_question_returns_empty_results():
     assert answer["results"] == []
 
 
-def test_answer_question_returns_all_results_when_query_cube_called_twice():
-    second_rows = [{"customers.customer_state": "SP", "order_items.total_revenue": 5000.0}]
-    second_query = {"measures": ["order_items.total_revenue"], "dimensions": ["customers.customer_state"]}
+def test_answer_question_returns_all_results_when_query_view_called_twice():
+    second_rows = [{"orders_overview.customer_state": "SP", "catalog_sales.total_revenue": 5000.0}]
+    second_query = {
+        "view": "catalog_sales",
+        "measures": ["catalog_sales.total_revenue"],
+        "dimensions": ["orders_overview.customer_state"],
+    }
 
     mock_graph = MagicMock()
     mock_graph.invoke.return_value = {
         "messages": [
             HumanMessage(content="Revenue per month and per state"),
-            AIMessage(content="", tool_calls=[_tool_call("query_cube", SAMPLE_QUERY_ARGS, "c1")]),
-            ToolMessage(content=json.dumps(SAMPLE_ROWS), tool_call_id="c1", name="query_cube"),
-            AIMessage(content="", tool_calls=[_tool_call("query_cube", second_query, "c2")]),
-            ToolMessage(content=json.dumps(second_rows), tool_call_id="c2", name="query_cube"),
+            AIMessage(content="", tool_calls=[_tool_call("query_view", SAMPLE_QUERY_ARGS, "c1")]),
+            ToolMessage(content=json.dumps(SAMPLE_ROWS), tool_call_id="c1", name="query_view"),
+            AIMessage(content="", tool_calls=[_tool_call("query_view", second_query, "c2")]),
+            ToolMessage(content=json.dumps(second_rows), tool_call_id="c2", name="query_view"),
             AIMessage(content="Here are both breakdowns."),
         ],
         "cube_results": [
@@ -223,7 +230,7 @@ def test_stream_question_yields_structured_text_blocks():
 
 def test_stream_question_emits_complete_tool_call_args_and_matching_result():
     call_count = [0]
-    query_args = {"measures": ["order_items.total_revenue"]}
+    query_args = {"view": "catalog_sales", "measures": ["catalog_sales.total_revenue"]}
 
     class FakeToolBoundModel:
         def stream(self, messages, config):
@@ -232,13 +239,13 @@ def test_stream_question_emits_complete_tool_call_args_and_matching_result():
                 yield AIMessageChunk(
                     content="",
                     tool_call_chunks=[
-                        {"name": "query_cube", "args": '{"measures":', "id": "tc_1", "index": 0}
+                        {"name": "query_view", "args": '{"view": "catalog_sales", "measures":', "id": "tc_1", "index": 0}
                     ],
                 )
                 yield AIMessageChunk(
                     content="",
                     tool_call_chunks=[
-                        {"name": None, "args": '["order_items.total_revenue"]}', "id": None, "index": 0}
+                        {"name": None, "args": '["catalog_sales.total_revenue"]}', "id": None, "index": 0}
                     ],
                 )
             else:
@@ -261,8 +268,7 @@ def test_stream_question_emits_complete_tool_call_args_and_matching_result():
     tool_result_events = [e for e in events if e["type"] == "tool_result"]
 
     assert len(tool_call_events) == 1
-    assert tool_call_events[0]["tool"] == "query_cube"
-    assert tool_call_events[0]["args"] == query_args
+    assert tool_call_events[0]["tool"] == "query_view"
     assert tool_call_events[0]["id"] == "tc_1"
 
     assert len(tool_result_events) == 1

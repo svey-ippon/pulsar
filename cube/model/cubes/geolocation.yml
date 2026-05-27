@@ -1,5 +1,6 @@
 cubes:
   - name: geolocation
+    public: false
     meta:
       summary: "Brazilian zip code prefixes mapped to lat/lon, city, and state. Grain is zip prefix (5 digits)."
     sql_table: ECOMMERCE_DB.MARTS.GEOLOCATION

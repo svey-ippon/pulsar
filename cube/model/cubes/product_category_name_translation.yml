@@ -1,5 +1,6 @@
 cubes:
   - name: product_category_name_translation
+    public: false
     meta:
       summary: "Lookup table: Portuguese product_category_name → English product_category_name_english."
     sql_table: ECOMMERCE_DB.MARTS.PRODUCT_CATEGORY_NAME_TRANSLATION

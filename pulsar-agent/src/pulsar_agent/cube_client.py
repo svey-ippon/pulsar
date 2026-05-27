@@ -23,18 +23,34 @@ class CubeQueryError(RuntimeError):
         self.status_code = status_code
 
 
+_NON_ADDITIVE_TYPES = {"avg", "count_distinct", "count_distinct_approx"}
+
+
+def _is_additive(measure_type: str) -> bool:
+    return measure_type not in _NON_ADDITIVE_TYPES
+
+
+def _is_calculated(sql_expr: str) -> bool:
+    """True if the dimension is the result of a SQL expression (CASE, DATEDIFF, etc.)."""
+    if not sql_expr:
+        return False
+    keywords = ("CASE", "DATEDIFF", "DATE_PART", "DATEADD", "CONCAT", "COALESCE", "NULLIF")
+    return any(kw in sql_expr.upper() for kw in keywords)
+
+
 class SupportsCubeQueries(Protocol):
-    def list_cubes(self) -> dict[str, Any]: ...
+    def list_views(self) -> dict[str, Any]: ...
 
-    def get_cube_schema(self, cube_name: str) -> dict[str, Any]: ...
+    def get_view_schema(self, view_name: str) -> dict[str, Any]: ...
 
-    def query_cube(
+    def query_view(
         self,
         measures: list[str],
         dimensions: list[str] | None = None,
         filters: list[dict[str, Any]] | None = None,
         time_dimensions: list[dict[str, Any]] | None = None,
-        limit: int = 500,
+        order: dict[str, str] | None = None,
+        limit: int = 1000,
     ) -> list[dict[str, Any]]: ...
 
 
@@ -53,7 +69,7 @@ class CubeClient(SupportsCubeQueries):
         retry=retry_if_exception_type(CubeServiceError),
         reraise=True,
     )
-    def list_cubes(self) -> dict[str, Any]:
+    def _fetch_meta(self) -> dict[str, Any]:
         try:
             response = requests.get(f"{self.base_url.rstrip('/')}/meta", headers=self.headers, timeout=30)
             response.raise_for_status()
@@ -61,27 +77,43 @@ class CubeClient(SupportsCubeQueries):
         except requests.RequestException as exc:
             raise CubeServiceError("Cube metadata unavailable") from exc
 
-    def get_cube_schema(self, cube_name: str) -> dict[str, Any]:
-        meta = self.list_cubes()
-        cubes = meta.get("cubes", [])
-        cube = next((c for c in cubes if c["name"] == cube_name), None)
-        if cube is None:
-            available = [c["name"] for c in cubes]
-            raise ValueError(f"Cube '{cube_name}' not found. Available: {available}")
+    def list_views(self) -> dict[str, Any]:
+        meta = self._fetch_meta()
+        # Cube returns views in the same "cubes" array with type="view"
+        # With public: false on all cubes, only views appear; the filter is an extra safety net
+        views = [c for c in meta.get("cubes", []) if c.get("type") == "view"]
+        return {"cubes": views}
 
-        def _field(item: dict) -> dict:
+    def get_view_schema(self, view_name: str) -> dict[str, Any]:
+        meta = self._fetch_meta()
+        cubes = meta.get("cubes", [])
+        view = next((c for c in cubes if c["name"] == view_name and c.get("type") == "view"), None)
+        if view is None:
+            available = [c["name"] for c in cubes if c.get("type") == "view"]
+            raise ValueError(f"View '{view_name}' not found. Available: {available}")
+
+        def _measure_field(item: dict) -> dict:
             return {
                 "name": item["name"],
                 "type": item.get("type", "unknown"),
                 "description": item.get("description", ""),
+                "additive": _is_additive(item.get("type", "")),
+            }
+
+        def _dimension_field(item: dict) -> dict:
+            return {
+                "name": item["name"],
+                "type": item.get("type", "unknown"),
+                "description": item.get("description", ""),
+                "is_calculated": _is_calculated(item.get("sql", "")),
             }
 
         return {
-            "name": cube["name"],
-            "title": cube.get("title", cube["name"]),
-            "description": cube.get("description", ""),
-            "measures": [_field(m) for m in cube.get("measures", [])],
-            "dimensions": [_field(d) for d in cube.get("dimensions", [])],
+            "name": view["name"],
+            "title": view.get("title", view["name"]),
+            "description": view.get("description", ""),
+            "measures": [_measure_field(m) for m in view.get("measures", [])],
+            "dimensions": [_dimension_field(d) for d in view.get("dimensions", [])],
         }
 
     @retry(
@@ -90,21 +122,24 @@ class CubeClient(SupportsCubeQueries):
         retry=retry_if_exception_type(CubeServiceError),
         reraise=True,
     )
-    def query_cube(
+    def query_view(
         self,
         measures: list[str],
         dimensions: list[str] | None = None,
         filters: list[dict[str, Any]] | None = None,
         time_dimensions: list[dict[str, Any]] | None = None,
-        limit: int = 500,
+        order: dict[str, str] | None = None,
+        limit: int = 1000,
     ) -> list[dict[str, Any]]:
-        query = {
+        query: dict[str, Any] = {
             "measures": measures,
             "dimensions": dimensions or [],
             "filters": filters or [],
             "timeDimensions": time_dimensions or [],
             "limit": limit,
         }
+        if order:
+            query["order"] = order
         try:
             response = requests.post(
                 f"{self.base_url.rstrip('/')}/load",
