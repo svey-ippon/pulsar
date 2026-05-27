@@ -29,6 +29,9 @@ The semantic model should expose governed views only. Raw cubes remain private.
 `olist_explorer` is the key prerequisite for Advanced mode. It should be a wide view designed for
 SQL API queries, not a raw table escape hatch.
 
+See [PLAN_V2_OLIST_EXPLORER_SPEC.md](PLAN_V2_OLIST_EXPLORER_SPEC.md) for the detailed view
+contract, metadata requirements, naming conventions, and acceptance checks.
+
 Minimum required columns:
 
 | Column | Purpose |

@@ -65,6 +65,37 @@ The prompt should no longer say the agent never writes SQL. It should say:
 - prefer Standard mode when it is sufficient;
 - disclose any attribution convention used in SQL.
 
+## SQL Generation Contract
+
+The LLM should not synthesize SQL from raw cube names or source tables. It should generate SQL from
+the schema returned by `describe_view("olist_explorer")`.
+
+Before calling `execute_sql` for an Advanced question, the agent should have seen:
+
+- the `olist_explorer` view description;
+- the available SQL aliases;
+- each alias type and description;
+- view/member `meta.ai_context`;
+- `sql_usage` rules.
+
+Prompt rules for Advanced SQL:
+
+```text
+When using execute_sql:
+- write SQL only against olist_explorer;
+- use only column names returned by describe_view("olist_explorer");
+- use Cube SQL API / PostgreSQL-subset syntax;
+- prefer CTEs for multi-step logic;
+- use item_total_price for merchandise revenue;
+- use COUNT(DISTINCT order_id) for order counts over item-like rows;
+- do not average review_score directly over item rows when grouping by category;
+- explain any attribution convention used by the SQL.
+```
+
+This makes `olist_explorer` a SQL-facing API for the LLM. The semantic model remains in Cube, while
+the LLM receives a controlled dictionary of table name, column aliases, grain warnings, and SQL
+patterns.
+
 ## Routing Guidance
 
 The agent should route with this bias:
@@ -116,6 +147,10 @@ compatible with existing UI behavior:
 ### Step 4 — Prompt Update
 
 Replace the Standard-only feasibility section with Standard/Advanced routing guidance.
+
+Also update the prompt to include the SQL generation contract above. The agent must call
+`describe_view("olist_explorer")` before generating Advanced SQL unless that schema is already
+visible in the conversation.
 
 ### Step 5 — Evaluation
 

@@ -25,6 +25,7 @@ The agent should route conservatively:
 |---|---|
 | [PLAN_V2_SQL_API.md](PLAN_V2_SQL_API.md) | Cube SQL API reference and POC configuration notes. |
 | [PLAN_V2_SEMANTIC_MODEL.md](PLAN_V2_SEMANTIC_MODEL.md) | Target semantic model, current model status, and `olist_explorer` requirements. |
+| [PLAN_V2_OLIST_EXPLORER_SPEC.md](PLAN_V2_OLIST_EXPLORER_SPEC.md) | Detailed `olist_explorer` view contract, metadata guidance, and acceptance checks. |
 | [PLAN_V2_QUESTION_CATALOG.md](PLAN_V2_QUESTION_CATALOG.md) | Evaluation questions, expected routing, and Advanced SQL reference patterns. |
 | [PLAN_V2_AGENT_ADVANCED.md](PLAN_V2_AGENT_ADVANCED.md) | Agent changes required for Advanced mode and implementation roadmap. |
 
@@ -54,8 +55,12 @@ The agent should route conservatively:
    `order_id`, `purchased_at`, `item_total_price`, `category_name`, `seller_id`,
    `seller_state`, `customer_state`, `customer_unique_id`, `review_score`,
    `delay_days`, and `is_delivered`.
-3. Confirm it appears in `list_views` and `describe_view`.
-4. Smoke-test a simple SQL API query against it.
+3. Treat `olist_explorer` as the SQL-facing API for the LLM: stable aliases, explicit grain
+   warnings, and view/member `meta.ai_context`.
+4. Confirm it appears in `list_views` and `describe_view`.
+5. Ensure `describe_view("olist_explorer")` exposes enough SQL guidance for generation:
+   table name, allowed aliases, descriptions, `meta.ai_context`, and `sql_usage` rules.
+6. Smoke-test a simple SQL API query against it.
 
 ### Phase 2 — Minimal Advanced Agent
 
@@ -66,6 +71,7 @@ The agent should route conservatively:
    - Standard mode remains the default.
    - Advanced mode is allowed only for CTE/window/HAVING/multi-grain logic.
    - `execute_sql` should target `olist_explorer`.
+   - Advanced SQL must use only aliases returned by `describe_view("olist_explorer")`.
 5. Add unit tests with a fake SQL client.
 
 ### Phase 3 — Advanced Evaluation
