@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 
-from pulsar_agent.cube_client import CubeQueryError, CubeServiceError
+from pulsar_agent.cube_rest_client import CubeRestQueryError, CubeRestServiceError
 from pulsar_agent.tools import make_tools
 
 
-class FakeCubeClient:
+class FakeCubeRestClient:
     def __init__(self, metadata=None, rows=None):
         self.metadata = metadata or {"cubes": []}
         self.rows = rows or []
@@ -91,22 +91,22 @@ class FakeCubeClient:
         return self.rows
 
 
-class ErrorCubeClient:
+class ErrorCubeRestClient:
     def list_views(self):
-        raise CubeServiceError("unavailable")
+        raise CubeRestServiceError("unavailable")
 
     def get_view_schema(self, view_name: str):
-        raise CubeServiceError("unavailable")
+        raise CubeRestServiceError("unavailable")
 
     def get_advanced_schema(self):
-        raise CubeServiceError("unavailable")
+        raise CubeRestServiceError("unavailable")
 
     def query_view(self, measures, dimensions=None, filters=None,
                    time_dimensions=None, order=None, limit=1000):
-        raise CubeServiceError("unavailable")
+        raise CubeRestServiceError("unavailable")
 
 
-class InvalidQueryCubeClient:
+class InvalidQueryCubeRestClient:
     def list_views(self):
         return {"cubes": []}
 
@@ -118,7 +118,7 @@ class InvalidQueryCubeClient:
 
     def query_view(self, measures, dimensions=None, filters=None,
                    time_dimensions=None, order=None, limit=1000):
-        raise CubeQueryError(
+        raise CubeRestQueryError(
             'Cube rejected query: Invalid query format: "timeDimensions[0].granularity" must be a string',
             query={
                 "measures": measures,
@@ -150,7 +150,7 @@ def test_list_views_tool_returns_summaries():
             }
         ]
     }
-    fake = FakeCubeClient(metadata=metadata)
+    fake = FakeCubeRestClient(metadata=metadata)
     list_views = get_tool(make_tools(fake), "list_views")
 
     result = json.loads(list_views.invoke({}))
@@ -170,7 +170,7 @@ def test_list_views_tool_falls_back_to_first_sentence_of_description_when_summar
             }
         ]
     }
-    fake = FakeCubeClient(metadata=metadata)
+    fake = FakeCubeRestClient(metadata=metadata)
     list_views = get_tool(make_tools(fake), "list_views")
 
     result = json.loads(list_views.invoke({}))
@@ -180,7 +180,7 @@ def test_list_views_tool_falls_back_to_first_sentence_of_description_when_summar
 
 def test_list_views_tool_returns_no_description_fallback_when_both_fields_absent():
     metadata = {"cubes": [{"name": "orders_overview", "measures": [], "dimensions": []}]}
-    fake = FakeCubeClient(metadata=metadata)
+    fake = FakeCubeRestClient(metadata=metadata)
     list_views = get_tool(make_tools(fake), "list_views")
 
     result = json.loads(list_views.invoke({}))
@@ -189,7 +189,7 @@ def test_list_views_tool_returns_no_description_fallback_when_both_fields_absent
 
 
 def test_list_views_tool_returns_error_json_when_cube_unavailable():
-    list_views = get_tool(make_tools(ErrorCubeClient()), "list_views")
+    list_views = get_tool(make_tools(ErrorCubeRestClient()), "list_views")
 
     result = list_views.invoke({})
 
@@ -218,7 +218,7 @@ def test_describe_view_tool_returns_additive_flag_on_measures():
             }
         ]
     }
-    fake = FakeCubeClient(metadata=metadata)
+    fake = FakeCubeRestClient(metadata=metadata)
     describe_view = get_tool(make_tools(fake), "describe_view")
 
     result = json.loads(describe_view.invoke({"view_name": "orders_overview"}))
@@ -247,7 +247,7 @@ def test_describe_view_tool_returns_is_calculated_flag_on_dimensions():
             }
         ]
     }
-    fake = FakeCubeClient(metadata=metadata)
+    fake = FakeCubeRestClient(metadata=metadata)
     describe_view = get_tool(make_tools(fake), "describe_view")
 
     result = json.loads(describe_view.invoke({"view_name": "orders_overview"}))
@@ -259,7 +259,7 @@ def test_describe_view_tool_returns_is_calculated_flag_on_dimensions():
 
 
 def test_describe_view_tool_returns_error_json_with_hint_for_unknown_view():
-    fake = FakeCubeClient(metadata={"cubes": []})
+    fake = FakeCubeRestClient(metadata={"cubes": []})
     describe_view = get_tool(make_tools(fake), "describe_view")
 
     result = json.loads(describe_view.invoke({"view_name": "nonexistent"}))
@@ -270,7 +270,7 @@ def test_describe_view_tool_returns_error_json_with_hint_for_unknown_view():
 
 
 def test_describe_view_tool_returns_error_json_when_cube_unavailable():
-    describe_view = get_tool(make_tools(ErrorCubeClient()), "describe_view")
+    describe_view = get_tool(make_tools(ErrorCubeRestClient()), "describe_view")
 
     result = json.loads(describe_view.invoke({"view_name": "orders_overview"}))
 
@@ -282,7 +282,7 @@ def test_describe_view_tool_returns_error_json_when_cube_unavailable():
 # ---------------------------------------------------------------------------
 
 def test_describe_advanced_schema_tool_returns_tables_joins_and_rules():
-    fake = FakeCubeClient()
+    fake = FakeCubeRestClient()
     describe_advanced_schema = get_tool(make_tools(fake), "describe_advanced_schema")
 
     result = json.loads(describe_advanced_schema.invoke({}))
@@ -295,7 +295,7 @@ def test_describe_advanced_schema_tool_returns_tables_joins_and_rules():
 
 
 def test_describe_advanced_schema_tool_returns_error_json_when_cube_unavailable():
-    describe_advanced_schema = get_tool(make_tools(ErrorCubeClient()), "describe_advanced_schema")
+    describe_advanced_schema = get_tool(make_tools(ErrorCubeRestClient()), "describe_advanced_schema")
 
     result = json.loads(describe_advanced_schema.invoke({}))
 
@@ -308,7 +308,7 @@ def test_describe_advanced_schema_tool_returns_error_json_when_cube_unavailable(
 
 def test_query_view_tool_passes_args_to_client_and_returns_rows():
     rows = [{"catalog_sales.total_revenue": 120.5}]
-    fake = FakeCubeClient(rows=rows)
+    fake = FakeCubeRestClient(rows=rows)
     query_view = get_tool(make_tools(fake), "query_view")
 
     result = query_view.invoke({
@@ -328,7 +328,7 @@ def test_query_view_tool_passes_args_to_client_and_returns_rows():
 
 def test_query_view_tool_passes_order_parameter():
     rows = [{"catalog_sales.total_revenue": 500.0, "catalog_sales.seller_seller_state": "SP"}]
-    fake = FakeCubeClient(rows=rows)
+    fake = FakeCubeRestClient(rows=rows)
     query_view = get_tool(make_tools(fake), "query_view")
 
     result = query_view.invoke({
@@ -344,7 +344,7 @@ def test_query_view_tool_passes_order_parameter():
 
 
 def test_query_view_tool_omits_empty_time_granularity_for_date_filter():
-    fake = FakeCubeClient()
+    fake = FakeCubeRestClient()
     query_view = get_tool(make_tools(fake), "query_view")
 
     result = query_view.invoke({
@@ -368,7 +368,7 @@ def test_query_view_tool_omits_empty_time_granularity_for_date_filter():
 
 
 def test_query_view_tool_returns_error_json_when_cube_unavailable():
-    query_view = get_tool(make_tools(ErrorCubeClient()), "query_view")
+    query_view = get_tool(make_tools(ErrorCubeRestClient()), "query_view")
 
     result = query_view.invoke({"view": "catalog_sales", "measures": ["catalog_sales.total_revenue"]})
 
@@ -377,7 +377,7 @@ def test_query_view_tool_returns_error_json_when_cube_unavailable():
 
 
 def test_query_view_tool_returns_cube_query_error_details_to_llm():
-    query_view = get_tool(make_tools(InvalidQueryCubeClient()), "query_view")
+    query_view = get_tool(make_tools(InvalidQueryCubeRestClient()), "query_view")
 
     result = query_view.invoke({"view": "reviews_overview", "measures": ["reviews_overview.avg_review_score"]})
 
@@ -390,7 +390,7 @@ def test_query_view_tool_returns_cube_query_error_details_to_llm():
 
 
 def test_query_view_tool_validation_error_is_returned_to_llm():
-    fake = FakeCubeClient()
+    fake = FakeCubeRestClient()
     query_view = get_tool(make_tools(fake), "query_view")
 
     result = query_view.invoke({
@@ -412,7 +412,7 @@ def test_query_view_tool_validation_error_is_returned_to_llm():
 # ---------------------------------------------------------------------------
 
 def test_make_tools_returns_four_tools_with_correct_names():
-    tools = make_tools(FakeCubeClient())
+    tools = make_tools(FakeCubeRestClient())
 
     names = {t.name for t in tools}
     assert names == {"list_views", "describe_view", "describe_advanced_schema", "query_view"}
@@ -422,7 +422,7 @@ def test_make_tools_does_not_require_env_vars_when_client_is_injected(monkeypatc
     monkeypatch.delenv("CUBE_API_URL", raising=False)
     monkeypatch.delenv("CUBE_API_TOKEN", raising=False)
 
-    tools = make_tools(FakeCubeClient())
+    tools = make_tools(FakeCubeRestClient())
 
     assert len(tools) == 4
     assert {t.name for t in tools} == {"list_views", "describe_view", "describe_advanced_schema", "query_view"}

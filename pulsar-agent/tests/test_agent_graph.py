@@ -61,12 +61,15 @@ def _refusal_state(text: str = "I cannot predict future revenue.") -> dict:
     }
 
 
-class FakeCubeClient:
+class FakeCubeRestClient:
     def list_views(self) -> dict:
         return {"cubes": []}
 
     def get_view_schema(self, view_name: str) -> dict:
         return {"name": view_name, "title": view_name, "description": "", "measures": [], "dimensions": []}
+
+    def get_advanced_schema(self) -> dict:
+        return {"mode": "advanced", "tables": [], "joins": [], "rules": []}
 
     def query_view(self, measures, dimensions=None, filters=None,
                    time_dimensions=None, order=None, limit=1000):
@@ -124,7 +127,7 @@ def test_supported_revenue_question_returns_results_with_data_and_query():
     mock_graph.invoke.return_value = _revenue_state()
 
     with patch("pulsar_agent.graph.build_graph", return_value=mock_graph):
-        answer = answer_question("What is the total revenue per month?", cube_client=FakeCubeClient())
+        answer = answer_question("What is the total revenue per month?", cube_rest_client=FakeCubeRestClient())
 
     assert len(answer["results"]) == 1
     assert answer["results"][0]["data"] == SAMPLE_ROWS
@@ -137,7 +140,7 @@ def test_refusal_question_returns_empty_results():
     mock_graph.invoke.return_value = _refusal_state("I cannot predict future revenue.")
 
     with patch("pulsar_agent.graph.build_graph", return_value=mock_graph):
-        answer = answer_question("Predict next month's revenue", cube_client=FakeCubeClient())
+        answer = answer_question("Predict next month's revenue", cube_rest_client=FakeCubeRestClient())
 
     assert answer["results"] == []
     assert answer["text"] != ""
@@ -154,7 +157,7 @@ def test_unsupported_question_returns_empty_results():
     }
 
     with patch("pulsar_agent.graph.build_graph", return_value=mock_graph):
-        answer = answer_question("What can you do?", cube_client=FakeCubeClient())
+        answer = answer_question("What can you do?", cube_rest_client=FakeCubeRestClient())
 
     assert answer["results"] == []
 
@@ -184,7 +187,7 @@ def test_answer_question_returns_all_results_when_query_view_called_twice():
     }
 
     with patch("pulsar_agent.graph.build_graph", return_value=mock_graph):
-        answer = answer_question("Revenue per month and per state", cube_client=FakeCubeClient())
+        answer = answer_question("Revenue per month and per state", cube_rest_client=FakeCubeRestClient())
 
     assert len(answer["results"]) == 2
     assert answer["results"][0]["data"] == SAMPLE_ROWS
@@ -200,7 +203,7 @@ def test_answer_question_does_not_require_env_vars_when_model_and_client_are_inj
     mock_graph.invoke.return_value = _refusal_state()
 
     with patch("pulsar_agent.graph.build_graph", return_value=mock_graph):
-        answer = answer_question("Predict revenue", cube_client=FakeCubeClient(), model=MagicMock())
+        answer = answer_question("Predict revenue", cube_rest_client=FakeCubeRestClient(), model=MagicMock())
 
     assert answer is not None
 
@@ -218,7 +221,7 @@ def test_stream_question_yields_structured_text_blocks():
     events = list(
         stream_question(
             "question",
-            cube_client=FakeCubeClient(),
+            cube_rest_client=FakeCubeRestClient(),
             model=FakeModel(),
             checkpointer=make_checkpointer(),
         )
@@ -251,7 +254,7 @@ def test_stream_question_classifies_tool_call_text_as_reasoning():
     events = list(
         stream_question(
             "question",
-            cube_client=FakeCubeClient(),
+            cube_rest_client=FakeCubeRestClient(),
             model=FakeModel(),
             checkpointer=make_checkpointer(),
         )
@@ -292,7 +295,7 @@ def test_stream_question_emits_complete_tool_call_args_and_matching_result():
     events = list(
         stream_question(
             "question",
-            cube_client=FakeCubeClient(),
+            cube_rest_client=FakeCubeRestClient(),
             model=FakeModel(),
             checkpointer=make_checkpointer(),
         )
@@ -316,7 +319,7 @@ def test_stream_question_emits_complete_tool_call_args_and_matching_result():
 
 def test_graph_can_be_built_with_injected_dependencies():
     graph = build_graph(
-        cube_client=FakeCubeClient(),
+        cube_rest_client=FakeCubeRestClient(),
         model=MagicMock(),
         checkpointer=make_checkpointer(),
     )

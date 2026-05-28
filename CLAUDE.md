@@ -85,7 +85,9 @@ This boundary is the seam that will become a network call (FastAPI/SSE) when gra
 |---|---|---|
 | `cube/model/cubes/*.yml` | Define governed metrics and dimensions (`public: false`) | Run transformations; query raw tables |
 | `cube/model/views/*.yml` | Expose business views (4 views: `orders_overview`, `payments_overview`, `catalog_sales`, `reviews_overview`) | Contain cube logic |
-| `pulsar-agent/src/pulsar_agent/cube_client.py` | HTTP client for Cube REST API (`/meta`, `/load`); `list_views`, `get_view_schema`, `query_view` | Connect to Snowflake |
+| `pulsar-agent/src/pulsar_agent/cube_rest_client.py` | HTTP client for Cube REST API (`/meta`, `/load`); `list_views`, `get_view_schema`, `query_view` | Connect to Snowflake |
+| `pulsar-agent/src/pulsar_agent/cube_sql_client.py` | Postgres-wire client for Cube SQL API; SQL execution boundary for Advanced mode | Know REST `/meta` or `/load` |
+| `pulsar-agent/src/pulsar_agent/settings.py` | `pydantic-settings` configuration boundary for model, Cube REST, and Cube SQL settings | Read business data |
 | `pulsar-agent/src/pulsar_agent/tools.py` | LangChain tool factory (`list_views`, `describe_view`, `query_view`) | Contain business logic |
 | `pulsar-agent/src/pulsar_agent/state.py` | `AgentState` and `QueryResult` TypedDicts | — |
 | `pulsar-agent/src/pulsar_agent/nodes.py` | Agent node, tool node, routing predicate | — |
@@ -151,11 +153,12 @@ The `_extract_text` name is re-exported from `pulsar_agent.graph` (imported from
 
 ### pulsar-agent/src/pulsar_agent/tools.py internals
 
-`make_tools(cube_client)` returns three LangChain tools (all operate on views, not raw cubes):
+`make_tools(cube_rest_client)` returns Cube LangChain tools (all operate on views, not raw cubes):
 
-- **`list_views()`** — calls `client.list_views()` (filters `/meta` to `type=="view"`); returns `[{name, summary}]` for all views (lightweight orientation); extracts `meta.summary` from each view, falling back to the first sentence of `description` if absent; catches `CubeServiceError`.
-- **`describe_view(view_name)`** — validated by `GetViewSchemaArgs` (Pydantic); calls `client.get_view_schema()`; returns `{name, title, description, measures, dimensions}` where each measure includes an `additive: bool` field and each dimension includes an `is_calculated: bool` field; on unknown view name returns structured error JSON with a hint; catches `CubeServiceError`.
-- **`query_view(view, measures, dimensions, filters, time_dimensions, order, limit)`** — validated by `QueryViewArgs` (Pydantic); `view` param is the view name; member names must be prefixed with the view name (e.g. `orders_overview.count`); calls `/load`; supports `order: dict[str, str]` for TOP-N queries; returns rows as JSON string; catches both `CubeServiceError` (stop + report) and `CubeQueryError` 400 (hint to retry with corrected args); default limit 1000, max 5000.
+- **`list_views()`** — calls `client.list_views()` (filters `/meta` to `type=="view"`); returns `[{name, summary}]` for all views (lightweight orientation); extracts `meta.summary` from each view, falling back to the first sentence of `description` if absent; catches `CubeRestServiceError`.
+- **`describe_view(view_name)`** — validated by `GetViewSchemaArgs` (Pydantic); calls `client.get_view_schema()`; returns `{name, title, description, measures, dimensions}` where each measure includes an `additive: bool` field and each dimension includes an `is_calculated: bool` field; on unknown view name returns structured error JSON with a hint; catches `CubeRestServiceError`.
+- **`describe_advanced_schema()`** — returns Advanced `adv_*` tables, columns, grains, allowed joins, and SQL-generation rules.
+- **`query_view(view, measures, dimensions, filters, time_dimensions, order, limit)`** — validated by `QueryViewArgs` (Pydantic); `view` param is the view name; member names must be prefixed with the view name (e.g. `orders_overview.count`); calls `/load`; supports `order: dict[str, str]` for TOP-N queries; returns rows as JSON string; catches both `CubeRestServiceError` (stop + report) and `CubeRestQueryError` 400 (hint to retry with corrected args); default limit 1000, max 5000.
 
 Error responses are structured JSON so the LLM can react correctly (retry vs. stop).
 
@@ -281,9 +284,11 @@ Pure functions for building and mutating reasoning block lists (no Streamlit imp
 Tests are split by package ownership.
 
 **`pulsar-agent/tests/`** — run in isolation with `uv run pytest pulsar-agent/tests/`:
-- `test_agent_graph.py` — graph build, text extraction, refusal and happy-path behaviour using `FakeCubeClient` (no env vars needed); also tests streaming event shapes (`tool_call`, `tool_result`, `token`, `answer`).
-- `test_agent_tools.py` — tool wrapping, Pydantic validation, structured error JSON for each error path; covers all three tools including `describe_view` (additive/is_calculated flags), `list_views` summary extraction/fallback, and `query_view` order parameter.
-- `test_cube_client.py` — HTTP client unit tests: `list_views`, `query_view`, `order` param inclusion/omission, error classification, 4xx vs 5xx handling.
+- `test_agent_graph.py` — graph build, text extraction, refusal and happy-path behaviour using `FakeCubeRestClient` (no env vars needed); also tests streaming event shapes (`tool_call`, `tool_result`, `token`, `answer`).
+- `test_agent_tools.py` — tool wrapping, Pydantic validation, structured error JSON for each error path; covers `list_views`, `describe_view`, `describe_advanced_schema`, and `query_view`.
+- `test_cube_rest_client.py` — REST client unit tests: `list_views`, `query_view`, `order` param inclusion/omission, error classification, 4xx vs 5xx handling.
+- `test_cube_sql_client.py` — SQL client unit tests: connection arguments, statement timeout, row/column shape, and error classification.
+- `test_settings.py` — `pydantic-settings` environment binding and lazy required-variable checks.
 
 **`pulsar-ui/tests/`** — run in isolation with `uv run pytest pulsar-ui/tests/`:
 - `test_app_main.py` — `pulsar_ui.rendering` and `pulsar_ui.reasoning` unit tests (mocked Streamlit): reasoning block rendering, running tool display, `build_final_reasoning_blocks` exclusion of final answer text.

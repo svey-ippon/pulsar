@@ -13,7 +13,7 @@ def _fmt_json(_tool: str, _args: dict, content: str) -> None:
         st.write(content)
 
 
-def _fmt_query_cube(_tool: str, _args: dict, content: str) -> None:
+def _fmt_query_view(_tool: str, _args: dict, content: str) -> None:
     try:
         parsed = json.loads(content)
         if isinstance(parsed, list):
@@ -32,7 +32,7 @@ _TOOL_RESULT_FORMATTERS = {
     "list_views": _fmt_json,
     "describe_view": _fmt_json,
     "describe_advanced_schema": _fmt_json,
-    "query_view": _fmt_query_cube,
+    "query_view": _fmt_query_view,
 }
 
 

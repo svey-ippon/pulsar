@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Any
 
 from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, ConfigDict, Field
 
-from pulsar_agent.cube_client import CubeClient, CubeQueryError, CubeServiceError, SupportsCubeQueries
+from pulsar_agent.cube_rest_client import (
+    CubeRestClient,
+    CubeRestQueryError,
+    CubeRestServiceError,
+    SupportsCubeRestQueries,
+)
+from pulsar_agent.settings import AgentSettings
 
 logger = logging.getLogger(__name__)
 
@@ -90,12 +95,20 @@ def _extract_summary(cube: dict) -> str:
     return "(no description)"
 
 
-def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]:
-    """Return Cube semantic tools, bound to *cube_client* or a default client built from env vars."""
-    client: SupportsCubeQueries = cube_client or CubeClient(
-        base_url=os.environ["CUBE_API_URL"],
-        token=os.environ["CUBE_API_TOKEN"],
+def _default_cube_rest_client(settings: AgentSettings | None = None) -> CubeRestClient:
+    resolved = settings or AgentSettings()
+    return CubeRestClient(
+        base_url=resolved.require_cube_api_url(),
+        token=resolved.cube_api_token_value(),
     )
+
+
+def make_tools(
+    cube_rest_client: SupportsCubeRestQueries | None = None,
+    settings: AgentSettings | None = None,
+) -> list[BaseTool]:
+    """Return Cube semantic tools, bound to *cube_rest_client* or a default REST client."""
+    client: SupportsCubeRestQueries = cube_rest_client or _default_cube_rest_client(settings)
 
     @tool
     def list_views() -> str:
@@ -120,7 +133,7 @@ def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]
                 for view in meta.get("cubes", [])
             ]
             return json.dumps(result)
-        except CubeServiceError:
+        except CubeRestServiceError:
             logger.error("Cube unavailable during list_views", exc_info=True)
             return _UNAVAILABLE
 
@@ -163,7 +176,7 @@ def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]
                 "error": str(exc),
                 "hint": "Call list_views() to see available view names, then retry describe_view with a valid name.",
             })
-        except CubeServiceError:
+        except CubeRestServiceError:
             logger.error("Cube unavailable during describe_view", exc_info=True)
             return _UNAVAILABLE
 
@@ -203,7 +216,7 @@ def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]
         """
         try:
             return json.dumps(client.get_advanced_schema())
-        except CubeServiceError:
+        except CubeRestServiceError:
             logger.error("Cube unavailable during describe_advanced_schema", exc_info=True)
             return _UNAVAILABLE
 
@@ -244,7 +257,7 @@ def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]
                 order=order or None,
                 limit=limit,
             ))
-        except CubeQueryError as exc:
+        except CubeRestQueryError as exc:
             logger.warning("Cube rejected query_view call: %s", exc)
             return json.dumps(
                 {
@@ -255,7 +268,7 @@ def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]
                     "hint": "Inspect the error and call query_view again with corrected arguments.",
                 }
             )
-        except CubeServiceError:
+        except CubeRestServiceError:
             logger.error("Cube unavailable during query_view", exc_info=True)
             return _UNAVAILABLE
 

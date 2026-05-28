@@ -8,7 +8,7 @@ It is a standalone `uv` workspace package with no Streamlit dependency. See the
 
 **Related docs:**
 - [Data flow walkthrough](data-flow.md) — step-by-step: question in, answer out
-- [Schema discovery design](design/schema-discovery.md) — `list_cubes` / `get_cube_schema` two-level convention
+- [Schema discovery design](design/schema-discovery.md) — `list_views` / `describe_view` two-level convention
 - [Streaming and reasoning](design/streaming-and-reasoning.md) — why Claude reasons as plain tokens
 
 ---
@@ -35,7 +35,7 @@ from pulsar_agent.graph import answer_question, build_graph, stream_question
 | `pulsar_agent.streaming` | Adapter from LangGraph stream chunks to UI-facing events. |
 | `pulsar_agent.extraction` | Pure helpers that extract final answer text and current-turn result slices. |
 | `pulsar_agent.tools` | LangChain tool definitions backed by a Cube query client. |
-| `pulsar_agent.cube_client` | HTTP client and protocol for Cube `/meta` and `/load` operations. |
+| `pulsar_agent.cube_rest_client` | HTTP client and protocol for Cube `/meta` and `/load` operations. |
 | `pulsar_agent.memory` | In-process LangGraph checkpointer factories. |
 | `pulsar_agent.prompt` | System prompt that constrains the agent's behavior. |
 | `pulsar_agent.__init__` | Empty package marker. No runtime behavior. |
@@ -88,7 +88,7 @@ or produces a final answer. Tool calls are executed by the tools node, converted
 
 ### Contents
 
-- `build_graph(cube_client=None, model=None, checkpointer=None)`
+- `build_graph(cube_rest_client=None, model=None, checkpointer=None, settings=None)`
 - `answer_question(question, thread_id="default", ...)`
 - `stream_question(question, thread_id="default", ...)`
 
@@ -106,7 +106,7 @@ or produces a final answer. Tool calls are executed by the tools node, converted
 
 - It does not implement tool execution logic. That lives in `pulsar_agent.nodes`.
 - It does not parse streamed chunks. That lives in `pulsar_agent.streaming`.
-- It does not know Cube HTTP details. That lives in `pulsar_agent.cube_client`.
+- It does not know Cube HTTP details. That lives in `pulsar_agent.cube_rest_client`.
 
 ---
 
@@ -173,7 +173,7 @@ Responsibilities:
 - Read `last_ai.tool_calls`.
 - Invoke the matching LangChain tool with the model-provided arguments.
 - Convert every tool output into a `ToolMessage`.
-- Parse successful `query_cube` list results into structured `QueryResult` entries.
+- Parse successful `query_view` list results into structured `QueryResult` entries.
 - Return both `messages` and `cube_results` updates.
 
 Tool errors are not raised here. Tools return JSON error payloads so the LLM can read the error
@@ -269,10 +269,10 @@ This keeps follow-up questions from re-rendering previous turn results.
 - Pydantic schemas:
   - `CubeFilter`
   - `CubeTimeDimension`
-  - `QueryCubeArgs`
-  - `GetCubeSchemaArgs`
+  - `QueryViewArgs`
+  - `GetViewSchemaArgs`
 - Tool factory:
-  - `make_tools(cube_client=None)`
+  - `make_tools(cube_rest_client=None)`
 - Internal helpers:
   - `_dump_models`
   - `_validation_error`
@@ -282,16 +282,17 @@ This keeps follow-up questions from re-rendering previous turn results.
 
 | Tool | Purpose |
 |---|---|
-| `list_cubes` | Return available cubes with lightweight summaries. |
-| `get_cube_schema` | Return measures and dimensions for one cube. |
-| `query_cube` | Execute a semantic-layer query and return rows. |
+| `list_views` | Return available semantic views with lightweight summaries. |
+| `describe_view` | Return measures and dimensions for one view. |
+| `describe_advanced_schema` | Return Advanced SQL tables, columns, joins, and rules. |
+| `query_view` | Execute a semantic-layer REST query and return rows. |
 
 ### Responsibilities
 
-- Bind tools to either an injected `SupportsCubeQueries` client or a default `CubeClient`.
+- Bind tools to either an injected `SupportsCubeRestQueries` client or a default `CubeRestClient`.
 - Validate model-provided arguments with Pydantic schemas.
 - Serialize tool outputs as JSON strings, matching what the LLM receives as `ToolMessage` content.
-- Convert `CubeServiceError` and `CubeQueryError` into JSON error payloads.
+- Convert `CubeRestServiceError` and `CubeRestQueryError` into JSON error payloads.
 
 ### Error contract
 
@@ -305,26 +306,26 @@ This keeps the LangGraph loop alive and lets the LLM produce a user-facing failu
 
 ---
 
-## `pulsar_agent.cube_client`
+## `pulsar_agent.cube_rest_client`
 
-`pulsar_agent.cube_client` is the HTTP boundary around Cube.
+`pulsar_agent.cube_rest_client` is the HTTP boundary around Cube.
 
 ### Contents
 
 - Exceptions:
-  - `CubeServiceError`
-  - `CubeQueryError`
+  - `CubeRestServiceError`
+  - `CubeRestQueryError`
 - Protocol:
-  - `SupportsCubeQueries`
+  - `SupportsCubeRestQueries`
 - Implementation:
-  - `CubeClient`
+  - `CubeRestClient`
 - Helper:
   - `_response_error_text`
 
 ### Responsibilities
 
-- Call Cube `/meta` to list cube metadata.
-- Derive a compact schema for one cube from metadata.
+- Call Cube `/meta` to list view metadata.
+- Derive a compact schema for one view from metadata.
 - Call Cube `/load` with a query payload.
 - Add bearer-token authorization headers.
 - Retry transient service failures with tenacity.
@@ -332,7 +333,7 @@ This keeps the LangGraph loop alive and lets the LLM produce a user-facing failu
 
 ### Protocol use
 
-`SupportsCubeQueries` lets tests inject fake clients and keeps `pulsar_agent.tools` independent from
+`SupportsCubeRestQueries` lets tests inject fake clients and keeps `pulsar_agent.tools` independent from
 the concrete HTTP implementation.
 
 ---
@@ -384,14 +385,14 @@ questions, not treated as copy-only changes.
 The package is designed for dependency injection:
 
 - pass `model=` to avoid real LLM calls
-- pass `cube_client=` to avoid real Cube calls
+- pass `cube_rest_client=` to avoid real Cube calls
 - pass `checkpointer=make_checkpointer()` to isolate tests
 
 The most important behavior to preserve in tests:
 
 - `answer_question` returns current-turn text and current-turn results
 - `stream_question` emits complete tool call args and matching tool result ids
-- `query_cube` results are captured as structured `cube_results`
+- `query_view` results are captured as structured `cube_results`
 - tool errors remain JSON payloads rather than uncaught exceptions
 
 ---
@@ -404,4 +405,4 @@ The most important behavior to preserve in tests:
 - Keep `pulsar_agent.streaming` UI-agnostic. It emits dictionaries; Streamlit formatting belongs in
   `app.ui` and `app.rendering`.
 - Keep `pulsar_agent.tools` as the only place where LangChain tool schemas are defined.
-- Keep `pulsar_agent.cube_client` as the only place that knows Cube HTTP endpoints.
+- Keep `pulsar_agent.cube_rest_client` as the only place that knows Cube HTTP endpoints.

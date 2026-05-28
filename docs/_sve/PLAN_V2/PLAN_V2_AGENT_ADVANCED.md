@@ -6,7 +6,7 @@ This document describes the agent work needed after Standard mode.
 
 The current agent is Standard-only:
 
-- `CubeClient` supports REST `/meta` and `/load`.
+- `CubeRestClient` supports REST `/meta` and `/load`.
 - `make_tools()` returns `list_views`, `describe_view`, and `query_view`.
 - The prompt forbids SQL generation.
 - The graph captures structured results for `query_view`.
@@ -125,8 +125,17 @@ The tool should:
 
 ### Step 2 — SQL Client
 
-Add a client abstraction for the Cube SQL API. It should be injectable in tests, similar to the
-existing Cube REST client.
+Status: done. `CubeSqlClient` provides an injectable client abstraction for the Cube SQL API.
+
+It can:
+
+- connect through the Postgres wire protocol;
+- execute SQL with a per-query statement timeout;
+- return rows, columns, row count, and execution time;
+- map connection failures to service errors;
+- map SQL failures to query errors.
+
+Runtime configuration still needs to be decided before wiring `execute_sql` into the default agent.
 
 Recommended environment variables:
 

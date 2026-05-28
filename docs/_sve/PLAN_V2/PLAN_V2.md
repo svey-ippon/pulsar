@@ -39,7 +39,7 @@ The agent should route conservatively:
 | Standard prompt behavior | Done | Current prompt is REST/view-oriented and avoids unsafe cross-grain work. |
 | Advanced entity views | Done | One SQL-facing `adv_*` view exists per semantic cube, including `adv_payments`. |
 | Advanced schema description | Done | `describe_advanced_schema()` exposes tables, columns, grain, source cube, and allowed joins before SQL generation. |
-| Cube SQL API connection from agent | To do | No Postgres/Cube SQL client exists in `pulsar-agent`. |
+| Cube SQL API client abstraction | Done | `CubeSqlClient` can connect through the Postgres wire protocol and execute SQL. Runtime configuration is still pending. |
 | `execute_sql` tool | To do | Required for Advanced POC. |
 | `explain_sql` tool | Later | Useful for validation/debugging, but not part of the first Advanced POC slice. |
 | SQL read-only validation | Later | Required if the POC is successful and moves toward broader usage. Not a blocker for the controlled POC. |
@@ -63,7 +63,7 @@ The agent should route conservatively:
 
 ### Phase 2 — Minimal Advanced Agent
 
-1. Add a Cube SQL API client to `pulsar-agent`.
+1. [Done] Add a Cube SQL API client to `pulsar-agent`.
 2. Add the `execute_sql` tool.
 3. Capture `execute_sql` rows in the agent result state, similar to `query_view`.
 4. Update the system prompt:

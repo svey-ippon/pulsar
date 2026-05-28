@@ -89,7 +89,7 @@ uv run pytest pulsar-ui/tests/
 | [`pulsar-agent/README.md`](pulsar-agent/README.md) | Public API, dev setup, package layout |
 | [`pulsar-agent/doc/architecture.md`](pulsar-agent/doc/architecture.md) | Module internals, ReAct loop, maintenance rules |
 | [`pulsar-agent/doc/data-flow.md`](pulsar-agent/doc/data-flow.md) | End-to-end walkthrough: question → answer |
-| [`pulsar-agent/doc/design/schema-discovery.md`](pulsar-agent/doc/design/schema-discovery.md) | Two-level `list_cubes` / `get_cube_schema` design |
+| [`pulsar-agent/doc/design/schema-discovery.md`](pulsar-agent/doc/design/schema-discovery.md) | Two-level `list_views` / `describe_view` design |
 | [`pulsar-agent/doc/design/streaming-and-reasoning.md`](pulsar-agent/doc/design/streaming-and-reasoning.md) | Token streaming, reasoning text, extended thinking |
 
 ### UI (`pulsar-ui/`)

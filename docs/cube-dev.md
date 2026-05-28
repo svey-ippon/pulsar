@@ -38,8 +38,8 @@ cubes:
     sql_table: "ECOMMERCE_DB.MARTS.<TABLE_NAME>"
 ```
 
-`meta.summary` is used by the `list_cubes` tool (lightweight orientation for the LLM).
-`description` is used by the `get_cube_schema` tool (full context before querying).
+`meta.summary` is used by the `list_views` tool (lightweight orientation for the LLM).
+`description` is used by the `describe_view` tool (full context before querying).
 See [`pulsar-agent/doc/design/schema-discovery.md`](../pulsar-agent/doc/design/schema-discovery.md)
 for the token-budget rationale.
 
@@ -84,7 +84,7 @@ answer_question("What is the total revenue?")
    measure definition to lock.
 3. Verify in the Cube Playground that the cube is queryable.
 4. Ask the agent: *"What cubes are available?"* — the new cube should appear in the
-   `list_cubes` response with its summary.
+   `list_views` response with its summary.
 
 ---
 

@@ -10,11 +10,11 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 logger = logging.getLogger(__name__)
 
 
-class CubeServiceError(RuntimeError):
+class CubeRestServiceError(RuntimeError):
     """Raised when Cube cannot serve metadata or data."""
 
 
-class CubeQueryError(RuntimeError):
+class CubeRestQueryError(RuntimeError):
     """Raised when Cube rejects a query as invalid."""
 
     def __init__(self, message: str, *, query: dict[str, Any], status_code: int | None = None):
@@ -187,7 +187,7 @@ def _join_tables(join: dict[str, Any]) -> tuple[str, str]:
     return join["left"].split(".", 1)[0], join["right"].split(".", 1)[0]
 
 
-class SupportsCubeQueries(Protocol):
+class SupportsCubeRestQueries(Protocol):
     def list_views(self) -> dict[str, Any]: ...
 
     def get_view_schema(self, view_name: str) -> dict[str, Any]: ...
@@ -206,7 +206,7 @@ class SupportsCubeQueries(Protocol):
 
 
 @dataclass(frozen=True)
-class CubeClient(SupportsCubeQueries):
+class CubeRestClient(SupportsCubeRestQueries):
     base_url: str
     token: str
 
@@ -217,7 +217,7 @@ class CubeClient(SupportsCubeQueries):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=8),
-        retry=retry_if_exception_type(CubeServiceError),
+        retry=retry_if_exception_type(CubeRestServiceError),
         reraise=True,
     )
     def _fetch_meta(self) -> dict[str, Any]:
@@ -226,7 +226,7 @@ class CubeClient(SupportsCubeQueries):
             response.raise_for_status()
             return response.json()
         except requests.RequestException as exc:
-            raise CubeServiceError("Cube metadata unavailable") from exc
+            raise CubeRestServiceError("Cube REST metadata unavailable") from exc
 
     def list_views(self) -> dict[str, Any]:
         meta = self._fetch_meta()
@@ -272,7 +272,7 @@ class CubeClient(SupportsCubeQueries):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=8),
-        retry=retry_if_exception_type(CubeServiceError),
+        retry=retry_if_exception_type(CubeRestServiceError),
         reraise=True,
     )
     def query_view(
@@ -309,15 +309,15 @@ class CubeClient(SupportsCubeQueries):
                     query,
                 )
                 if 400 <= response.status_code < 500:
-                    raise CubeQueryError(
+                    raise CubeRestQueryError(
                         f"Cube rejected query: {detail}",
                         query=query,
                         status_code=response.status_code,
                     )
-                raise CubeServiceError(f"Cube query unavailable: {detail}")
+                raise CubeRestServiceError(f"Cube REST query unavailable: {detail}")
             return response.json().get("data", [])
         except requests.RequestException as exc:
-            raise CubeServiceError("Cube query unavailable") from exc
+            raise CubeRestServiceError("Cube REST query unavailable") from exc
 
 
 def _response_error_text(response: requests.Response) -> str:

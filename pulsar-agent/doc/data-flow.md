@@ -55,25 +55,25 @@ tool-bound LLM. The LLM either:
 
 ## Step 3: The LLM Discovers and Queries Cube
 
-The tools are defined in `pulsar_agent.tools` and backed by `pulsar_agent.cube_client`.
+The tools are defined in `pulsar_agent.tools` and backed by `pulsar_agent.cube_rest_client`.
 
 Typical sequence:
 
 ```text
-list_cubes
-  └── get available cube names and summaries
+list_views
+  └── get available view names and summaries
 
-get_cube_schema
-  └── inspect measures and dimensions for relevant cubes
+describe_view
+  └── inspect measures and dimensions for relevant views
 
-query_cube
+query_view
   └── execute the selected semantic-layer query
 ```
 
 Each tool returns a JSON string. That string is stored as a `ToolMessage` so the LLM can read it
 on the next graph loop.
 
-When the tool is `query_cube` and the JSON output is a list, the tools node also captures a
+When the tool is `query_view` and the JSON output is a list, the tools node also captures a
 structured result:
 
 ```python
@@ -121,7 +121,7 @@ After streaming completes, Streamlit builds `reasoning_blocks`:
     {"type": "text", "content": "..."},
     {
         "type": "tool",
-        "tool": "query_cube",
+        "tool": "query_view",
         "args": {...},
         "result": "[...]",
     },
@@ -133,7 +133,7 @@ the same block renderer is also used in the visible assistant message stream so 
 appear inline as full boxes. Tool result formatting is UI-specific:
 
 - JSON objects/lists are rendered with `st.json`
-- `query_cube` list results are rendered as a dataframe
+- `query_view` list results are rendered as a dataframe
 - non-JSON output is rendered as text
 
 ---

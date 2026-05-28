@@ -1,7 +1,7 @@
 import requests
 import pytest
 
-from pulsar_agent.cube_client import CubeClient, CubeQueryError, CubeServiceError
+from pulsar_agent.cube_rest_client import CubeRestClient, CubeRestQueryError, CubeRestServiceError
 
 
 class FakeResponse:
@@ -26,7 +26,7 @@ def test_list_views_calls_meta_with_bearer_token(monkeypatch):
         return FakeResponse({"cubes": [{"name": "orders_overview", "type": "view"}]})
 
     monkeypatch.setattr(requests, "get", fake_get)
-    client = CubeClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
+    client = CubeRestClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
 
     result = client.list_views()
     # list_views filters to type=="view" entries
@@ -83,7 +83,7 @@ def test_get_view_schema_exposes_meta_and_sql_names(monkeypatch):
         })
 
     monkeypatch.setattr(requests, "get", fake_get)
-    client = CubeClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
+    client = CubeRestClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
 
     schema = client.get_view_schema("adv_orders")
 
@@ -163,7 +163,7 @@ def test_get_advanced_schema_returns_tables_joins_and_rules(monkeypatch):
         })
 
     monkeypatch.setattr(requests, "get", fake_get)
-    client = CubeClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
+    client = CubeRestClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
 
     schema = client.get_advanced_schema()
 
@@ -190,7 +190,7 @@ def test_query_view_posts_load_query(monkeypatch):
         return FakeResponse({"data": [{"catalog_sales.order_purchase_timestamp.month": "2017-01-01", "catalog_sales.total_revenue": 10.0}]})
 
     monkeypatch.setattr(requests, "post", fake_post)
-    client = CubeClient(base_url="http://cube:4000/cubejs-api/v1/", token="abc")
+    client = CubeRestClient(base_url="http://cube:4000/cubejs-api/v1/", token="abc")
 
     rows = client.query_view(
         measures=["catalog_sales.total_revenue"],
@@ -219,7 +219,7 @@ def test_query_view_includes_order_when_provided(monkeypatch):
         return FakeResponse({"data": []})
 
     monkeypatch.setattr(requests, "post", fake_post)
-    client = CubeClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
+    client = CubeRestClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
 
     client.query_view(
         measures=["catalog_sales.total_revenue"],
@@ -238,7 +238,7 @@ def test_query_view_omits_order_when_empty(monkeypatch):
         return FakeResponse({"data": []})
 
     monkeypatch.setattr(requests, "post", fake_post)
-    client = CubeClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
+    client = CubeRestClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
 
     client.query_view(
         measures=["catalog_sales.total_revenue"],
@@ -253,9 +253,9 @@ def test_http_errors_are_mapped_to_cube_service_error(monkeypatch):
         return FakeResponse({}, status_code=503)
 
     monkeypatch.setattr(requests, "get", fake_get)
-    client = CubeClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
+    client = CubeRestClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
 
-    with pytest.raises(CubeServiceError, match="Cube metadata unavailable"):
+    with pytest.raises(CubeRestServiceError, match="Cube REST metadata unavailable"):
         client.list_views()
 
 
@@ -267,9 +267,9 @@ def test_query_view_invalid_query_raises_cube_query_error_with_api_message(monke
         )
 
     monkeypatch.setattr(requests, "post", fake_post)
-    client = CubeClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
+    client = CubeRestClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
 
-    with pytest.raises(CubeQueryError) as exc_info:
+    with pytest.raises(CubeRestQueryError) as exc_info:
         client.query_view(
             measures=["reviews_overview.avg_review_score"],
             time_dimensions=[{"dimension": "reviews_overview.review_creation_date", "granularity": None}],
