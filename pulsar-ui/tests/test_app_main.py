@@ -139,6 +139,24 @@ def test_render_answer_with_reasoning_blocks_shows_text_and_tool_calls(monkeypat
     assert len(fake_streamlit.dataframes) == 1
 
 
+def test_render_reasoning_blocks_formats_describe_advanced_schema_as_json(monkeypatch):
+    module, fake_streamlit = load_rendering(monkeypatch)
+
+    module.render_reasoning_blocks([
+        {
+            "type": "tool",
+            "tool": "describe_advanced_schema",
+            "args": {},
+            "result": '{"mode": "advanced", "tables": []}',
+            "status": "done",
+        }
+    ])
+
+    assert "🛠 describe_advanced_schema" in fake_streamlit.expander_labels
+    assert fake_streamlit.json_values == [{}, {"mode": "advanced", "tables": []}]
+    assert fake_streamlit.dataframes == []
+
+
 def test_render_reasoning_blocks_shows_running_tool_result(monkeypatch):
     module, fake_streamlit = load_rendering(monkeypatch)
 

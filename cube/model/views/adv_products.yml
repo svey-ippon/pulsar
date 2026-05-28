@@ -1,0 +1,31 @@
+views:
+  - name: adv_products
+    description: >
+      Advanced SQL view over products. Grain: one row per product_id.
+      Use product_category_name to join to adv_categories for English names.
+    meta:
+      summary: "Advanced products table. Grain product_id."
+      mode: advanced
+      source_cube: products
+      sql_table: adv_products
+      grain: product
+      primary_key:
+        - product_id
+      join_keys:
+        - column: product_id
+          joins_to: adv_order_items.product_id
+          relationship: one_to_many
+        - column: product_category_name
+          joins_to: adv_categories.product_category_name
+          relationship: many_to_one
+      ai_context: >
+        Product catalog table. Category names here are Portuguese; join
+        adv_categories for English category names.
+
+    cubes:
+      - join_path: products
+        includes:
+          - product_id
+          - product_category_name
+          - count
+          - product_photos_qty

@@ -15,17 +15,19 @@ That is correct for Standard mode, but it blocks the six Advanced questions.
 
 ## Target Agent State
 
-The target POC agent has five tools:
+The target POC agent has six tools:
 
 | Tool | Mode | Status |
 |---|---|---|
 | `list_views` | Shared | Done |
 | `describe_view` | Shared | Done |
+| `describe_advanced_schema` | Advanced planning | Done |
 | `query_view` | Standard | Done |
 | `execute_sql` | Advanced | To do |
 | `explain_sql` | Advanced support | Later |
 
-Only `execute_sql` is required for the first Advanced POC slice.
+`describe_advanced_schema` is the first Advanced slice. `execute_sql` comes after the SQL-facing
+schema is visible to the agent.
 
 ## `execute_sql` POC Contract
 
@@ -49,7 +51,7 @@ Output JSON:
 Expected behavior:
 
 - connect to the Cube SQL API through the Postgres wire protocol;
-- run SQL against Cube views, especially `olist_explorer`;
+- run SQL against Cube Advanced views (`adv_*`);
 - return rows as a list of dictionaries;
 - apply `max_rows` to limit returned data;
 - surface SQL or service errors as JSON for the LLM.
@@ -61,40 +63,43 @@ The prompt should no longer say the agent never writes SQL. It should say:
 - all data access goes through Cube semantic views;
 - use `query_view` for Standard questions;
 - use `execute_sql` only for Advanced questions requiring CTEs, window functions, aggregate filters, multi-stage aggregation, or grain-aware attribution;
-- target `olist_explorer` for Advanced SQL;
+- target only Advanced views returned by `describe_advanced_schema()` for Advanced SQL;
 - prefer Standard mode when it is sufficient;
 - disclose any attribution convention used in SQL.
 
 ## SQL Generation Contract
 
 The LLM should not synthesize SQL from raw cube names or source tables. It should generate SQL from
-the schema returned by `describe_view("olist_explorer")`.
+the schema returned by `describe_advanced_schema()`.
 
 Before calling `execute_sql` for an Advanced question, the agent should have seen:
 
-- the `olist_explorer` view description;
-- the available SQL aliases;
-- each alias type and description;
-- view/member `meta.ai_context`;
-- `sql_usage` rules.
+- all available Advanced tables;
+- each table grain, primary key, and source cube;
+- each SQL column name, type, description, and semantic member name;
+- the allowed join map;
+- Advanced SQL rules and grain warnings.
 
 Prompt rules for Advanced SQL:
 
 ```text
 When using execute_sql:
-- write SQL only against olist_explorer;
-- use only column names returned by describe_view("olist_explorer");
+- call describe_advanced_schema first unless the schema is already visible;
+- write SQL only against adv_* views returned by describe_advanced_schema;
+- use only columns returned by describe_advanced_schema;
+- use only documented joins from describe_advanced_schema;
 - use Cube SQL API / PostgreSQL-subset syntax;
 - prefer CTEs for multi-step logic;
-- use item_total_price for merchandise revenue;
-- use COUNT(DISTINCT order_id) for order counts over item-like rows;
-- do not average review_score directly over item rows when grouping by category;
+- use adv_order_items.total_revenue for merchandise revenue;
+- use adv_payments.payment_value for collected payment value;
+- use COUNT(DISTINCT adv_orders.order_id) for order counts after one-to-many joins;
+- do not average adv_reviews.review_score directly after joining to item rows when grouping by category;
 - explain any attribution convention used by the SQL.
 ```
 
-This makes `olist_explorer` a SQL-facing API for the LLM. The semantic model remains in Cube, while
-the LLM receives a controlled dictionary of table name, column aliases, grain warnings, and SQL
-patterns.
+This makes the Advanced schema a SQL-facing API for the LLM. The semantic model remains in Cube,
+while the LLM receives a controlled dictionary of table names, columns, join keys, grain warnings,
+and SQL patterns.
 
 ## Routing Guidance
 
@@ -107,7 +112,18 @@ The agent should route with this bias:
 
 ## Implementation Steps
 
-### Step 1 — SQL Client
+### Step 1 — Advanced Schema Tool
+
+Add `describe_advanced_schema()` to `make_tools()`.
+
+The tool should:
+
+- read Cube metadata;
+- select views with `meta.mode = advanced` or names starting with `adv_`;
+- return table names, source cubes, grains, primary keys, columns, allowed joins, and SQL rules;
+- be metadata-only and side-effect free.
+
+### Step 2 — SQL Client
 
 Add a client abstraction for the Cube SQL API. It should be injectable in tests, similar to the
 existing Cube REST client.
@@ -122,7 +138,7 @@ CUBE_SQL_PASSWORD=<password>
 CUBE_SQL_DATABASE=cube
 ```
 
-### Step 2 — Tool Wiring
+### Step 3 — Tool Wiring
 
 Add `execute_sql` to `make_tools()`. The tool should call the SQL client and return JSON. Unit tests
 should cover:
@@ -132,7 +148,7 @@ should cover:
 - service error JSON;
 - validation error JSON for invalid tool arguments.
 
-### Step 3 — Graph Result Capture
+### Step 4 — Graph Result Capture
 
 Update the tool node so successful `execute_sql` calls are captured in `cube_results`, using a shape
 compatible with existing UI behavior:
@@ -144,15 +160,15 @@ compatible with existing UI behavior:
 }
 ```
 
-### Step 4 — Prompt Update
+### Step 5 — Prompt Update
 
 Replace the Standard-only feasibility section with Standard/Advanced routing guidance.
 
 Also update the prompt to include the SQL generation contract above. The agent must call
-`describe_view("olist_explorer")` before generating Advanced SQL unless that schema is already
+`describe_advanced_schema()` before generating Advanced SQL unless that schema is already
 visible in the conversation.
 
-### Step 5 — Evaluation
+### Step 6 — Evaluation
 
 Run the six Advanced questions from [PLAN_V2_QUESTION_CATALOG.md](PLAN_V2_QUESTION_CATALOG.md):
 

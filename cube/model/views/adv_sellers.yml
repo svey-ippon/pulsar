@@ -1,0 +1,29 @@
+views:
+  - name: adv_sellers
+    description: >
+      Advanced SQL view over sellers. Grain: one row per seller_id.
+      Use this table for seller geography and seller counts.
+    meta:
+      summary: "Advanced sellers table. Grain seller_id."
+      mode: advanced
+      source_cube: sellers
+      sql_table: adv_sellers
+      grain: seller
+      primary_key:
+        - seller_id
+      join_keys:
+        - column: seller_id
+          joins_to: adv_order_items.seller_id
+          relationship: one_to_many
+      ai_context: >
+        Seller table. Join through adv_order_items for revenue or order-item
+        activity by seller.
+
+    cubes:
+      - join_path: sellers
+        includes:
+          - seller_id
+          - seller_zip_code_prefix
+          - seller_city
+          - seller_state
+          - count

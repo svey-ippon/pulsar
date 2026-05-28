@@ -71,9 +71,10 @@ Stateless rendering functions called by `ui.py`:
 
 | Tool | Format |
 |---|---|
-| `list_cubes` | `st.json` |
-| `get_cube_schema` | `st.json` |
-| `query_cube` | `st.dataframe` if list, else `st.json` |
+| `list_views` | `st.json` |
+| `describe_view` | `st.json` |
+| `describe_advanced_schema` | `st.json` |
+| `query_view` | `st.dataframe` if list, else `st.json` |
 | other | `st.write` |
 
 ### reasoning.py

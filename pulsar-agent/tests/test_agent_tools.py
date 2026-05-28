@@ -50,6 +50,38 @@ class FakeCubeClient:
             ],
         }
 
+    def get_advanced_schema(self) -> dict:
+        return {
+            "mode": "advanced",
+            "dialect": "Cube SQL API / PostgreSQL subset",
+            "tables": [
+                {
+                    "name": "adv_orders",
+                    "source_cube": "orders",
+                    "grain": "order",
+                    "primary_key": ["order_id"],
+                    "columns": [
+                        {
+                            "name": "order_id",
+                            "semantic_name": "adv_orders.order_id",
+                            "kind": "dimension",
+                            "type": "string",
+                            "description": "Unique order identifier.",
+                        }
+                    ],
+                }
+            ],
+            "joins": [
+                {
+                    "left": "adv_order_items.order_id",
+                    "right": "adv_orders.order_id",
+                    "relationship": "many_to_one",
+                    "description": "Many item rows can belong to one order.",
+                }
+            ],
+            "rules": ["Use only the adv_* tables and columns returned by this tool."],
+        }
+
     def query_view(self, measures, dimensions=None, filters=None,
                    time_dimensions=None, order=None, limit=1000):
         self.query_view_calls.append(
@@ -66,6 +98,9 @@ class ErrorCubeClient:
     def get_view_schema(self, view_name: str):
         raise CubeServiceError("unavailable")
 
+    def get_advanced_schema(self):
+        raise CubeServiceError("unavailable")
+
     def query_view(self, measures, dimensions=None, filters=None,
                    time_dimensions=None, order=None, limit=1000):
         raise CubeServiceError("unavailable")
@@ -77,6 +112,9 @@ class InvalidQueryCubeClient:
 
     def get_view_schema(self, view_name: str):
         raise ValueError(f"View '{view_name}' not found. Available: []")
+
+    def get_advanced_schema(self):
+        return {"mode": "advanced", "tables": [], "joins": [], "rules": []}
 
     def query_view(self, measures, dimensions=None, filters=None,
                    time_dimensions=None, order=None, limit=1000):
@@ -240,6 +278,31 @@ def test_describe_view_tool_returns_error_json_when_cube_unavailable():
 
 
 # ---------------------------------------------------------------------------
+# describe_advanced_schema tool
+# ---------------------------------------------------------------------------
+
+def test_describe_advanced_schema_tool_returns_tables_joins_and_rules():
+    fake = FakeCubeClient()
+    describe_advanced_schema = get_tool(make_tools(fake), "describe_advanced_schema")
+
+    result = json.loads(describe_advanced_schema.invoke({}))
+
+    assert result["mode"] == "advanced"
+    assert result["tables"][0]["name"] == "adv_orders"
+    assert result["tables"][0]["columns"][0]["name"] == "order_id"
+    assert result["joins"][0]["left"] == "adv_order_items.order_id"
+    assert "adv_*" in result["rules"][0]
+
+
+def test_describe_advanced_schema_tool_returns_error_json_when_cube_unavailable():
+    describe_advanced_schema = get_tool(make_tools(ErrorCubeClient()), "describe_advanced_schema")
+
+    result = json.loads(describe_advanced_schema.invoke({}))
+
+    assert "error" in result
+
+
+# ---------------------------------------------------------------------------
 # query_view tool
 # ---------------------------------------------------------------------------
 
@@ -348,11 +411,11 @@ def test_query_view_tool_validation_error_is_returned_to_llm():
 # make_tools
 # ---------------------------------------------------------------------------
 
-def test_make_tools_returns_three_tools_with_correct_names():
+def test_make_tools_returns_four_tools_with_correct_names():
     tools = make_tools(FakeCubeClient())
 
     names = {t.name for t in tools}
-    assert names == {"list_views", "describe_view", "query_view"}
+    assert names == {"list_views", "describe_view", "describe_advanced_schema", "query_view"}
 
 
 def test_make_tools_does_not_require_env_vars_when_client_is_injected(monkeypatch):
@@ -361,5 +424,5 @@ def test_make_tools_does_not_require_env_vars_when_client_is_injected(monkeypatc
 
     tools = make_tools(FakeCubeClient())
 
-    assert len(tools) == 3
-    assert {t.name for t in tools} == {"list_views", "describe_view", "query_view"}
+    assert len(tools) == 4
+    assert {t.name for t in tools} == {"list_views", "describe_view", "describe_advanced_schema", "query_view"}

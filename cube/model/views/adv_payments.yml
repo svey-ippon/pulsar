@@ -1,0 +1,33 @@
+views:
+  - name: adv_payments
+    description: >
+      Advanced SQL view over order payments. Grain: one row per order_payment_key,
+      equivalent to one row per order_id and payment sequence.
+    meta:
+      summary: "Advanced payments table. Grain order payment row."
+      mode: advanced
+      source_cube: order_payments
+      sql_table: adv_payments
+      grain: payment
+      primary_key:
+        - order_payment_key
+      join_keys:
+        - column: order_id
+          joins_to: adv_orders.order_id
+          relationship: many_to_one
+      ai_context: >
+        Payment-grain table. payment_value is collected payment value including
+        freight and adjustments. Orders can have multiple payment rows.
+
+    cubes:
+      - join_path: order_payments
+        includes:
+          - order_payment_key
+          - order_id
+          - payment_type
+          - payment_installments
+          - is_multi_installment
+          - count
+          - payment_value
+          - count_multi_installment
+          - avg_installments

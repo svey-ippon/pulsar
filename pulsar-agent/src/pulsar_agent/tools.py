@@ -91,7 +91,7 @@ def _extract_summary(cube: dict) -> str:
 
 
 def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]:
-    """Return the three Cube view tools, bound to *cube_client* or a default client built from env vars."""
+    """Return Cube semantic tools, bound to *cube_client* or a default client built from env vars."""
     client: SupportsCubeQueries = cube_client or CubeClient(
         base_url=os.environ["CUBE_API_URL"],
         token=os.environ["CUBE_API_TOKEN"],
@@ -126,17 +126,21 @@ def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]
 
     @tool(args_schema=GetViewSchemaArgs)
     def describe_view(view_name: str) -> str:
-        """Return the full schema for a single view: description, all measures, and all dimensions.
+        """Return the full schema for a single view: description, metadata, measures, and dimensions.
 
         Output format:
           {
             "name": str,
             "description": str,
-            "measures": [{"name": str, "type": str, "description": str, "additive": bool}, ...],
-            "dimensions": [{"name": str, "type": str, "description": str, "is_calculated": bool}, ...]
+            "meta": {"summary": str, "ai_context": str, ...},
+            "measures": [{"name": str, "sql_name": str, "type": str, "description": str, "additive": bool, "meta": dict}, ...],
+            "dimensions": [{"name": str, "sql_name": str, "type": str, "description": str, "is_calculated": bool, "meta": dict}, ...]
           }
 
         Interpreting the output before building a query:
+          - name: Cube REST member name. Use this with query_view.
+          - sql_name: SQL API column name for the same view.
+          - meta.ai_context: extra agent-facing guidance, especially for grain warnings and synonyms.
           - additive (measure): True → the measure can safely be summed or further aggregated across
             any grouping (typical for count, sum). False → non-additive (avg, count_distinct, ratio)
             — never re-sum or re-aggregate this value; use it as-is or select an additive alternative.
@@ -161,6 +165,46 @@ def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]
             })
         except CubeServiceError:
             logger.error("Cube unavailable during describe_view", exc_info=True)
+            return _UNAVAILABLE
+
+    @tool
+    def describe_advanced_schema() -> str:
+        """Return the full Advanced SQL schema contract for Cube SQL API generation.
+
+        Output format:
+          {
+            "mode": "advanced",
+            "dialect": "Cube SQL API / PostgreSQL subset",
+            "tables": [
+              {
+                "name": "adv_orders",
+                "source_cube": "orders",
+                "grain": "order",
+                "primary_key": ["order_id"],
+                "description": str,
+                "columns": [
+                  {
+                    "name": "order_id",
+                    "semantic_name": "adv_orders.order_id",
+                    "kind": "dimension",
+                    "type": "string",
+                    "description": str
+                  }
+                ]
+              }
+            ],
+            "joins": [{"left": str, "right": str, "relationship": str, "description": str}],
+            "rules": [str]
+          }
+
+        Use this before execute_sql for Advanced questions. Generate SQL only against the returned
+        adv_* tables, columns, and join map. For Standard questions, prefer list_views,
+        describe_view, and query_view instead.
+        """
+        try:
+            return json.dumps(client.get_advanced_schema())
+        except CubeServiceError:
+            logger.error("Cube unavailable during describe_advanced_schema", exc_info=True)
             return _UNAVAILABLE
 
     @tool(args_schema=QueryViewArgs)
@@ -217,4 +261,4 @@ def make_tools(cube_client: SupportsCubeQueries | None = None) -> list[BaseTool]
 
     query_view.handle_validation_error = _validation_error
 
-    return [list_views, describe_view, query_view]
+    return [list_views, describe_view, describe_advanced_schema, query_view]

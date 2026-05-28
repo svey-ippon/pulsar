@@ -35,13 +35,13 @@ unsafe or impossible with `query_view`.
 | 8 | What share of payments are paid in more than one installment? | Standard | `payments_overview` | Two measures and agent-side ratio. |
 | 9 | How many orders are paid in more than one installment? | Standard | `payments_overview` | Native filtered measure. |
 | 10 | Who are our best sellers by revenue? | Standard | `catalog_sales` | Seller dimension and revenue measure. |
-| 11 | Top 3 seller states by revenue per seller in 2017, only states with more than 5 sellers. | Advanced | `olist_explorer` | Aggregate filter plus ratio over grouped aggregates. |
-| 12 | Average review score by product category, categories with at least 50 reviews. Use English names. | Advanced | `olist_explorer` | Review/category grain mismatch plus aggregate filter. |
-| 13 | Top 3 product categories by revenue within each customer state. | Advanced | `olist_explorer` | Top-N per group using window functions. |
-| 14 | 2017 cohorts: percent of customers who made a second purchase within 90 days. | Advanced | `olist_explorer` | Cohort logic and temporal self-join. |
-| 15 | Seller states with worst average delivery performance, minimum 100 deliveries. | Advanced | `olist_explorer` | Aggregate filter over delivery count. |
+| 11 | Top 3 seller states by revenue per seller in 2017, only states with more than 5 sellers. | Advanced | `adv_order_items`, `adv_orders`, `adv_sellers` | Aggregate filter plus ratio over grouped aggregates. |
+| 12 | Average review score by product category, categories with at least 50 reviews. Use English names. | Advanced | `adv_reviews`, `adv_order_items`, `adv_products`, `adv_categories` | Review/category grain mismatch plus aggregate filter. |
+| 13 | Top 3 product categories by revenue within each customer state. | Advanced | `adv_order_items`, `adv_orders`, `adv_customers`, `adv_products`, `adv_categories` | Top-N per group using window functions. |
+| 14 | 2017 cohorts: percent of customers who made a second purchase within 90 days. | Advanced | `adv_orders`, `adv_customers` | Cohort logic and temporal self-join. |
+| 15 | Seller states with worst average delivery performance, minimum 100 deliveries. | Advanced | `adv_order_items`, `adv_orders`, `adv_sellers` | Aggregate filter over delivery count. |
 | 16 | Late deliveries vs review score, on-time vs late. | Standard | `orders_overview` or `reviews_overview` | Supported by modeled `delivery_status`. |
-| 17 | Revenue share: repeat customers vs one-time customers. | Advanced | `olist_explorer` | Customer history classification. |
+| 17 | Revenue share: repeat customers vs one-time customers. | Advanced | `adv_order_items`, `adv_orders`, `adv_customers` | Customer history classification. |
 
 ## Advanced SQL Reference Patterns
 
@@ -53,13 +53,15 @@ but it should produce equivalent logic.
 ```sql
 WITH order_categories AS (
     SELECT
-        order_id,
-        category_name,
-        SUM(item_total_price) AS total_price,
+        oi.order_id,
+        c.product_category_name_english AS category_name,
+        SUM(oi.total_revenue) AS total_price,
         COUNT(*) AS item_count
-    FROM olist_explorer
-    WHERE category_name IS NOT NULL
-    GROUP BY order_id, category_name
+    FROM adv_order_items oi
+    JOIN adv_products p ON oi.product_id = p.product_id
+    JOIN adv_categories c ON p.product_category_name = c.product_category_name
+    WHERE c.product_category_name_english IS NOT NULL
+    GROUP BY oi.order_id, c.product_category_name_english
 ),
 ranked AS (
     SELECT
@@ -79,10 +81,10 @@ dominant_category_per_order AS (
 SELECT
     d.category_name AS category,
     COUNT(*) AS review_count,
-    ROUND(AVG(o.review_score), 2) AS avg_review_score
-FROM olist_explorer o
-JOIN dominant_category_per_order d ON o.order_id = d.order_id
-WHERE o.review_score IS NOT NULL
+    ROUND(AVG(r.review_score), 2) AS avg_review_score
+FROM adv_reviews r
+JOIN dominant_category_per_order d ON r.order_id = d.order_id
+WHERE r.review_score IS NOT NULL
 GROUP BY d.category_name
 HAVING COUNT(*) >= 50
 ORDER BY avg_review_score DESC;
@@ -93,13 +95,17 @@ ORDER BY avg_review_score DESC;
 ```sql
 WITH state_category_revenue AS (
     SELECT
-        customer_state,
-        category_name,
-        SUM(item_total_price) AS revenue
-    FROM olist_explorer
-    WHERE category_name IS NOT NULL
-      AND customer_state IS NOT NULL
-    GROUP BY customer_state, category_name
+        cst.customer_state,
+        cat.product_category_name_english AS category_name,
+        SUM(oi.total_revenue) AS revenue
+    FROM adv_order_items oi
+    JOIN adv_orders o ON oi.order_id = o.order_id
+    JOIN adv_customers cst ON o.customer_id = cst.customer_id
+    JOIN adv_products p ON oi.product_id = p.product_id
+    JOIN adv_categories cat ON p.product_category_name = cat.product_category_name
+    WHERE cat.product_category_name_english IS NOT NULL
+      AND cst.customer_state IS NOT NULL
+    GROUP BY cst.customer_state, cat.product_category_name_english
 ),
 ranked AS (
     SELECT
@@ -123,11 +129,12 @@ ORDER BY customer_state, rn;
 ```sql
 WITH customer_order_count AS (
     SELECT
-        customer_unique_id,
-        COUNT(DISTINCT order_id) AS order_count
-    FROM olist_explorer
-    WHERE customer_unique_id IS NOT NULL
-    GROUP BY customer_unique_id
+        c.customer_unique_id,
+        COUNT(DISTINCT o.order_id) AS order_count
+    FROM adv_orders o
+    JOIN adv_customers c ON o.customer_id = c.customer_id
+    WHERE c.customer_unique_id IS NOT NULL
+    GROUP BY c.customer_unique_id
 ),
 customer_segment AS (
     SELECT
@@ -137,10 +144,12 @@ customer_segment AS (
 ),
 customer_revenue AS (
     SELECT
-        customer_unique_id,
-        SUM(item_total_price) AS total_revenue
-    FROM olist_explorer
-    GROUP BY customer_unique_id
+        c.customer_unique_id,
+        SUM(oi.total_revenue) AS total_revenue
+    FROM adv_order_items oi
+    JOIN adv_orders o ON oi.order_id = o.order_id
+    JOIN adv_customers c ON o.customer_id = c.customer_id
+    GROUP BY c.customer_unique_id
 )
 SELECT
     cs.segment,

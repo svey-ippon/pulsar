@@ -1,0 +1,32 @@
+views:
+  - name: adv_customers
+    description: >
+      Advanced SQL view over customers. Grain: one row per customer_id.
+      customer_id is order-scoped; use customer_unique_id for physical-customer
+      repeat-purchase analysis.
+    meta:
+      summary: "Advanced customers table. Grain customer_id."
+      mode: advanced
+      source_cube: customers
+      sql_table: adv_customers
+      grain: customer
+      primary_key:
+        - customer_id
+      join_keys:
+        - column: customer_id
+          joins_to: adv_orders.customer_id
+          relationship: one_to_many
+      ai_context: >
+        Customer table. customer_id is order-scoped, while customer_unique_id
+        identifies a physical customer across orders.
+
+    cubes:
+      - join_path: customers
+        includes:
+          - customer_id
+          - customer_unique_id
+          - customer_zip_code_prefix
+          - customer_city
+          - customer_state
+          - count
+          - unique_customer_count

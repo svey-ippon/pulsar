@@ -1,0 +1,47 @@
+views:
+  - name: adv_orders
+    description: >
+      Advanced SQL view over orders. Grain: one row per order_id.
+      Use this table for order lifecycle, delivery, and customer-key analysis.
+    meta:
+      summary: "Advanced orders table. Grain order_id."
+      mode: advanced
+      source_cube: orders
+      sql_table: adv_orders
+      grain: order
+      primary_key:
+        - order_id
+      join_keys:
+        - column: customer_id
+          joins_to: adv_customers.customer_id
+          relationship: many_to_one
+        - column: order_id
+          joins_to: adv_order_items.order_id
+          relationship: one_to_many
+        - column: order_id
+          joins_to: adv_reviews.order_id
+          relationship: one_to_many
+        - column: order_id
+          joins_to: adv_payments.order_id
+          relationship: one_to_many
+      ai_context: >
+        Order-grain table. When joining to item or payment rows, use
+        COUNT(DISTINCT adv_orders.order_id) for order counts.
+
+    cubes:
+      - join_path: orders
+        includes:
+          - order_id
+          - customer_id
+          - order_status
+          - order_purchase_timestamp
+          - order_approved_at
+          - order_delivered_carrier_date
+          - order_delivered_customer_date
+          - order_estimated_delivery_date
+          - delay_days
+          - delivery_status
+          - is_delivered
+          - count
+          - avg_delay_days
+          - delivered_count
