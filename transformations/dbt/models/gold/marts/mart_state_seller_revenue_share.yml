@@ -7,7 +7,6 @@ models:
       meta:
         grain: "customer_state, seller_id"
         why: "Ranks sellers within each customer state by delivered local revenue share."
-        layer: gold
         model_type: mart
         business_conventions:
           - "customer_state is the buyer state, not the seller state."

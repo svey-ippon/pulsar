@@ -7,7 +7,6 @@ models:
       meta:
         grain: "order_id"
         why: "Supports basket and percentile analysis without item/payment fan-out."
-        layer: gold
         model_type: mart
     columns:
       - name: order_id

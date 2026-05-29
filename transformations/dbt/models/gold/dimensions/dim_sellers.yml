@@ -7,7 +7,6 @@ models:
       meta:
         grain: "seller_id"
         why: "Centralizes seller geography for scorecards, delivery performance, and seller-to-customer distance analysis."
-        layer: gold
         model_type: dimension
     columns:
       - name: seller_id

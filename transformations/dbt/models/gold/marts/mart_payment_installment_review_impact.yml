@@ -7,7 +7,6 @@ models:
       meta:
         grain: "max_installment_bucket"
         why: "Aggregates payment value and review outcomes by installment bucket while avoiding direct payment x item joins."
-        layer: gold
         model_type: mart
     columns:
       - name: max_installment_bucket

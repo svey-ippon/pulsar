@@ -7,7 +7,6 @@ models:
       meta:
         grain: "order_id"
         why: "Identifies multi-seller orders and exposes delivery delay at order grain."
-        layer: gold
         model_type: mart
     columns:
       - name: order_id

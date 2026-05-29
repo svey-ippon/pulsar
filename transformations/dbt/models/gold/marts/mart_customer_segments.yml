@@ -7,7 +7,6 @@ models:
       meta:
         grain: "customer_segment"
         why: "Segments physical customers before aggregating delivered merchandise revenue."
-        layer: gold
         model_type: mart
     columns:
       - name: customer_segment

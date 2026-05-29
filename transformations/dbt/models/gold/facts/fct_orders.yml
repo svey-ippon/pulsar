@@ -7,7 +7,6 @@ models:
       meta:
         grain: "order_id"
         why: "Centralizes order lifecycle and delivery status logic before semantic exposure."
-        layer: gold
         model_type: fact
         business_conventions:
           - "delay_days > 0 means late delivery."

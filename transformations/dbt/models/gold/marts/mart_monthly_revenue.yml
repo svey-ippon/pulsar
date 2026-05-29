@@ -7,7 +7,6 @@ models:
       meta:
         grain: "order_purchase_month"
         why: "Keeps common time-series logic stable and prevents payment value from being confused with merchandise revenue."
-        layer: gold
         model_type: mart
     columns:
       - name: order_purchase_month

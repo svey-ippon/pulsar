@@ -7,7 +7,6 @@ models:
       meta:
         grain: "order_id, order_item_id"
         why: "Computes approximate great-circle distance from representative zip-prefix coordinates for logistics analysis."
-        layer: gold
         model_type: mart
     columns:
       - name: order_item_key

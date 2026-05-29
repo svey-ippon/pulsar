@@ -7,7 +7,6 @@ models:
       meta:
         grain: "customer_id"
         why: "Makes the distinction between order-scoped customer_id and physical customer_unique_id explicit."
-        layer: gold
         model_type: dimension
     columns:
       - name: customer_id

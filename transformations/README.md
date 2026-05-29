@@ -62,6 +62,12 @@ uv run sqlfmt dbt/models dbt/macros
 
 The formatter excludes generated dbt artifacts under `dbt/target/` and `dbt/dbt_packages/`.
 
+## Query Tags
+
+Snowflake query tags should be used for dbt observability and cost attribution. See
+[QUERY_TAGS.md](QUERY_TAGS.md) for the recommended JSON query tag format and example
+`QUERY_HISTORY` queries.
+
 The profile expects these environment variables:
 
 ```text

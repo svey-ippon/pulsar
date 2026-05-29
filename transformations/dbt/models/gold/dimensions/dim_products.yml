@@ -7,7 +7,6 @@ models:
       meta:
         grain: "product_id"
         why: "Centralizes category translation so downstream models and semantic layers do not guess English names."
-        layer: gold
         model_type: dimension
     columns:
       - name: product_id

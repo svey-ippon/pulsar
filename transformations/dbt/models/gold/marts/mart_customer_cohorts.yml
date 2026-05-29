@@ -7,7 +7,6 @@ models:
       meta:
         grain: "cohort_month"
         why: "Precomputes physical-customer cohort logic so semantic tools do not rebuild retention flags per query."
-        layer: gold
         model_type: mart
         business_conventions:
           - "Customers are identified by customer_unique_id."

@@ -7,7 +7,6 @@ models:
       meta:
         grain: "order_id, payment_sequential"
         why: "Separates collected payment value from merchandise revenue."
-        layer: gold
         model_type: fact
         business_conventions:
           - "payment_value is collected value including freight and adjustments."

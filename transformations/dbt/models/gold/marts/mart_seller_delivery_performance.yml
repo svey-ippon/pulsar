@@ -7,7 +7,6 @@ models:
       meta:
         grain: "seller/order item"
         why: "Supports seller-state delivery delay and late-rate analysis at fulfillment grain."
-        layer: gold
         model_type: mart
         business_conventions:
           - "Only delivered order items with non-null delay_days are included."

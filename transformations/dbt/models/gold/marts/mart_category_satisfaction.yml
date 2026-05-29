@@ -7,7 +7,6 @@ models:
       meta:
         grain: "order_id, product_category_name_english, review_id"
         why: "Attributes one order-level review once to each distinct English category in the order, avoiding review x item fan-out."
-        layer: gold
         model_type: mart
         attribution: "One order review is attributed once to each distinct English category present in that order."
     columns:

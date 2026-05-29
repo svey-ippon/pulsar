@@ -7,7 +7,6 @@ models:
       meta:
         grain: "zip_code_prefix"
         why: "Deduplicates raw geolocation rows before enriching customers and sellers."
-        layer: gold
         model_type: dimension
     columns:
       - name: zip_code_prefix

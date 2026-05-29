@@ -7,7 +7,6 @@ models:
       meta:
         grain: "customer_unique_id"
         why: "Supports concentration analysis such as revenue from the top 20 percent of customers."
-        layer: gold
         model_type: mart
     columns:
       - name: customer_unique_id

@@ -7,7 +7,6 @@ models:
       meta:
         grain: "customer_unique_id"
         why: "Supports at-risk customer analysis and customer health segmentation."
-        layer: gold
         model_type: mart
     columns:
       - name: customer_unique_id

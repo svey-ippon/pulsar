@@ -7,7 +7,6 @@ models:
       meta:
         grain: "order_id, product_category_name_english"
         why: "Deduplicates category membership inside an order and prevents category analysis from multiplying order-level facts by item rows."
-        layer: gold
         model_type: bridge
     columns:
       - name: order_category_key

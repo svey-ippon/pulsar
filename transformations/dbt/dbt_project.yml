@@ -22,8 +22,9 @@ models:
       relation: true
       columns: true
     +database: ECOMMERCE_DB
+    +transient: false
+    +materialized: table
+    +query_tag: "true - value set by set_query_tag() macro"
 
     gold:
       +schema: GOLD
-      +materialized: table
-

@@ -7,7 +7,6 @@ models:
       meta:
         grain: "product_category_name_english, product_id"
         why: "Supports top-products-per-category questions with a governed delivered revenue definition."
-        layer: gold
         model_type: mart
     columns:
       - name: product_id

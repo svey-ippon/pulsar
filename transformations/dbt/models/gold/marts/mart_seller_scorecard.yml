@@ -7,7 +7,6 @@ models:
       meta:
         grain: "seller_id"
         why: "Supports top-seller and seller-quality questions with a single governed seller view."
-        layer: gold
         model_type: mart
         attribution: "Seller review score is based on distinct seller/order membership, not item rows."
     columns:

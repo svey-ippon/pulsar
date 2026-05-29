@@ -7,7 +7,6 @@ models:
       meta:
         grain: "order_id, order_item_id"
         why: "Defines governed merchandise revenue. item_revenue excludes freight and payment adjustments."
-        layer: gold
         model_type: fact
         business_conventions:
           - "item_revenue is merchandise revenue from ORDER_ITEMS.PRICE."

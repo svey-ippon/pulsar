@@ -7,7 +7,6 @@ models:
       meta:
         grain: "review_id, order_id"
         why: "Keeps reviews at order-level grain; category and seller attribution are handled by dedicated marts."
-        layer: gold
         model_type: fact
         business_conventions:
           - "Reviews are order-level, not item-level."
