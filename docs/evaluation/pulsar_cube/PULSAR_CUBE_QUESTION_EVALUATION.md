@@ -1,4 +1,4 @@
-# Pulsar Semantic Model Coverage
+# Pulsar Cube Question Evaluation
 
 This document maps the neutral Olist evaluation catalog to the current Pulsar solution.
 
@@ -418,53 +418,7 @@ two delivered orders.
 
 -> 5/5
 
-
-## Details
+## Agent Setup
 
 - **LLM:** Claude Sonnet 4.6
-- **Agent:** LangGraph simple (`ReAct`) + prompt d'environ 50 lignes.
-- **Cout LLM**: 2,45€ - seule l'inférence - toutes les questions posées à la suite dans le même contexte
-
-### Prompt Overview
-
-**Briefing sur le rôle**
-
-- L'agent est un assistant data analyste.
-- Il travaille uniquement via une couche sémantique gouvernée Cube.
-- Il ne doit pas écrire de SQL ni inférer des jointures entre tables brutes.
-- Si une question n'est pas couverte par une vue gouvernée, il doit l'expliquer et demander une
-  clarification ou une extension du modèle.
-
-**Découverte du schéma**
-
-- Toujours passer par `list_views`, puis `describe_view(view_name)` sur les vues pertinentes.
-- Réutiliser le schéma déjà visible dans la conversation si possible.
-- Choisir la vue dont le résumé, la description et surtout le grain correspondent le mieux à la
-  question.
-- N'utiliser que les membres explicitement retournés par `describe_view`.
-- Ne jamais inventer de métriques ou de noms de colonnes.
-
-**Pré-analyse avant requête**
-
-- Vérifier les ambiguïtés de schéma : plusieurs mesures possibles, différences de périmètre,
-  `count` vs `distinct count`, etc.
-- Vérifier les ambiguïtés conceptuelles : `grain mismatch`, attribution implicite, fan-out,
-  conventions non documentées.
-- Vérifier la faisabilité : si la demande nécessite une jointure non exposée, une convention
-  d'attribution non documentée, de la logique de cohortes, de ranking ou un artefact sémantique
-  absent, l'agent doit s'arrêter et expliquer ce qui manque.
-
-**Règles d'exécution**
-
-- Refuser les prédictions, forecasts et projections.
-- Ne pas inventer de métrique absente de la couche sémantique.
-- En cas d'erreur outil avec un `hint`, suivre le `hint` et réessayer.
-- En cas d'erreur outil sans `hint`, considérer le service indisponible et demander de réessayer plus tard.
-- Respecter les flags `additive` et `is_calculated` fournis par `describe_view`.
-
-**Cadrage de la réponse**
-
-- Chaque réponse doit indiquer les vues, mesures et dimensions utilisées.
-- Avant d'enrichir avec de la connaissance externe, vérifier si l'information existe dans la couche sémantique.
-- Si l'agent utilise sa propre connaissance, il doit le signaler.
-- Terminer chaque réponse non-refusée par une section concise `Limits & implicits`, avec 1 à 4 points sur les conventions, limites, fan-out, déduplication ou hypothèses de périmètre.
+- **Agent:** LangGraph simple (`ReAct`) + prompt d'environ 50 lignes (brief role, decouverte metadata, pre analyse, règle exécution et réponse)
