@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: dim_geolocation_zip_prefix
+    description: "One row per Brazilian zip-code prefix with representative city/state and averaged coordinates."
+    config:
+      meta:
+        grain: "zip_code_prefix"
+        why: "Deduplicates raw geolocation rows before enriching customers and sellers."
+        layer: gold
+        model_type: dimension
+    columns:
+      - name: zip_code_prefix
+        description: "Brazilian five-digit zip-code prefix."
+        data_tests:
+          - not_null
+          - unique
+      - name: latitude
+        description: "Average latitude for the zip-code prefix."
+      - name: longitude
+        description: "Average longitude for the zip-code prefix."
+

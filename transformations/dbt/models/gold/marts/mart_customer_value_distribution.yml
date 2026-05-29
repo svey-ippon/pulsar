@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: mart_customer_value_distribution
+    description: "Customer spend distribution mart with revenue rank, quintile, and cumulative revenue share."
+    config:
+      meta:
+        grain: "customer_unique_id"
+        why: "Supports concentration analysis such as revenue from the top 20 percent of customers."
+        layer: gold
+        model_type: mart
+    columns:
+      - name: customer_unique_id
+        description: "Physical customer identifier."
+        data_tests:
+          - not_null
+          - unique
+      - name: revenue_quintile
+        description: "Spend quintile, where 1 is the highest-spending quintile."
+      - name: cumulative_pct_total_revenue
+        description: "Cumulative delivered revenue share ordered by customer spend descending."
+

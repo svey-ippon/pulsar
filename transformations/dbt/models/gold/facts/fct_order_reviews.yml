@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: fct_order_reviews
+    description: "Review fact at review row grain enriched with order delivery status."
+    config:
+      meta:
+        grain: "review_id, order_id"
+        why: "Keeps reviews at order-level grain; category and seller attribution are handled by dedicated marts."
+        layer: gold
+        model_type: fact
+        business_conventions:
+          - "Reviews are order-level, not item-level."
+    columns:
+      - name: order_review_key
+        description: "Synthetic key for one review/order row."
+        data_tests:
+          - not_null
+          - unique
+      - name: order_id
+        description: "Order identifier."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: review_score
+        description: "Review score from 1 to 5."
+

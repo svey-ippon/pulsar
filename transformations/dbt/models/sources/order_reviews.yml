@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: silver
+    database: ECOMMERCE_DB
+    schema: SILVER
+    tables:
+      - name: order_reviews
+        identifier: ORDER_REVIEWS
+        description: "Source review table. Reviews are order-level in the Olist dataset."
+

@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: silver
+    database: ECOMMERCE_DB
+    schema: SILVER
+    tables:
+      - name: orders
+        identifier: ORDERS
+        description: "Source orders table. Grain is one row per order_id."
+

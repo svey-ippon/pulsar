@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: mart_seller_delivery_performance
+    description: "Delivered seller/order-item delivery performance mart."
+    config:
+      meta:
+        grain: "seller/order item"
+        why: "Supports seller-state delivery delay and late-rate analysis at fulfillment grain."
+        layer: gold
+        model_type: mart
+        business_conventions:
+          - "Only delivered order items with non-null delay_days are included."
+          - "delay_days > 0 means late delivery."
+    columns:
+      - name: seller_delivery_key
+        description: "Synthetic key for one seller/order-item delivery row."
+        data_tests:
+          - not_null
+          - unique
+      - name: order_id
+        description: "Order identifier."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: seller_id
+        description: "Seller identifier."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_sellers')
+                field: seller_id
+

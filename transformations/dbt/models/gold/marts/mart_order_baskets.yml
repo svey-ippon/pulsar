@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: mart_order_baskets
+    description: "Order-level basket mart with items, sellers, revenue, freight, and collected value."
+    config:
+      meta:
+        grain: "order_id"
+        why: "Supports basket and percentile analysis without item/payment fan-out."
+        layer: gold
+        model_type: mart
+    columns:
+      - name: order_id
+        description: "Order identifier."
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: merchandise_revenue
+        description: "Order merchandise revenue excluding freight and payment adjustments."
+      - name: collected_value
+        description: "Collected payment value including freight and adjustments."
+      - name: is_multi_seller_order
+        description: "True when the order involves more than one seller."
+

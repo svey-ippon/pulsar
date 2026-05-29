@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: mart_category_revenue_pareto
+    description: "Category Pareto mart for delivered merchandise revenue."
+    config:
+      meta:
+        grain: "product_category_name_english"
+        why: "Exposes category revenue share and cumulative revenue share in revenue order."
+        layer: gold
+        model_type: mart
+    columns:
+      - name: product_category_name_english
+        description: "English product category."
+        data_tests:
+          - not_null
+          - unique
+      - name: total_revenue
+        description: "Delivered merchandise revenue for the category."
+      - name: cumulative_pct_total_revenue
+        description: "Cumulative delivered revenue share ordered by category revenue descending."
+

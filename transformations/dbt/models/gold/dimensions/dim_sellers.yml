@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: dim_sellers
+    description: "Seller dimension enriched with representative zip-prefix coordinates."
+    config:
+      meta:
+        grain: "seller_id"
+        why: "Centralizes seller geography for scorecards, delivery performance, and seller-to-customer distance analysis."
+        layer: gold
+        model_type: dimension
+    columns:
+      - name: seller_id
+        description: "Seller identifier."
+        data_tests:
+          - not_null
+          - unique
+      - name: seller_state
+        description: "Seller state code."
+

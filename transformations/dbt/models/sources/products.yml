@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: silver
+    database: ECOMMERCE_DB
+    schema: SILVER
+    tables:
+      - name: products
+        identifier: PRODUCTS
+        description: "Source product table with Portuguese product categories and product attributes."
+

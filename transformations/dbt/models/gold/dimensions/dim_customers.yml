@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: dim_customers
+    description: "Customer dimension at Olist order-customer grain."
+    config:
+      meta:
+        grain: "customer_id"
+        why: "Makes the distinction between order-scoped customer_id and physical customer_unique_id explicit."
+        layer: gold
+        model_type: dimension
+    columns:
+      - name: customer_id
+        description: "Order-scoped customer key."
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_unique_id
+        description: "Physical customer identifier used for repeat-purchase analysis."
+        data_tests:
+          - not_null
+      - name: customer_state
+        description: "Customer state code."
+

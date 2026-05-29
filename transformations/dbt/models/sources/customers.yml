@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: silver
+    database: ECOMMERCE_DB
+    schema: SILVER
+    tables:
+      - name: customers
+        identifier: CUSTOMERS
+        description: "Source customer table. customer_id is order-scoped; customer_unique_id identifies a physical customer."
+

@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: mart_order_seller_complexity
+    description: "Order-level seller complexity mart."
+    config:
+      meta:
+        grain: "order_id"
+        why: "Identifies multi-seller orders and exposes delivery delay at order grain."
+        layer: gold
+        model_type: mart
+    columns:
+      - name: order_id
+        description: "Order identifier."
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: is_multi_seller_order
+        description: "True when the order has more than one seller."
+

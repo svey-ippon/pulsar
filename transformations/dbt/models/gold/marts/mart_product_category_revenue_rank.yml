@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: mart_product_category_revenue_rank
+    description: "Product revenue ranking within each English category."
+    config:
+      meta:
+        grain: "product_category_name_english, product_id"
+        why: "Supports top-products-per-category questions with a governed delivered revenue definition."
+        layer: gold
+        model_type: mart
+    columns:
+      - name: product_id
+        description: "Product identifier."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_id
+      - name: product_category_name_english
+        description: "English product category."
+        data_tests:
+          - not_null
+      - name: category_revenue_rank
+        description: "Product revenue rank inside its English category."
+
