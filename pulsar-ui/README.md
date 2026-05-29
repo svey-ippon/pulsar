@@ -19,7 +19,7 @@ docker compose up -d
 # Run the app
 CUBE_API_URL=http://localhost:4000/cubejs-api/v1 \
 CUBE_API_TOKEN=<jwt-from-cubejs-api-secret> \
-ANTHROPIC_API_KEY=<anthropic-key> \
+OPENROUTER_API_KEY=<openrouter-key> \
 uv run pulsar-ui
 ```
 
@@ -33,7 +33,7 @@ uv run pulsar-ui
 |---|---|
 | `CUBE_API_URL` | Cube REST API base URL, e.g. `http://localhost:4000/cubejs-api/v1` |
 | `CUBE_API_TOKEN` | JWT signed from `CUBEJS_API_SECRET` |
-| `ANTHROPIC_API_KEY` | Claude API key — passed through to `pulsar-agent` |
+| `OPENROUTER_API_KEY` | OpenRouter API key for Claude Sonnet 4.6 — passed through to `pulsar-agent` |
 
 ---
 

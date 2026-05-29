@@ -20,7 +20,7 @@ class AgentSettings(BaseSettings):
         populate_by_name=True,
     )
 
-    anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")
+    openrouter_api_key: SecretStr | None = Field(default=None, validation_alias="OPENROUTER_API_KEY")
 
     cube_api_url: str | None = Field(default=None, validation_alias="CUBE_API_URL")
     cube_api_token: SecretStr | None = Field(default=None, validation_alias="CUBE_API_TOKEN")
@@ -37,10 +37,10 @@ class AgentSettings(BaseSettings):
             _missing("CUBE_API_TOKEN")
         return self.cube_api_token.get_secret_value()
 
-    def anthropic_api_key_value(self) -> str:
-        if self.anthropic_api_key is None:
-            _missing("ANTHROPIC_API_KEY")
-        return self.anthropic_api_key.get_secret_value()
+    def openrouter_api_key_value(self) -> str:
+        if self.openrouter_api_key is None:
+            _missing("OPENROUTER_API_KEY")
+        return self.openrouter_api_key.get_secret_value()
 
     def cube_sql_password_value(self) -> str:
         if self.cube_sql_password is None:

@@ -37,7 +37,7 @@ cd cube && docker compose up -d && cd ..
 # 3. Run the Streamlit app
 CUBE_API_URL=http://localhost:4000/cubejs-api/v1 \
 CUBE_API_TOKEN=<jwt-from-cubejs-api-secret> \
-ANTHROPIC_API_KEY=<anthropic-key> \
+OPENROUTER_API_KEY=<openrouter-key> \
 uv run pulsar-ui
 ```
 
@@ -48,7 +48,7 @@ uv run pulsar-ui
 ```bash
 # Copy and fill in secrets
 cp cube/example.env cube/.env   # Snowflake credentials + CUBEJS_API_SECRET + CUBEJS_SQL_*
-cp .env.example .env            # CUBE_API_TOKEN + ANTHROPIC_API_KEY
+cp .env.example .env            # CUBE_API_TOKEN + OPENROUTER_API_KEY
 
 docker compose up -d
 # UI → http://localhost:8501   Cube Playground → http://localhost:4000

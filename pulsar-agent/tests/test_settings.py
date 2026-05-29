@@ -6,7 +6,7 @@ from pulsar_agent.settings import AgentSettings
 
 
 def test_agent_settings_reads_environment_variables(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-secret")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-secret")
     monkeypatch.setenv("CUBE_API_URL", "http://cube:4000/cubejs-api/v1")
     monkeypatch.setenv("CUBE_API_TOKEN", "cube-token")
     monkeypatch.setenv("CUBE_SQL_HOST", "cube")
@@ -18,7 +18,7 @@ def test_agent_settings_reads_environment_variables(monkeypatch):
 
     settings = AgentSettings()
 
-    assert settings.anthropic_api_key_value() == "anthropic-secret"
+    assert settings.openrouter_api_key_value() == "openrouter-secret"
     assert settings.require_cube_api_url() == "http://cube:4000/cubejs-api/v1"
     assert settings.cube_api_token_value() == "cube-token"
     assert settings.require_cube_sql_host() == "cube"
@@ -31,7 +31,7 @@ def test_agent_settings_reads_environment_variables(monkeypatch):
 
 def test_agent_settings_can_be_instantiated_without_env_until_required(monkeypatch):
     for name in [
-        "ANTHROPIC_API_KEY",
+        "OPENROUTER_API_KEY",
         "CUBE_API_URL",
         "CUBE_API_TOKEN",
         "CUBE_SQL_HOST",
@@ -42,8 +42,8 @@ def test_agent_settings_can_be_instantiated_without_env_until_required(monkeypat
 
     settings = AgentSettings()
 
-    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
-        settings.anthropic_api_key_value()
+    with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+        settings.openrouter_api_key_value()
     with pytest.raises(ValueError, match="CUBE_API_URL"):
         settings.require_cube_api_url()
     with pytest.raises(ValueError, match="CUBE_SQL_HOST"):

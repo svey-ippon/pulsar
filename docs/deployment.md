@@ -34,7 +34,7 @@ cp cube/example.env cube/.env
 
 ```bash
 cp .env.example .env
-# Fill in CUBE_API_TOKEN, ANTHROPIC_API_KEY, and CUBE_SQL_*
+# Fill in CUBE_API_TOKEN, OPENROUTER_API_KEY, and CUBE_SQL_*
 ```
 
 `CUBE_API_TOKEN` must be a **JWT signed from `CUBEJS_API_SECRET`**, not the raw secret.
@@ -82,7 +82,7 @@ on semantic models without starting the UI.
 ```bash
 CUBE_API_URL=http://localhost:4000/cubejs-api/v1 \
 CUBE_API_TOKEN=<jwt> \
-ANTHROPIC_API_KEY=<key> \
+OPENROUTER_API_KEY=<key> \
 CUBE_SQL_HOST=localhost \
 CUBE_SQL_PORT=15432 \
 CUBE_SQL_USER=<cube-sql-user> \
@@ -116,7 +116,7 @@ docker build -f pulsar-ui/Dockerfile -t pulsar-ui:ci .
 |---|---|---|
 | `CUBE_API_URL` | `docker-compose.yml` `environment:` | Cube REST API base URL |
 | `CUBE_API_TOKEN` | `.env` | JWT signed from `CUBEJS_API_SECRET` |
-| `ANTHROPIC_API_KEY` | `.env` | Claude API key |
+| `OPENROUTER_API_KEY` | `.env` | OpenRouter API key for Claude Sonnet 4.6 |
 | `CUBE_SQL_HOST` | `.env` or direnv | Cube SQL API host (`localhost` locally, `cube` in Compose) |
 | `CUBE_SQL_PORT` | `.env` or direnv | Cube SQL API port, usually `15432` |
 | `CUBE_SQL_USER` | `.env` or direnv | Cube SQL API user, must match `CUBEJS_SQL_USER` |

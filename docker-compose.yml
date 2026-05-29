@@ -2,7 +2,7 @@
 #
 # Prerequisites:
 #   1. cube/.env created from cube/example.env (Snowflake credentials + CUBEJS_API_SECRET)
-#   2. .env created from .env.example (CUBE_API_TOKEN + ANTHROPIC_API_KEY)
+#   2. .env created from .env.example (CUBE_API_TOKEN + OPENROUTER_API_KEY)
 #
 # Usage:
 #   docker compose up -d              # start everything

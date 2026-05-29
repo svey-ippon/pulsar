@@ -35,7 +35,7 @@ uv run pytest pulsar-ui/tests/ -v
 cd cube && docker compose up -d
 
 # Run Streamlit locally (from repo root)
-CUBE_API_URL=http://localhost:4000/cubejs-api/v1 CUBE_API_TOKEN=<jwt> ANTHROPIC_API_KEY=<key> uv run pulsar-ui
+CUBE_API_URL=http://localhost:4000/cubejs-api/v1 CUBE_API_TOKEN=<jwt> OPENROUTER_API_KEY=<key> uv run pulsar-ui
 
 # Run the full stack with Docker Compose (from repo root)
 docker compose up -d   # requires cube/.env and .env — see docs/deployment.md
@@ -209,7 +209,7 @@ The prompt is structured in four phases:
 
 - `cube/.env` holds Snowflake credentials and `CUBEJS_API_SECRET`. **Never read, print, or commit it.**
 - `CUBE_API_TOKEN` must be a JWT signed from `CUBEJS_API_SECRET`, not the raw secret.
-- `ANTHROPIC_API_KEY` is required by the Streamlit process for the Claude LLM. Never commit it.
+- `OPENROUTER_API_KEY` is required by the Streamlit process for Claude Sonnet 4.6 through OpenRouter. Never commit it.
 - `cube/example.env` shows the required Cube variables.
 
 ### Cube semantic models

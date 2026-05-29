@@ -195,7 +195,7 @@ def test_answer_question_returns_all_results_when_query_view_called_twice():
 def test_answer_question_does_not_require_env_vars_when_model_and_client_are_injected(monkeypatch):
     monkeypatch.delenv("CUBE_API_URL", raising=False)
     monkeypatch.delenv("CUBE_API_TOKEN", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     mock_graph = MagicMock()
     mock_graph.invoke.return_value = _refusal_state()
@@ -322,3 +322,22 @@ def test_graph_can_be_built_with_injected_dependencies():
         checkpointer=make_checkpointer(),
     )
     assert graph is not None
+
+
+def test_graph_uses_openrouter_default_model(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-secret")
+
+    with patch("pulsar_agent.graph.ChatOpenRouter") as chat_openrouter:
+        chat_openrouter.return_value.bind_tools.return_value = MagicMock()
+
+        graph = build_graph(
+            cube_rest_client=FakeCubeRestClient(),
+            checkpointer=make_checkpointer(),
+        )
+
+    assert graph is not None
+    chat_openrouter.assert_called_once_with(
+        model="anthropic/claude-sonnet-4.6",
+        temperature=0,
+        api_key="openrouter-secret",
+    )

@@ -134,7 +134,7 @@ Memory is lost on:
 # Via console script (recommended — path-independent, Docker-friendly)
 CUBE_API_URL=http://localhost:4000/cubejs-api/v1 \
 CUBE_API_TOKEN=<jwt> \
-ANTHROPIC_API_KEY=<key> \
+OPENROUTER_API_KEY=<key> \
 uv run pulsar-ui
 
 # Or equivalently

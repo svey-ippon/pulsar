@@ -5,8 +5,8 @@ description = "LangGraph ReAct agent for natural-language analytics over a Cube 
 requires-python = "~=3.14.2"
 dependencies = [
     "langchain>=1.3.1",
-    "langchain-anthropic>=0.3",
     "langchain-core>=0.3",
+    "langchain-openrouter>=0.1",
     "langgraph>=0.2",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.8",

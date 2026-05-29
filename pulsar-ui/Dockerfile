@@ -35,6 +35,6 @@ EXPOSE 8501
 # Required at runtime (from .env or docker-compose environment:):
 #   CUBE_API_URL      — set to http://cube:4000/cubejs-api/v1 in compose
 #   CUBE_API_TOKEN    — JWT signed from CUBEJS_API_SECRET
-#   ANTHROPIC_API_KEY
+#   OPENROUTER_API_KEY
 
 CMD ["uv", "run", "python", "-m", "pulsar_ui"]

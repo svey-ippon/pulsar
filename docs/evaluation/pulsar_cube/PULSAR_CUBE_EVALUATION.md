@@ -246,10 +246,8 @@ measure at sales grain.
 - `catalog_sales` exposes seller id/state/city and revenue.
 - `seller_delivery_performance` exposes delivery count, average delay, late count, and late rate.
 
-**Current limitation:** A complete seller scorecard is not modeled. The agent should not silently
-pick a metric for "best".
 
---> 4/5. Only one possibility to evaluate performance with semantic measures (total_revenue), no disambiguation and this measure is used
+--> 5/5. disambiguation + good answer for either total_revenue or item solds as best
 
 ---
 
@@ -347,6 +345,8 @@ per state when at least three categories exist. It does not preserve ties the wa
 **Important caveat:** The view is deliberately based on physical customers
 (`customer_unique_id`), not order-scoped `customer_id`.
 
+-> 5/5
+
 ---
 
 ### C3 - Delivery Delay By Seller State
@@ -370,6 +370,8 @@ per state when at least three categories exist. It does not preserve ties the wa
 **Important caveat:** The view grain is seller/order item, matching the benchmark reference logic.
 The answer should disclose that delivery count is at joined seller/order-item grain.
 
+--> 5/5
+
 ---
 
 ### C4 - Late Delivery Impact On Review Score
@@ -388,6 +390,8 @@ delivered orders if needed and excluding `not_delivered`.
   `late`, `on_time`, or `not_delivered`.
 - `reviews_overview` exposes that dimension through the order join.
 - `reviews_overview` exposes `avg_review_score` and `review_count`.
+
+--> 5/5
 
 ---
 
@@ -411,3 +415,56 @@ delivered orders if needed and excluding `not_delivered`.
 
 **Important caveat:** The repeat-customer definition is modeled as physical customers with at least
 two delivered orders.
+
+-> 5/5
+
+
+## Details
+
+- **LLM:** Claude Sonnet 4.6
+- **Agent:** LangGraph simple (`ReAct`) + prompt d'environ 50 lignes.
+- **Cout LLM**: 2,45€ - seule l'inférence - toutes les questions posées à la suite dans le même contexte
+
+### Prompt Overview
+
+**Briefing sur le rôle**
+
+- L'agent est un assistant data analyste.
+- Il travaille uniquement via une couche sémantique gouvernée Cube.
+- Il ne doit pas écrire de SQL ni inférer des jointures entre tables brutes.
+- Si une question n'est pas couverte par une vue gouvernée, il doit l'expliquer et demander une
+  clarification ou une extension du modèle.
+
+**Découverte du schéma**
+
+- Toujours passer par `list_views`, puis `describe_view(view_name)` sur les vues pertinentes.
+- Réutiliser le schéma déjà visible dans la conversation si possible.
+- Choisir la vue dont le résumé, la description et surtout le grain correspondent le mieux à la
+  question.
+- N'utiliser que les membres explicitement retournés par `describe_view`.
+- Ne jamais inventer de métriques ou de noms de colonnes.
+
+**Pré-analyse avant requête**
+
+- Vérifier les ambiguïtés de schéma : plusieurs mesures possibles, différences de périmètre,
+  `count` vs `distinct count`, etc.
+- Vérifier les ambiguïtés conceptuelles : `grain mismatch`, attribution implicite, fan-out,
+  conventions non documentées.
+- Vérifier la faisabilité : si la demande nécessite une jointure non exposée, une convention
+  d'attribution non documentée, de la logique de cohortes, de ranking ou un artefact sémantique
+  absent, l'agent doit s'arrêter et expliquer ce qui manque.
+
+**Règles d'exécution**
+
+- Refuser les prédictions, forecasts et projections.
+- Ne pas inventer de métrique absente de la couche sémantique.
+- En cas d'erreur outil avec un `hint`, suivre le `hint` et réessayer.
+- En cas d'erreur outil sans `hint`, considérer le service indisponible et demander de réessayer plus tard.
+- Respecter les flags `additive` et `is_calculated` fournis par `describe_view`.
+
+**Cadrage de la réponse**
+
+- Chaque réponse doit indiquer les vues, mesures et dimensions utilisées.
+- Avant d'enrichir avec de la connaissance externe, vérifier si l'information existe dans la couche sémantique.
+- Si l'agent utilise sa propre connaissance, il doit le signaler.
+- Terminer chaque réponse non-refusée par une section concise `Limits & implicits`, avec 1 à 4 points sur les conventions, limites, fan-out, déduplication ou hypothèses de périmètre.

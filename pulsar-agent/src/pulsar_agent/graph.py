@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Generator, cast
 
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
+from langchain_openrouter import ChatOpenRouter
 from langgraph.graph import START, StateGraph
 
 from pulsar_agent.cube_rest_client import SupportsCubeRestQueries
@@ -25,10 +25,10 @@ def build_graph(
     settings: AgentSettings | None = None,
 ):
     resolved_settings = None if (model is not None and cube_rest_client is not None) else (settings or AgentSettings())
-    llm = model or ChatAnthropic(  # type: ignore[call-arg]
-        model_name="claude-sonnet-4-6",
+    llm = model or ChatOpenRouter(
+        model="anthropic/claude-sonnet-4.6",
         temperature=0,
-        api_key=resolved_settings.anthropic_api_key_value() if resolved_settings else None,
+        api_key=resolved_settings.openrouter_api_key_value() if resolved_settings else None,
     )
     tools = make_tools(cube_rest_client, settings=resolved_settings)
     tools_by_name = {t.name: t for t in tools}

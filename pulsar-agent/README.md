@@ -61,7 +61,7 @@ Results are captured from successful `query_view` calls.
 
 | Variable | Description |
 |---|---|
-| `ANTHROPIC_API_KEY` | Claude API key — used when no `model` is injected |
+| `OPENROUTER_API_KEY` | OpenRouter API key for Claude Sonnet 4.6 — used when no `model` is injected |
 | `CUBE_API_URL` | Cube REST API base URL, e.g. `http://localhost:4000/cubejs-api/v1` |
 | `CUBE_API_TOKEN` | JWT signed from `CUBEJS_API_SECRET` (not the raw secret) |
 
