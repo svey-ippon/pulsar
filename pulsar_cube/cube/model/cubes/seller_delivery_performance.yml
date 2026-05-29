@@ -1,0 +1,95 @@
+cubes:
+  - name: helper_seller_delivery_performance
+    public: false
+    meta:
+      summary: "Delivered order-item delivery performance by seller geography. Grain seller x order item."
+    sql: >
+      SELECT
+        CONCAT(oi."ORDER_ID", '-', oi."ORDER_ITEM_ID", '-', oi."SELLER_ID") AS seller_delivery_key,
+        oi."ORDER_ID" AS order_id,
+        oi."ORDER_ITEM_ID" AS order_item_id,
+        s."SELLER_ID" AS seller_id,
+        s."SELLER_STATE" AS seller_state,
+        s."SELLER_CITY" AS seller_city,
+        DATEDIFF('DAY', o."ORDER_ESTIMATED_DELIVERY_DATE", o."ORDER_DELIVERED_CUSTOMER_DATE") AS delay_days
+      FROM ECOMMERCE_DB.SILVER.ORDERS o
+      JOIN ECOMMERCE_DB.SILVER.ORDER_ITEMS oi
+        ON o."ORDER_ID" = oi."ORDER_ID"
+      JOIN ECOMMERCE_DB.SILVER.SELLERS s
+        ON oi."SELLER_ID" = s."SELLER_ID"
+      WHERE o."ORDER_STATUS" = 'delivered'
+        AND o."ORDER_DELIVERED_CUSTOMER_DATE" IS NOT NULL
+        AND o."ORDER_ESTIMATED_DELIVERY_DATE" IS NOT NULL
+    data_source: default
+    description: >
+      Seller delivery performance helper for delivered orders with known delivery dates.
+      Grain: one row per seller/order item. Positive delay_days means late delivery;
+      negative values mean early delivery. This matches the evaluation convention where
+      deliveries are counted at the joined order-item grain.
+
+    joins: []
+
+    dimensions:
+      - name: seller_delivery_key
+        sql: "{CUBE}.\"SELLER_DELIVERY_KEY\""
+        type: string
+        primary_key: true
+        description: "Synthetic seller/order-item delivery row key."
+
+      - name: order_id
+        sql: "{CUBE}.\"ORDER_ID\""
+        type: string
+        description: "Delivered order identifier."
+
+      - name: order_item_id
+        sql: "{CUBE}.\"ORDER_ITEM_ID\""
+        type: string
+        description: "Order-item position within the order."
+
+      - name: seller_id
+        sql: "{CUBE}.\"SELLER_ID\""
+        type: string
+        description: "Seller identifier."
+
+      - name: seller_state
+        sql: "{CUBE}.\"SELLER_STATE\""
+        type: string
+        description: "Seller state code."
+
+      - name: seller_city
+        sql: "{CUBE}.\"SELLER_CITY\""
+        type: string
+        description: "Seller city."
+
+      - name: delay_days
+        sql: "{CUBE}.\"DELAY_DAYS\""
+        type: number
+        description: "Delivery delay in days; positive means late, negative means early."
+
+      - name: delivery_late_status
+        sql: "CASE WHEN {CUBE}.\"DELAY_DAYS\" > 0 THEN 'late' ELSE 'on_time' END"
+        type: string
+        description: "Binary delivery status for late-delivery impact analysis."
+
+    measures:
+      - name: delivery_count
+        type: count
+        description: "Number of delivered seller/order-item rows."
+
+      - name: avg_delay_days
+        sql: "{CUBE}.\"DELAY_DAYS\""
+        type: avg
+        description: "Average delivery delay in days; higher is worse."
+
+      - name: late_delivery_count
+        type: count
+        filters:
+          - sql: "{CUBE}.\"DELAY_DAYS\" > 0"
+        description: "Number of delivered seller/order-item rows delivered after the promised date."
+
+      - name: pct_late
+        sql: "100.0 * {late_delivery_count} / NULLIF({delivery_count}, 0)"
+        type: number
+        description: "Percent of delivered seller/order-item rows delivered late."
+
+    pre_aggregations: []

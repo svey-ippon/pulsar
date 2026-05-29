@@ -1,0 +1,82 @@
+cubes:
+  - name: order_payments
+    public: false
+    meta:
+      summary: "Payments transaction per order, one row per payment method used. payment_value includes freight and adjustments."
+    sql_table: ECOMMERCE_DB.SILVER.ORDER_PAYMENTS
+    data_source: default
+    description: >
+      Grain: (order_id, payment_sequential) — one row per payment method per order.
+      An order may have multiple rows if the customer split payment across
+      methods (e.g. credit card + voucher); sum payment_value across rows
+      to get the true order total, which includes freight and adjustments.
+      Reachable from: orders (many_to_one join defined here).
+
+    joins:
+      - name: orders
+        sql: "{CUBE.order_id} = {orders.order_id}"
+        relationship: many_to_one
+
+    dimensions:
+      - name: order_payment_key
+        sql: "CONCAT({CUBE}.\"ORDER_ID\", '-', {CUBE}.\"PAYMENT_SEQUENTIAL\")"
+        type: string
+        primary_key: true
+
+      - name: order_id
+        sql: "{CUBE}.\"ORDER_ID\""
+        type: string
+        description: "Foreign key to the orders cube."
+
+      - name: payment_type
+        sql: "{CUBE}.\"PAYMENT_TYPE\""
+        type: string
+        description: "Payment method chosen by the customer (credit_card, boleto, voucher, debit_card, etc.)."
+
+      - name: payment_installments
+        sql: "{CUBE}.\"PAYMENT_INSTALLMENTS\""
+        type: number
+        description: "Number of installments chosen by the customer for this payment row. 1 means paid in full; greater than 1 means split into multiple monthly payments."
+
+      - name: is_multi_installment
+        sql: "({CUBE}.\"PAYMENT_INSTALLMENTS\" > 1)"
+        type: boolean
+        description: "True if the payment is split into more than one installment."
+
+    measures:
+      - name: count
+        type: count
+        description: "Number of payment rows. One order can have multiple rows (split payments), so this is not equivalent to order count."
+
+      - name: payment_value
+        sql: "{CUBE}.\"PAYMENT_VALUE\""
+        type: sum
+        description: "Total transaction value including freight and adjustments. Unlike order_items.total_revenue, this reflects what the customer actually paid."
+
+      - name: count_multi_installment
+        sql: "{CUBE}.\"ORDER_ID\""
+        type: count
+        filters:
+          - sql: "{CUBE}.\"PAYMENT_INSTALLMENTS\" > 1"
+        description: "Number of payments made in multiple installments (more than one)."
+
+      - name: orders_with_multi_installment
+        sql: "{CUBE}.\"ORDER_ID\""
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.\"PAYMENT_INSTALLMENTS\" > 1"
+        description: "Number of distinct orders with at least one payment row split into multiple installments."
+
+      - name: multi_installment_payment_share
+        sql: "100.0 * {count_multi_installment} / NULLIF({count}, 0)"
+        type: number
+        description: "Percent of payment rows made in multiple installments."
+
+      - name: avg_installments
+        sql: "{CUBE}.\"PAYMENT_INSTALLMENTS\""
+        type: avg
+        description: >
+          Average number of installments per payment.
+          ⚠️ Non-additive — do not sum.
+
+    pre_aggregations: []

@@ -1,0 +1,76 @@
+cubes:
+  - name: helper_customer_cohorts
+    public: false
+    meta:
+      summary: "Monthly first-order cohorts with 90-day repeat purchase retention. Grain cohort_month."
+    sql: >
+      WITH customer_orders AS (
+        SELECT
+          c."CUSTOMER_UNIQUE_ID" AS customer_unique_id,
+          o."ORDER_ID" AS order_id,
+          o."ORDER_PURCHASE_TIMESTAMP" AS order_purchase_timestamp,
+          MIN(o."ORDER_PURCHASE_TIMESTAMP") OVER (
+            PARTITION BY c."CUSTOMER_UNIQUE_ID"
+          ) AS first_order_date
+        FROM ECOMMERCE_DB.SILVER.ORDERS o
+        JOIN ECOMMERCE_DB.SILVER.CUSTOMERS c
+          ON o."CUSTOMER_ID" = c."CUSTOMER_ID"
+        WHERE c."CUSTOMER_UNIQUE_ID" IS NOT NULL
+      ),
+      cohort_flags AS (
+        SELECT
+          DATE_TRUNC('MONTH', first_order_date) AS cohort_month,
+          customer_unique_id,
+          MAX(CASE
+            WHEN order_purchase_timestamp > first_order_date
+             AND DATEDIFF('DAY', first_order_date, order_purchase_timestamp) <= 90
+            THEN 1 ELSE 0
+          END) AS returned_within_90d
+        FROM customer_orders
+        GROUP BY DATE_TRUNC('MONTH', first_order_date), customer_unique_id
+      )
+      SELECT
+        TO_VARCHAR(cohort_month, 'YYYY-MM-DD') AS cohort_month_key,
+        cohort_month,
+        COUNT(*) AS cohort_size,
+        SUM(returned_within_90d) AS retained_90d,
+        100.0 * SUM(returned_within_90d) / NULLIF(COUNT(*), 0) AS retention_90d_pct
+      FROM cohort_flags
+      GROUP BY cohort_month
+    data_source: default
+    description: >
+      Monthly cohort retention model based on customer_unique_id, not customer_id.
+      Grain: one row per first-order month. A customer is retained when they make
+      another purchase after their first order and within 90 days.
+
+    joins: []
+
+    dimensions:
+      - name: cohort_month_key
+        sql: "{CUBE}.\"COHORT_MONTH_KEY\""
+        type: string
+        primary_key: true
+        description: "Month key for the customer acquisition cohort."
+
+      - name: cohort_month
+        sql: "{CUBE}.\"COHORT_MONTH\""
+        type: time
+        description: "Month of the customer's first known order."
+
+    measures:
+      - name: cohort_size
+        sql: "{CUBE}.\"COHORT_SIZE\""
+        type: sum
+        description: "Number of unique customers whose first order falls in the cohort month."
+
+      - name: retained_90d
+        sql: "{CUBE}.\"RETAINED_90D\""
+        type: sum
+        description: "Number of cohort customers with a second purchase within 90 days."
+
+      - name: retention_90d_pct
+        sql: "{CUBE}.\"RETENTION_90D_PCT\""
+        type: max
+        description: "Percent of cohort customers retained within 90 days."
+
+    pre_aggregations: []

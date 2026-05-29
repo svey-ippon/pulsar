@@ -4,17 +4,17 @@ This catalog defines the questions used to evaluate a data agent on the Olist e-
 It is intentionally **independent from the current Pulsar semantic model**.
 
 The difficulty, ambiguity, and expected reasoning are evaluated as if the agent queried the source
-mart tables directly with SQL:
+silver tables directly with SQL:
 
 ```text
-ECOMMERCE_DB.MARTS.ORDERS
-ECOMMERCE_DB.MARTS.ORDER_ITEMS
-ECOMMERCE_DB.MARTS.ORDER_PAYMENTS
-ECOMMERCE_DB.MARTS.ORDER_REVIEWS
-ECOMMERCE_DB.MARTS.CUSTOMERS
-ECOMMERCE_DB.MARTS.SELLERS
-ECOMMERCE_DB.MARTS.PRODUCTS
-ECOMMERCE_DB.MARTS.PRODUCT_CATEGORY_NAME_TRANSLATION
+ECOMMERCE_DB.SILVER.ORDERS
+ECOMMERCE_DB.SILVER.ORDER_ITEMS
+ECOMMERCE_DB.SILVER.ORDER_PAYMENTS
+ECOMMERCE_DB.SILVER.ORDER_REVIEWS
+ECOMMERCE_DB.SILVER.CUSTOMERS
+ECOMMERCE_DB.SILVER.SELLERS
+ECOMMERCE_DB.SILVER.PRODUCTS
+ECOMMERCE_DB.SILVER.PRODUCT_CATEGORY_NAME_TRANSLATION
 ```
 
 Do not interpret this document as a mapping to Cube views, tools, or any implementation-specific
@@ -22,7 +22,7 @@ solution. It describes the analytical task itself.
 
 ## Global Conventions
 
-- Use fully qualified source mart tables: `ECOMMERCE_DB.MARTS.<TABLE>`.
+- Use fully qualified source silver tables: `ECOMMERCE_DB.SILVER.<TABLE>`.
 - Revenue means merchandise revenue from `ORDER_ITEMS.price` unless the wording says collected
   value, paid value, payment value, or freight-inclusive value.
 - Collected value means `ORDER_PAYMENTS.payment_value`.
