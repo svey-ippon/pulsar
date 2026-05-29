@@ -100,6 +100,20 @@ cubes:
           'late' (up to 7 days late), 'very_late' (more than 7 days late),
           'not_delivered' (not yet delivered). Use for Q16 (satisfaction vs delivery).
 
+      - name: delivery_late_status
+        sql: >
+          CASE
+            WHEN {CUBE}."ORDER_DELIVERED_CUSTOMER_DATE" IS NULL THEN 'not_delivered'
+            WHEN {CUBE}."ORDER_DELIVERED_CUSTOMER_DATE"
+                 > {CUBE}."ORDER_ESTIMATED_DELIVERY_DATE" THEN 'late'
+            ELSE 'on_time'
+          END
+        type: string
+        description: >
+          Binary delivery status for satisfaction comparisons: 'late' if delivered
+          after the promised date, 'on_time' otherwise, and 'not_delivered' when
+          there is no delivered customer date.
+
       - name: is_delivered
         sql: "({CUBE}.\"ORDER_DELIVERED_CUSTOMER_DATE\" IS NOT NULL)"
         type: boolean

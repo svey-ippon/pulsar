@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Protocol
 
 from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,6 +26,21 @@ class CubeFilter(BaseModel):
     member: str = Field(description="View member name returned by describe_view().")
     operator: str = Field(description='Cube filter operator, e.g. "equals", "gte", "lte", "contains".')
     values: list[str | int | float | bool] = Field(description="Filter values.")
+
+
+class CubeLogicalFilter(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    and_: list[CubeFilter | CubeLogicalFilter] | None = Field(
+        default=None,
+        alias="and",
+        description="All nested filters must match.",
+    )
+    or_: list[CubeFilter | CubeLogicalFilter] | None = Field(
+        default=None,
+        alias="or",
+        description="At least one nested filter must match.",
+    )
 
 
 class CubeTimeDimension(BaseModel):
@@ -55,16 +70,26 @@ class QueryViewArgs(BaseModel):
     view: str = Field(description="View name (must match a name returned by list_views()).")
     measures: list[str] = Field(description='Metric names prefixed with view name, e.g. ["orders_overview.count"].')
     dimensions: list[str] = Field(default_factory=list, description='Grouping axes, e.g. ["orders_overview.delivery_status"].')
-    filters: list[CubeFilter] = Field(default_factory=list, description="Optional Cube filters.")
+    filters: list[CubeFilter | CubeLogicalFilter] = Field(
+        default_factory=list,
+        description=(
+            "Optional Cube filters. Filter members can be dimensions or measures; "
+            "measure filters are applied by Cube as aggregate filters. Supports nested and/or filters."
+        ),
+    )
     time_dimensions: list[CubeTimeDimension] = Field(
         default_factory=list,
         description="Optional Cube time dimensions. Use dateRange for date filters and granularity only for time grouping.",
     )
+    segments: list[str] = Field(default_factory=list, description="Optional Cube segments returned by describe_view().")
     order: dict[str, str] = Field(
         default_factory=dict,
         description='Sort order dict, e.g. {"catalog_sales.total_revenue": "desc"}.',
     )
     limit: int = Field(default=1000, ge=1, le=5000, description="Maximum rows returned.")
+    offset: int | None = Field(default=None, ge=0, description="Optional row offset for pagination.")
+    total: bool | None = Field(default=None, description="Ask Cube to include total row count metadata when supported.")
+    timezone: str | None = Field(default=None, description='Timezone for time dimensions, e.g. "UTC" or "Europe/Paris".')
 
 
 def _dump_models(value: Any) -> Any:
@@ -95,6 +120,34 @@ def _extract_summary(cube: dict) -> str:
     return "(no description)"
 
 
+def _prefixed_member_error(view: str, members: list[str]) -> str | None:
+    prefix = f"{view}."
+    invalid = sorted({member for member in members if "." in member and not member.startswith(prefix)})
+    if not invalid:
+        return None
+    return json.dumps(
+        {
+            "error": "query_view members do not match the declared view.",
+            "details": {
+                "view": view,
+                "invalid_members": invalid,
+            },
+            "hint": f"Use only members prefixed with '{prefix}' for this query, or call query_view with the matching view.",
+        }
+    )
+
+
+def _filter_members(filters: list[CubeFilter | CubeLogicalFilter]) -> list[str]:
+    members: list[str] = []
+    for item in filters:
+        if isinstance(item, CubeFilter):
+            members.append(item.member)
+            continue
+        members.extend(_filter_members(item.and_ or []))
+        members.extend(_filter_members(item.or_ or []))
+    return members
+
+
 def _default_cube_rest_client(settings: AgentSettings | None = None) -> CubeRestClient:
     resolved = settings or AgentSettings()
     return CubeRestClient(
@@ -108,7 +161,7 @@ def make_tools(
     settings: AgentSettings | None = None,
 ) -> list[BaseTool]:
     """Return Cube semantic tools, bound to *cube_rest_client* or a default REST client."""
-    client: SupportsCubeRestQueries = cube_rest_client or _default_cube_rest_client(settings)
+    rest_client: SupportsCubeRestQueries = cube_rest_client or _default_cube_rest_client(settings)
 
     @tool
     def list_views() -> str:
@@ -124,7 +177,7 @@ def make_tools(
         full list of measures and dimensions available in the selected view.
         """
         try:
-            meta = client.list_views()
+            meta = rest_client.list_views()
             result = [
                 {
                     "name": view["name"],
@@ -169,7 +222,7 @@ def make_tools(
             view_name: Exact view name as returned by list_views().
         """
         try:
-            schema = client.get_view_schema(view_name)
+            schema = rest_client.get_view_schema(view_name)
             return json.dumps(schema)
         except ValueError as exc:
             return json.dumps({
@@ -180,55 +233,19 @@ def make_tools(
             logger.error("Cube unavailable during describe_view", exc_info=True)
             return _UNAVAILABLE
 
-    @tool
-    def describe_advanced_schema() -> str:
-        """Return the full Advanced SQL schema contract for Cube SQL API generation.
-
-        Output format:
-          {
-            "mode": "advanced",
-            "dialect": "Cube SQL API / PostgreSQL subset",
-            "tables": [
-              {
-                "name": "adv_orders",
-                "source_cube": "orders",
-                "grain": "order",
-                "primary_key": ["order_id"],
-                "description": str,
-                "columns": [
-                  {
-                    "name": "order_id",
-                    "semantic_name": "adv_orders.order_id",
-                    "kind": "dimension",
-                    "type": "string",
-                    "description": str
-                  }
-                ]
-              }
-            ],
-            "joins": [{"left": str, "right": str, "relationship": str, "description": str}],
-            "rules": [str]
-          }
-
-        Use this before execute_sql for Advanced questions. Generate SQL only against the returned
-        adv_* tables, columns, and join map. For Standard questions, prefer list_views,
-        describe_view, and query_view instead.
-        """
-        try:
-            return json.dumps(client.get_advanced_schema())
-        except CubeRestServiceError:
-            logger.error("Cube unavailable during describe_advanced_schema", exc_info=True)
-            return _UNAVAILABLE
-
     @tool(args_schema=QueryViewArgs)
     def query_view(
         view: str,
         measures: list[str],
         dimensions: list[str] = [],
-        filters: list[CubeFilter] = [],
+        filters: list[CubeFilter | CubeLogicalFilter] = [],
         time_dimensions: list[CubeTimeDimension] = [],
+        segments: list[str] = [],
         order: dict[str, str] = {},
         limit: int = 1000,
+        offset: int | None = None,
+        total: bool | None = None,
+        timezone: str | None = None,
     ) -> str:
         """Query a semantic view. Returns rows as a list of dicts.
 
@@ -236,26 +253,47 @@ def make_tools(
             view: View name (must match a name returned by list_views()).
             measures: Metric names prefixed with view name, e.g. ["orders_overview.count"].
             dimensions: Grouping axes, e.g. ["orders_overview.delivery_status"].
-            filters: Row filters, e.g. [{"member": "orders_overview.order_status",
-                     "operator": "equals", "values": ["delivered"]}]
+            filters: Dimension or measure filters, e.g. [{"member": "orders_overview.order_status",
+                     "operator": "equals", "values": ["delivered"]}]. Measure filters such as
+                     review_count >= 50 are aggregate filters. Supports nested {"and": [...]} and
+                     {"or": [...]} groups.
             time_dimensions: Time filter or grouping. Use dateRange for date filters.
                      Only include granularity when grouping by time; never pass null.
+            segments: Optional reusable semantic filters returned by describe_view().
             order: Sort order dict, e.g. {"catalog_sales.total_revenue": "desc"}.
             limit: Maximum rows returned (default 1000, max 5000).
+            offset: Optional row offset for pagination.
+            total: Optional total row count metadata flag.
+            timezone: Optional timezone for time dimensions.
 
         Use only member names returned by describe_view(). Never invent metric names.
         Member names are prefixed with the view name (e.g. "orders_overview.count", not "orders.count").
         """
         try:
+            members = [
+                *measures,
+                *dimensions,
+                *segments,
+                *[td.dimension for td in time_dimensions],
+                *_filter_members(filters),
+                *list(order.keys()),
+            ]
+            if error := _prefixed_member_error(view, members):
+                return error
+
             filter_args = _dump_models(filters)
             time_dimension_args = _dump_models(time_dimensions)
-            return json.dumps(client.query_view(
+            return json.dumps(rest_client.query_view(
                 measures=measures,
                 dimensions=dimensions,
                 filters=filter_args,
                 time_dimensions=time_dimension_args,
+                segments=segments,
                 order=order or None,
                 limit=limit,
+                offset=offset,
+                total=total,
+                timezone=timezone,
             ))
         except CubeRestQueryError as exc:
             logger.warning("Cube rejected query_view call: %s", exc)
@@ -274,4 +312,4 @@ def make_tools(
 
     query_view.handle_validation_error = _validation_error
 
-    return [list_views, describe_view, describe_advanced_schema, query_view]
+    return [list_views, describe_view, query_view]

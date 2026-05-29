@@ -73,7 +73,6 @@ Stateless rendering functions called by `ui.py`:
 |---|---|
 | `list_views` | `st.json` |
 | `describe_view` | `st.json` |
-| `describe_advanced_schema` | `st.json` |
 | `query_view` | `st.dataframe` if list, else `st.json` |
 | other | `st.write` |
 

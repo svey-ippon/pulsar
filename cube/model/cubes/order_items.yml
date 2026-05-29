@@ -84,4 +84,14 @@ cubes:
         type: avg
         description: "Average item price (merchandise only, excluding freight)."
 
+      - name: seller_count
+        sql: "{CUBE}.\"SELLER_ID\""
+        type: count_distinct
+        description: "Number of distinct sellers represented in the current result grain."
+
+      - name: revenue_per_seller
+        sql: "{total_revenue} / NULLIF({seller_count}, 0)"
+        type: number
+        description: "Merchandise revenue divided by distinct seller count for the current grouping."
+
     pre_aggregations: []

@@ -48,6 +48,7 @@ uv run pytest pulsar-ui/tests/ -v
 
 # Run the full workspace suite
 uv run pytest
+
 ```
 
 ---

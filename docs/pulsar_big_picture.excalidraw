@@ -588,8 +588,8 @@
     {
       "id": "j48Xpe7S2nF7MLjq6Fqw9",
       "type": "rectangle",
-      "x": 293.9513464557732,
-      "y": 452.7209520976304,
+      "x": 293.71441300529625,
+      "y": 452.72813189915996,
       "width": 276.30404424242283,
       "height": 64.44008438389761,
       "angle": 0,
@@ -607,8 +607,8 @@
         "type": 3
       },
       "seed": 1474840830,
-      "version": 525,
-      "versionNonce": 1172204799,
+      "version": 526,
+      "versionNonce": 1585803347,
       "isDeleted": false,
       "boundElements": [
         {
@@ -620,15 +620,15 @@
           "type": "arrow"
         }
       ],
-      "updated": 1779806066190,
+      "updated": 1779972748471,
       "link": null,
       "locked": false
     },
     {
       "id": "q154GyTL5WRI61MFZh9yZ",
       "type": "text",
-      "x": 312.43345433137915,
-      "y": 472.44099428957924,
+      "x": 312.1965208809022,
+      "y": 472.4481740911088,
       "width": 239.33982849121094,
       "height": 25,
       "angle": 0,
@@ -644,11 +644,11 @@
       "index": "aV",
       "roundness": null,
       "seed": 271743294,
-      "version": 730,
-      "versionNonce": 782660895,
+      "version": 731,
+      "versionNonce": 1404694003,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1779806066190,
+      "updated": 1779972748471,
       "link": null,
       "locked": false,
       "text": "semantic discovery tools",
@@ -936,10 +936,10 @@
     {
       "id": "Rno6lcqQ1P6NE3oFFUYoh",
       "type": "arrow",
-      "x": 418.46810065467076,
-      "y": 517.3932431073412,
-      "width": 0.5485731836324703,
-      "height": 111.75751066432474,
+      "x": 418.28030249206194,
+      "y": 517.4004229088706,
+      "width": 0.7362771279326807,
+      "height": 111.7503308627953,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -955,11 +955,11 @@
         "type": 2
       },
       "seed": 1275435070,
-      "version": 45,
-      "versionNonce": 762870079,
+      "version": 46,
+      "versionNonce": 1422768019,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1779806066192,
+      "updated": 1779972748473,
       "link": null,
       "locked": false,
       "points": [
@@ -968,8 +968,8 @@
           0
         ],
         [
-          0.5485731836324703,
-          111.75751066432474
+          0.7362771279326807,
+          111.7503308627953
         ]
       ],
       "lastCommittedPoint": null,

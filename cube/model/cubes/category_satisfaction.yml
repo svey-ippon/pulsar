@@ -1,0 +1,71 @@
+cubes:
+  - name: helper_category_satisfaction
+    public: false
+    meta:
+      summary: "Review score attributed to each distinct English category in an order. Grain order x category."
+    sql: >
+      WITH order_category_review AS (
+        SELECT DISTINCT
+          oi."ORDER_ID" AS order_id,
+          t."PRODUCT_CATEGORY_NAME_ENGLISH" AS category,
+          r."REVIEW_SCORE" AS review_score
+        FROM ECOMMERCE_DB.MARTS.ORDER_ITEMS oi
+        JOIN ECOMMERCE_DB.MARTS.PRODUCTS p
+          ON oi."PRODUCT_ID" = p."PRODUCT_ID"
+        JOIN ECOMMERCE_DB.MARTS.PRODUCT_CATEGORY_NAME_TRANSLATION t
+          ON p."PRODUCT_CATEGORY_NAME" = t."PRODUCT_CATEGORY_NAME"
+        JOIN ECOMMERCE_DB.MARTS.ORDER_REVIEWS r
+          ON oi."ORDER_ID" = r."ORDER_ID"
+        WHERE t."PRODUCT_CATEGORY_NAME_ENGLISH" IS NOT NULL
+          AND r."REVIEW_SCORE" IS NOT NULL
+      )
+      SELECT
+        CONCAT(order_id, '::', category) AS order_category_review_key,
+        order_id,
+        category AS product_category_name_english,
+        review_score
+      FROM order_category_review
+    data_source: default
+    description: >
+      Governed attribution helper for category satisfaction questions.
+      Grain: one row per distinct (order_id, English product category) with a review score.
+      Convention: an order-level review is attributed once to each distinct category present
+      in that order. This avoids item-line fan-out but still reflects an explicit business
+      attribution choice. Orders without reviews and products without English category names
+      are excluded.
+
+    joins: []
+
+    dimensions:
+      - name: order_category_review_key
+        sql: "{CUBE}.\"ORDER_CATEGORY_REVIEW_KEY\""
+        type: string
+        primary_key: true
+        description: "Synthetic key for one order/category review attribution row."
+
+      - name: order_id
+        sql: "{CUBE}.\"ORDER_ID\""
+        type: string
+        description: "Order whose review score is being attributed."
+
+      - name: product_category_name_english
+        sql: "{CUBE}.\"PRODUCT_CATEGORY_NAME_ENGLISH\""
+        type: string
+        description: "English category receiving the attributed order-level review score."
+
+      - name: review_score
+        sql: "{CUBE}.\"REVIEW_SCORE\""
+        type: number
+        description: "Order-level customer review score, attributed to the category by convention."
+
+    measures:
+      - name: review_count
+        type: count
+        description: "Number of distinct order/category review attributions."
+
+      - name: avg_review_score
+        sql: "{CUBE}.\"REVIEW_SCORE\""
+        type: avg
+        description: "Average review score using the order/category attribution convention."
+
+    pre_aggregations: []

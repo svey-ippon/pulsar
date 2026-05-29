@@ -55,7 +55,8 @@ tool-bound LLM. The LLM either:
 
 ## Step 3: The LLM Discovers and Queries Cube
 
-The tools are defined in `pulsar_agent.tools` and backed by `pulsar_agent.cube_rest_client`.
+The tools are defined in `pulsar_agent.tools` and backed by
+`pulsar_agent.cube_rest_client`.
 
 Typical sequence:
 

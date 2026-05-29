@@ -25,62 +25,6 @@ class CubeRestQueryError(RuntimeError):
 
 _NON_ADDITIVE_TYPES = {"avg", "count_distinct", "count_distinct_approx"}
 
-_ADVANCED_SQL_JOINS = [
-    {
-        "left": "adv_orders.customer_id",
-        "right": "adv_customers.customer_id",
-        "relationship": "many_to_one",
-        "description": "One order points to one order-scoped customer row.",
-    },
-    {
-        "left": "adv_order_items.order_id",
-        "right": "adv_orders.order_id",
-        "relationship": "many_to_one",
-        "description": "Many item rows can belong to one order.",
-    },
-    {
-        "left": "adv_reviews.order_id",
-        "right": "adv_orders.order_id",
-        "relationship": "many_to_one",
-        "description": "Reviews are order-level; avoid item fan-out when joining to items.",
-    },
-    {
-        "left": "adv_payments.order_id",
-        "right": "adv_orders.order_id",
-        "relationship": "many_to_one",
-        "description": "An order can have multiple payment rows.",
-    },
-    {
-        "left": "adv_order_items.product_id",
-        "right": "adv_products.product_id",
-        "relationship": "many_to_one",
-        "description": "Each order item references one product.",
-    },
-    {
-        "left": "adv_order_items.seller_id",
-        "right": "adv_sellers.seller_id",
-        "relationship": "many_to_one",
-        "description": "Each order item references one seller.",
-    },
-    {
-        "left": "adv_products.product_category_name",
-        "right": "adv_categories.product_category_name",
-        "relationship": "many_to_one",
-        "description": "Portuguese product category key to English category lookup.",
-    },
-]
-
-_ADVANCED_SQL_RULES = [
-    "Use only the adv_* tables and columns returned by this tool.",
-    "Use explicit JOIN ... ON clauses from the allowed join map.",
-    "Use Cube SQL API / PostgreSQL-subset syntax.",
-    "Use adv_order_items.total_revenue for merchandise revenue.",
-    "Use adv_payments.payment_value for collected payment value.",
-    "Use COUNT(DISTINCT adv_orders.order_id) when counting orders after joining item or payment rows.",
-    "Do not average adv_reviews.review_score after joining to item rows unless the SQL first defines an order-level attribution rule.",
-]
-
-
 def _is_additive(measure_type: str) -> bool:
     return measure_type not in _NON_ADDITIVE_TYPES
 
@@ -150,49 +94,10 @@ def _view_schema(view: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _advanced_column(field: dict[str, Any], kind: str) -> dict[str, Any]:
-    column = {
-        "name": field["sql_name"],
-        "semantic_name": field["name"],
-        "kind": kind,
-        "type": field.get("type", "unknown"),
-        "description": field.get("description", ""),
-    }
-    if kind == "measure":
-        column["additive"] = field.get("additive", False)
-    else:
-        column["is_calculated"] = field.get("is_calculated", False)
-    if meta := field.get("meta"):
-        column["meta"] = meta
-    return column
-
-
-def _advanced_table_schema(view: dict[str, Any]) -> dict[str, Any]:
-    schema = _view_schema(view)
-    meta = schema.get("meta", {})
-    return {
-        "name": schema["name"],
-        "source_cube": meta.get("source_cube", ""),
-        "grain": meta.get("grain", ""),
-        "primary_key": meta.get("primary_key", []),
-        "description": schema.get("description", ""),
-        "columns": [
-            *[_advanced_column(d, "dimension") for d in schema["dimensions"]],
-            *[_advanced_column(m, "measure") for m in schema["measures"]],
-        ],
-    }
-
-
-def _join_tables(join: dict[str, Any]) -> tuple[str, str]:
-    return join["left"].split(".", 1)[0], join["right"].split(".", 1)[0]
-
-
 class SupportsCubeRestQueries(Protocol):
     def list_views(self) -> dict[str, Any]: ...
 
     def get_view_schema(self, view_name: str) -> dict[str, Any]: ...
-
-    def get_advanced_schema(self) -> dict[str, Any]: ...
 
     def query_view(
         self,
@@ -200,8 +105,12 @@ class SupportsCubeRestQueries(Protocol):
         dimensions: list[str] | None = None,
         filters: list[dict[str, Any]] | None = None,
         time_dimensions: list[dict[str, Any]] | None = None,
+        segments: list[str] | None = None,
         order: dict[str, str] | None = None,
         limit: int = 1000,
+        offset: int | None = None,
+        total: bool | None = None,
+        timezone: str | None = None,
     ) -> list[dict[str, Any]]: ...
 
 
@@ -245,30 +154,6 @@ class CubeRestClient(SupportsCubeRestQueries):
 
         return _view_schema(view)
 
-    def get_advanced_schema(self) -> dict[str, Any]:
-        meta = self._fetch_meta()
-        views = [
-            c for c in meta.get("cubes", [])
-            if c.get("type") == "view"
-            and (
-                (_meta_field(c).get("mode") == "advanced")
-                or c.get("name", "").startswith("adv_")
-            )
-        ]
-        tables = [_advanced_table_schema(view) for view in sorted(views, key=lambda item: item["name"])]
-        table_names = {table["name"] for table in tables}
-        joins = [
-            join for join in _ADVANCED_SQL_JOINS
-            if all(table in table_names for table in _join_tables(join))
-        ]
-        return {
-            "mode": "advanced",
-            "dialect": "Cube SQL API / PostgreSQL subset",
-            "tables": tables,
-            "joins": joins,
-            "rules": _ADVANCED_SQL_RULES,
-        }
-
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=8),
@@ -281,16 +166,27 @@ class CubeRestClient(SupportsCubeRestQueries):
         dimensions: list[str] | None = None,
         filters: list[dict[str, Any]] | None = None,
         time_dimensions: list[dict[str, Any]] | None = None,
+        segments: list[str] | None = None,
         order: dict[str, str] | None = None,
         limit: int = 1000,
+        offset: int | None = None,
+        total: bool | None = None,
+        timezone: str | None = None,
     ) -> list[dict[str, Any]]:
         query: dict[str, Any] = {
             "measures": measures,
             "dimensions": dimensions or [],
             "filters": filters or [],
             "timeDimensions": time_dimensions or [],
+            "segments": segments or [],
             "limit": limit,
         }
+        if offset is not None:
+            query["offset"] = offset
+        if total is not None:
+            query["total"] = total
+        if timezone:
+            query["timezone"] = timezone
         if order:
             query["order"] = order
         try:

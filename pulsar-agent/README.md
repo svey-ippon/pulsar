@@ -52,8 +52,8 @@ def answer_question(
 ```
 
 Blocking wrapper — runs the graph to completion and returns the final answer dict.
-`results` is a list of `{"query": dict, "data": list[dict]}` — one per `query_view` call in the
-current turn.
+`results` is a list of `{"query": dict, "data": list[dict]}` for the current turn.
+Results are captured from successful `query_view` calls.
 
 ---
 
@@ -64,14 +64,9 @@ current turn.
 | `ANTHROPIC_API_KEY` | Claude API key — used when no `model` is injected |
 | `CUBE_API_URL` | Cube REST API base URL, e.g. `http://localhost:4000/cubejs-api/v1` |
 | `CUBE_API_TOKEN` | JWT signed from `CUBEJS_API_SECRET` (not the raw secret) |
-| `CUBE_SQL_HOST` | Cube SQL API host — required when using `CubeSqlClient.from_settings()` |
-| `CUBE_SQL_PORT` | Cube SQL API port, defaults to `15432` |
-| `CUBE_SQL_USER` | Cube SQL API user |
-| `CUBE_SQL_PASSWORD` | Cube SQL API password |
-| `CUBE_SQL_DATABASE` | Cube SQL API database, defaults to `cube` |
-| `CUBE_SQL_CONNECT_TIMEOUT_S` | SQL connection timeout in seconds, defaults to `10` |
 
-Model and REST settings can be bypassed by injecting `model=` and `cube_rest_client=` — no env vars needed in tests.
+Model and REST settings can be bypassed by injecting `model=` and `cube_rest_client=` —
+no env vars needed in tests.
 
 ---
 
@@ -103,7 +98,7 @@ pulsar-agent/
 │       ├── nodes.py        ← LangGraph node factories and routing
 │       ├── streaming.py    ← LangGraph chunk → application event adapter
 │       ├── extraction.py   ← pure text and result helpers
-│       ├── tools.py        ← LangChain tools: list_views, describe_view, describe_advanced_schema, query_view
+│       ├── tools.py        ← LangChain tools: list_views, describe_view, query_view
 │       ├── cube_rest_client.py  ← HTTP client for Cube /meta and /load
 │       ├── cube_sql_client.py   ← Postgres-wire client for Cube SQL API
 │       ├── settings.py      ← pydantic-settings runtime config
@@ -112,7 +107,9 @@ pulsar-agent/
 ├── tests/                  ← unit tests (no env vars required)
 │   ├── test_agent_graph.py ← graph, streaming, text extraction
 │   ├── test_agent_tools.py ← tool wrapping, Pydantic validation, error paths
-│   └── test_cube_rest_client.py ← HTTP client: retries, error classification
+│   ├── test_cube_rest_client.py ← HTTP client: retries, error classification
+│   ├── test_cube_sql_client.py  ← SQL client: execution shape, timeouts, error classification
+│   └── test_settings.py         ← pydantic-settings environment binding
 └── doc/
     ├── architecture.md     ← module internals, ReAct loop, maintenance rules
     ├── data-flow.md        ← step-by-step: question in → answer out

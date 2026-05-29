@@ -60,6 +60,18 @@ cubes:
           - sql: "{CUBE}.\"PAYMENT_INSTALLMENTS\" > 1"
         description: "Number of payments made in multiple installments (more than one)."
 
+      - name: orders_with_multi_installment
+        sql: "{CUBE}.\"ORDER_ID\""
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.\"PAYMENT_INSTALLMENTS\" > 1"
+        description: "Number of distinct orders with at least one payment row split into multiple installments."
+
+      - name: multi_installment_payment_share
+        sql: "100.0 * {count_multi_installment} / NULLIF({count}, 0)"
+        type: number
+        description: "Percent of payment rows made in multiple installments."
+
       - name: avg_installments
         sql: "{CUBE}.\"PAYMENT_INSTALLMENTS\""
         type: avg

@@ -45,17 +45,16 @@ def test_get_view_schema_exposes_meta_and_sql_names(monkeypatch):
         return FakeResponse({
             "cubes": [
                 {
-                    "name": "adv_orders",
+                    "name": "orders_overview",
                     "type": "view",
-                    "description": "Advanced orders view.",
+                    "description": "Orders overview view.",
                     "meta": {
-                        "summary": "Advanced orders table.",
-                        "mode": "advanced",
+                        "summary": "Orders overview.",
                         "ai_context": "Order-grain table.",
                     },
                     "measures": [
                         {
-                            "name": "adv_orders.count",
+                            "name": "orders_overview.count",
                             "type": "count",
                             "description": "Order count.",
                             "meta": {
@@ -65,13 +64,13 @@ def test_get_view_schema_exposes_meta_and_sql_names(monkeypatch):
                     ],
                     "dimensions": [
                         {
-                            "name": "adv_orders.order_id",
+                            "name": "orders_overview.order_id",
                             "type": "string",
                             "description": "Unique order identifier.",
                             "sql": "{CUBE}.\"ORDER_ID\"",
                         },
                         {
-                            "name": "adv_orders.delivery_status",
+                            "name": "orders_overview.delivery_status",
                             "type": "string",
                             "description": "Delivery status.",
                             "sql": "CASE WHEN {CUBE}.\"ORDER_DELIVERED_CUSTOMER_DATE\" IS NULL THEN 'not_delivered' ELSE 'on_time' END",
@@ -85,7 +84,7 @@ def test_get_view_schema_exposes_meta_and_sql_names(monkeypatch):
     monkeypatch.setattr(requests, "get", fake_get)
     client = CubeRestClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
 
-    schema = client.get_view_schema("adv_orders")
+    schema = client.get_view_schema("orders_overview")
 
     assert schema["meta"]["ai_context"] == "Order-grain table."
     assert "folders" not in schema
@@ -95,91 +94,6 @@ def test_get_view_schema_exposes_meta_and_sql_names(monkeypatch):
     assert dimensions_by_sql_name["order_id"]["is_calculated"] is False
     assert dimensions_by_sql_name["delivery_status"]["is_calculated"] is True
     assert dimensions_by_sql_name["delivery_status"]["meta"]["ai_context"] == "Use for delivery buckets."
-
-
-def test_get_advanced_schema_returns_tables_joins_and_rules(monkeypatch):
-    def fake_get(url, headers, timeout):
-        return FakeResponse({
-            "cubes": [
-                {
-                    "name": "orders_overview",
-                    "type": "view",
-                    "measures": [],
-                    "dimensions": [],
-                },
-                {
-                    "name": "adv_orders",
-                    "type": "view",
-                    "description": "Advanced orders view.",
-                    "meta": {
-                        "mode": "advanced",
-                        "source_cube": "orders",
-                        "grain": "order",
-                        "primary_key": ["order_id"],
-                    },
-                    "measures": [
-                        {
-                            "name": "adv_orders.count",
-                            "type": "count",
-                            "description": "Order count.",
-                        }
-                    ],
-                    "dimensions": [
-                        {
-                            "name": "adv_orders.order_id",
-                            "type": "string",
-                            "description": "Unique order identifier.",
-                            "sql": "{CUBE}.\"ORDER_ID\"",
-                        },
-                        {
-                            "name": "adv_orders.customer_id",
-                            "type": "string",
-                            "description": "Customer key.",
-                            "sql": "{CUBE}.\"CUSTOMER_ID\"",
-                        },
-                    ],
-                },
-                {
-                    "name": "adv_customers",
-                    "type": "view",
-                    "description": "Advanced customers view.",
-                    "meta": {
-                        "mode": "advanced",
-                        "source_cube": "customers",
-                        "grain": "customer",
-                        "primary_key": ["customer_id"],
-                    },
-                    "measures": [],
-                    "dimensions": [
-                        {
-                            "name": "adv_customers.customer_id",
-                            "type": "string",
-                            "description": "Customer key.",
-                            "sql": "{CUBE}.\"CUSTOMER_ID\"",
-                        },
-                    ],
-                },
-            ]
-        })
-
-    monkeypatch.setattr(requests, "get", fake_get)
-    client = CubeRestClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
-
-    schema = client.get_advanced_schema()
-
-    assert schema["mode"] == "advanced"
-    assert schema["dialect"] == "Cube SQL API / PostgreSQL subset"
-    assert [table["name"] for table in schema["tables"]] == ["adv_customers", "adv_orders"]
-    orders = next(table for table in schema["tables"] if table["name"] == "adv_orders")
-    assert orders["source_cube"] == "orders"
-    assert orders["grain"] == "order"
-    assert orders["primary_key"] == ["order_id"]
-    assert {column["name"] for column in orders["columns"]} == {"order_id", "customer_id", "count"}
-    assert any(
-        join["left"] == "adv_orders.customer_id" and join["right"] == "adv_customers.customer_id"
-        for join in schema["joins"]
-    )
-    assert any("COUNT(DISTINCT adv_orders.order_id)" in rule for rule in schema["rules"])
 
 
 def test_query_view_posts_load_query(monkeypatch):
@@ -205,6 +119,7 @@ def test_query_view_posts_load_query(monkeypatch):
             "dimensions": [],
             "filters": [],
             "timeDimensions": [{"dimension": "catalog_sales.order_purchase_timestamp", "granularity": "month"}],
+            "segments": [],
             "limit": 1000,
         }
     }
@@ -228,6 +143,56 @@ def test_query_view_includes_order_when_provided(monkeypatch):
 
     assert "order" in calls[0][2]["query"]
     assert calls[0][2]["query"]["order"] == {"catalog_sales.total_revenue": "desc"}
+
+
+def test_query_view_posts_extended_rest_query_options(monkeypatch):
+    calls = []
+
+    def fake_post(url, headers, json, timeout):
+        calls.append((url, headers, json, timeout))
+        return FakeResponse({"data": []})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    client = CubeRestClient(base_url="http://cube:4000/cubejs-api/v1", token="abc")
+
+    client.query_view(
+        measures=["category_satisfaction.avg_review_score"],
+        dimensions=["category_satisfaction.product_category_name_english"],
+        filters=[
+            {
+                "member": "category_satisfaction.review_count",
+                "operator": "gte",
+                "values": [50],
+            }
+        ],
+        segments=["category_satisfaction.reviewed_categories"],
+        order={"category_satisfaction.avg_review_score": "desc"},
+        limit=25,
+        offset=50,
+        total=True,
+        timezone="Europe/Paris",
+    )
+
+    assert calls[0][2] == {
+        "query": {
+            "measures": ["category_satisfaction.avg_review_score"],
+            "dimensions": ["category_satisfaction.product_category_name_english"],
+            "filters": [
+                {
+                    "member": "category_satisfaction.review_count",
+                    "operator": "gte",
+                    "values": [50],
+                }
+            ],
+            "timeDimensions": [],
+            "segments": ["category_satisfaction.reviewed_categories"],
+            "limit": 25,
+            "offset": 50,
+            "total": True,
+            "timezone": "Europe/Paris",
+            "order": {"category_satisfaction.avg_review_score": "desc"},
+        }
+    }
 
 
 def test_query_view_omits_order_when_empty(monkeypatch):

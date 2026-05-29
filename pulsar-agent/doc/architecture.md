@@ -284,12 +284,16 @@ This keeps follow-up questions from re-rendering previous turn results.
 |---|---|
 | `list_views` | Return available semantic views with lightweight summaries. |
 | `describe_view` | Return measures and dimensions for one view. |
-| `describe_advanced_schema` | Return Advanced SQL tables, columns, joins, and rules. |
 | `query_view` | Execute a semantic-layer REST query and return rows. |
+
+`query_view` exposes the REST query fields needed by the POC: measures, dimensions, nested
+dimension/measure filters, time dimensions, segments, order, limit, offset, total, and timezone.
+The tool validates that explicitly prefixed members belong to the declared view before calling
+Cube, so accidental cross-view member mixes fail early with an error JSON.
 
 ### Responsibilities
 
-- Bind tools to either an injected `SupportsCubeRestQueries` client or a default `CubeRestClient`.
+- Bind REST tools to either an injected `SupportsCubeRestQueries` client or a default `CubeRestClient`.
 - Validate model-provided arguments with Pydantic schemas.
 - Serialize tool outputs as JSON strings, matching what the LLM receives as `ToolMessage` content.
 - Convert `CubeRestServiceError` and `CubeRestQueryError` into JSON error payloads.
@@ -335,6 +339,31 @@ This keeps the LangGraph loop alive and lets the LLM produce a user-facing failu
 
 `SupportsCubeRestQueries` lets tests inject fake clients and keeps `pulsar_agent.tools` independent from
 the concrete HTTP implementation.
+
+---
+
+## `pulsar_agent.cube_sql_client`
+
+`pulsar_agent.cube_sql_client` is the Postgres wire-protocol boundary around Cube SQL API.
+
+### Contents
+
+- Exceptions:
+  - `CubeSqlServiceError`
+  - `CubeSqlQueryError`
+- Implementation:
+  - `CubeSqlClient`
+
+### Responsibilities
+
+- Build a SQL client from `AgentSettings`.
+- Connect to Cube SQL API through the Postgres wire protocol.
+- Apply a per-query `statement_timeout`.
+- Return rows, columns, row count, and execution time.
+- Distinguish SQL query failures from service-level failures.
+
+`CubeSqlClient` is currently not exposed as an LLM tool. It remains a low-level client that can be
+reused later for controlled SQL API diagnostics or explicitly modeled SQL workflows.
 
 ---
 

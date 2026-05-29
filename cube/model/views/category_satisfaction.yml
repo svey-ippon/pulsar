@@ -1,0 +1,22 @@
+views:
+  - name: category_satisfaction
+    description: >
+      View for customer satisfaction by English product category.
+      Grain: one row per distinct order/category review attribution.
+      Use this view for questions like average review score by product category
+      and categories with at least a minimum review count.
+
+      Attribution convention:
+      Reviews are order-level while categories are item-level. This view attributes
+      an order's review score once to each distinct English category present in the order.
+      It intentionally deduplicates item lines before averaging review scores.
+    meta:
+      summary: "Category satisfaction: attributed review score by English category. Grain order x category."
+
+    cubes:
+      - join_path: helper_category_satisfaction
+        includes:
+          - product_category_name_english
+          - review_score
+          - review_count
+          - avg_review_score

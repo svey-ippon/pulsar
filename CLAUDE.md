@@ -10,7 +10,11 @@ A self-hosted data-agent POC for natural-language analytics over a Brazilian e-c
 Streamlit → LangGraph (ReAct agent) → Cube Core (Docker) → Snowflake
 ```
 
-The agent uses Claude Sonnet 4.6 to classify questions, discover the schema dynamically via `list_views`, and call `query_view` to answer questions about the Olist dataset. It operates in **standard mode**: 9 cubes (`public: false`) are exposed only through 4 business views (`orders_overview`, `payments_overview`, `catalog_sales`, `reviews_overview`). The agent routes questions to the appropriate view, queries it, and returns governed results. Predictions and questions outside the semantic layer are refused.
+The agent uses Claude Sonnet 4.6 to classify questions, discover the schema dynamically via
+`list_views`, and answer questions about the Olist dataset. Standard mode uses `query_view` over
+business views (`orders_overview`, `payments_overview`, `catalog_sales`, `reviews_overview`).
+Advanced mode uses `describe_advanced_schema` plus `execute_sql` over governed `adv_*` views through
+Cube SQL API. Predictions and questions outside the semantic layer are refused.
 
 ## Commands
 
@@ -88,7 +92,7 @@ This boundary is the seam that will become a network call (FastAPI/SSE) when gra
 | `pulsar-agent/src/pulsar_agent/cube_rest_client.py` | HTTP client for Cube REST API (`/meta`, `/load`); `list_views`, `get_view_schema`, `query_view` | Connect to Snowflake |
 | `pulsar-agent/src/pulsar_agent/cube_sql_client.py` | Postgres-wire client for Cube SQL API; SQL execution boundary for Advanced mode | Know REST `/meta` or `/load` |
 | `pulsar-agent/src/pulsar_agent/settings.py` | `pydantic-settings` configuration boundary for model, Cube REST, and Cube SQL settings | Read business data |
-| `pulsar-agent/src/pulsar_agent/tools.py` | LangChain tool factory (`list_views`, `describe_view`, `query_view`) | Contain business logic |
+| `pulsar-agent/src/pulsar_agent/tools.py` | LangChain tool factory (`list_views`, `describe_view`, `describe_advanced_schema`, `query_view`, `execute_sql`) | Contain business logic |
 | `pulsar-agent/src/pulsar_agent/state.py` | `AgentState` and `QueryResult` TypedDicts | — |
 | `pulsar-agent/src/pulsar_agent/nodes.py` | Agent node, tool node, routing predicate | — |
 | `pulsar-agent/src/pulsar_agent/extraction.py` | Text extraction helpers (`extract_text`, `prev_results_count`) | — |
@@ -116,13 +120,13 @@ This boundary is the seam that will become a network call (FastAPI/SSE) when gra
 
 #### pulsar-agent/src/pulsar_agent/state.py
 
-- **`QueryResult`**: `{"query": dict, "data": list[dict]}` — one per `query_view` call per turn.
+- **`QueryResult`**: `{"query": dict, "data": list[dict]}` — one per successful `query_view` or `execute_sql` call per turn.
 - **`AgentState`**: `messages` (accumulates with `add_messages`) + `cube_results` (accumulates with `operator.add`).
 
 #### pulsar-agent/src/pulsar_agent/nodes.py
 
 - **`make_agent_node(llm_with_tools)`** — returns the agent node function; uses `.stream()` on the LLM (not `.invoke()`) so token chunks are emitted during execution and captured by LangGraph's streaming.
-- **`make_tool_node(tools_by_name)`** — executes each tool call in the last AI message; appends `QueryResult` to state for every successful `query_view` response.
+- **`make_tool_node(tools_by_name)`** — executes each tool call in the last AI message; appends `QueryResult` to state for every successful `query_view` response and every successful `execute_sql` response with a `rows` list.
 - **`should_continue(state)`** — routes to `"tools"` if the last message has tool calls, else `END`.
 
 #### pulsar-agent/src/pulsar_agent/extraction.py
@@ -159,6 +163,7 @@ The `_extract_text` name is re-exported from `pulsar_agent.graph` (imported from
 - **`describe_view(view_name)`** — validated by `GetViewSchemaArgs` (Pydantic); calls `client.get_view_schema()`; returns `{name, title, description, measures, dimensions}` where each measure includes an `additive: bool` field and each dimension includes an `is_calculated: bool` field; on unknown view name returns structured error JSON with a hint; catches `CubeRestServiceError`.
 - **`describe_advanced_schema()`** — returns Advanced `adv_*` tables, columns, grains, allowed joins, and SQL-generation rules.
 - **`query_view(view, measures, dimensions, filters, time_dimensions, order, limit)`** — validated by `QueryViewArgs` (Pydantic); `view` param is the view name; member names must be prefixed with the view name (e.g. `orders_overview.count`); calls `/load`; supports `order: dict[str, str]` for TOP-N queries; returns rows as JSON string; catches both `CubeRestServiceError` (stop + report) and `CubeRestQueryError` 400 (hint to retry with corrected args); default limit 1000, max 5000.
+- **`execute_sql(sql, max_rows, timeout_s)`** — validated by `ExecuteSqlArgs`; calls Cube SQL API through `CubeSqlClient`; returns `{rows, columns, row_count, execution_time_ms}` as JSON; catches `CubeSqlServiceError` and `CubeSqlQueryError`. For multi-table `adv_*` SQL, use `CROSS JOIN` semantic join hints and prefer matching `describe_advanced_schema().sql_patterns`.
 
 Error responses are structured JSON so the LLM can react correctly (retry vs. stop).
 
@@ -268,7 +273,7 @@ Thin entry point — just calls `run_app()` from `pulsar_ui.ui`.
 - **`render_reasoning_blocks(blocks)`** — renders a list of reasoning blocks:
   - `{"type": "text", "content": str}` → `st.write(content)`
   - `{"type": "tool", "tool": str, "args": dict, "result": str|None, "status": str}` → collapsible `st.expander` showing arguments and formatted result.
-  - Tool result format: `list_views`/`describe_view` → `st.json`; `query_view` list → `st.dataframe`; other → `st.write`.
+  - Tool result format: `list_views`/`describe_view`/`describe_advanced_schema`/`execute_sql` → `st.json`; `query_view` list → `st.dataframe`; other → `st.write`.
 - **`render_reasoning_details(blocks)`** — wraps `render_reasoning_blocks` in a collapsed `st.status` labelled "reasoning details".
 - **`render_answer(answer)`** — renders `reasoning_blocks` (if present) then the final text.
 
@@ -285,7 +290,7 @@ Tests are split by package ownership.
 
 **`pulsar-agent/tests/`** — run in isolation with `uv run pytest pulsar-agent/tests/`:
 - `test_agent_graph.py` — graph build, text extraction, refusal and happy-path behaviour using `FakeCubeRestClient` (no env vars needed); also tests streaming event shapes (`tool_call`, `tool_result`, `token`, `answer`).
-- `test_agent_tools.py` — tool wrapping, Pydantic validation, structured error JSON for each error path; covers `list_views`, `describe_view`, `describe_advanced_schema`, and `query_view`.
+- `test_agent_tools.py` — tool wrapping, Pydantic validation, structured error JSON for each error path; covers `list_views`, `describe_view`, `describe_advanced_schema`, `query_view`, and `execute_sql`.
 - `test_cube_rest_client.py` — REST client unit tests: `list_views`, `query_view`, `order` param inclusion/omission, error classification, 4xx vs 5xx handling.
 - `test_cube_sql_client.py` — SQL client unit tests: connection arguments, statement timeout, row/column shape, and error classification.
 - `test_settings.py` — `pydantic-settings` environment binding and lazy required-variable checks.

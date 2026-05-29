@@ -31,7 +31,6 @@ def _fmt_default(_tool: str, _args: dict, content: str) -> None:
 _TOOL_RESULT_FORMATTERS = {
     "list_views": _fmt_json,
     "describe_view": _fmt_json,
-    "describe_advanced_schema": _fmt_json,
     "query_view": _fmt_query_view,
 }
 

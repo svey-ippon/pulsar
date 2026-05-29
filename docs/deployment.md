@@ -25,7 +25,7 @@ the internal DNS name `cube` (not `localhost`). This is handled automatically by
 
 ```bash
 cp cube/example.env cube/.env
-# Edit cube/.env: fill in CUBEJS_DB_*, CUBEJS_API_SECRET
+# Edit cube/.env: fill in CUBEJS_DB_*, CUBEJS_API_SECRET, CUBEJS_PG_SQL_PORT, CUBEJS_SQL_USER, CUBEJS_SQL_PASSWORD
 ```
 
 `cube/.env` is gitignored. Never commit it.
@@ -34,11 +34,14 @@ cp cube/example.env cube/.env
 
 ```bash
 cp .env.example .env
-# Fill in CUBE_API_TOKEN and ANTHROPIC_API_KEY
+# Fill in CUBE_API_TOKEN, ANTHROPIC_API_KEY, and CUBE_SQL_*
 ```
 
 `CUBE_API_TOKEN` must be a **JWT signed from `CUBEJS_API_SECRET`**, not the raw secret.
 `CUBE_API_URL` is injected by `docker-compose.yml` automatically — do not set it in `.env`.
+For local `direnv` usage outside Docker, set `CUBE_API_URL=http://localhost:4000/cubejs-api/v1`
+and `CUBE_SQL_HOST=localhost`. In Docker Compose, service-to-service values should use the `cube`
+hostname.
 
 ---
 
@@ -80,6 +83,11 @@ on semantic models without starting the UI.
 CUBE_API_URL=http://localhost:4000/cubejs-api/v1 \
 CUBE_API_TOKEN=<jwt> \
 ANTHROPIC_API_KEY=<key> \
+CUBE_SQL_HOST=localhost \
+CUBE_SQL_PORT=15432 \
+CUBE_SQL_USER=<cube-sql-user> \
+CUBE_SQL_PASSWORD=<cube-sql-password> \
+CUBE_SQL_DATABASE=cube \
 uv run pulsar-ui
 ```
 
@@ -109,5 +117,13 @@ docker build -f pulsar-ui/Dockerfile -t pulsar-ui:ci .
 | `CUBE_API_URL` | `docker-compose.yml` `environment:` | Cube REST API base URL |
 | `CUBE_API_TOKEN` | `.env` | JWT signed from `CUBEJS_API_SECRET` |
 | `ANTHROPIC_API_KEY` | `.env` | Claude API key |
+| `CUBE_SQL_HOST` | `.env` or direnv | Cube SQL API host (`localhost` locally, `cube` in Compose) |
+| `CUBE_SQL_PORT` | `.env` or direnv | Cube SQL API port, usually `15432` |
+| `CUBE_SQL_USER` | `.env` or direnv | Cube SQL API user, must match `CUBEJS_SQL_USER` |
+| `CUBE_SQL_PASSWORD` | `.env` or direnv | Cube SQL API password, must match `CUBEJS_SQL_PASSWORD` |
+| `CUBE_SQL_DATABASE` | `.env` or direnv | Cube SQL database, usually `cube` |
 | `CUBEJS_API_SECRET` | `cube/.env` | Cube signing secret (never exposed to UI) |
+| `CUBEJS_PG_SQL_PORT` | `cube/.env` | Enables Cube SQL API on the Postgres wire-protocol port |
+| `CUBEJS_SQL_USER` | `cube/.env` | Cube SQL API user |
+| `CUBEJS_SQL_PASSWORD` | `cube/.env` | Cube SQL API password |
 | `CUBEJS_DB_*` | `cube/.env` | Snowflake connection params |

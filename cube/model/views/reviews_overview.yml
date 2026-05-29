@@ -21,6 +21,7 @@ views:
           - order_status
           - order_purchase_timestamp
           - delivery_status
+          - delivery_late_status
           - delay_days
 
       - join_path: order_reviews.orders.customers

@@ -69,7 +69,7 @@ def test_cube_sql_client_executes_query_and_returns_rows(monkeypatch):
         password="secret",
     )
 
-    result = client.execute("SELECT order_count FROM adv_orders", max_rows=1, timeout_s=12)
+    result = client.execute("SELECT order_count FROM orders_overview", max_rows=1, timeout_s=12)
 
     assert calls == [
         {
@@ -83,7 +83,7 @@ def test_cube_sql_client_executes_query_and_returns_rows(monkeypatch):
     ]
     assert cursor.executed == [
         ("SET statement_timeout = 12000", None),
-        ("SELECT order_count FROM adv_orders", None),
+        ("SELECT order_count FROM orders_overview", None),
     ]
     assert cursor.fetchmany_size == 1
     assert result["rows"] == [{"order_count": 10}]

@@ -13,6 +13,8 @@ views:
           - count
           - total_revenue
           - freight_value
+          - seller_count
+          - revenue_per_seller
 
       - join_path: order_items.orders
         includes:

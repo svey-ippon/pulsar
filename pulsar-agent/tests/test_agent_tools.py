@@ -50,43 +50,13 @@ class FakeCubeRestClient:
             ],
         }
 
-    def get_advanced_schema(self) -> dict:
-        return {
-            "mode": "advanced",
-            "dialect": "Cube SQL API / PostgreSQL subset",
-            "tables": [
-                {
-                    "name": "adv_orders",
-                    "source_cube": "orders",
-                    "grain": "order",
-                    "primary_key": ["order_id"],
-                    "columns": [
-                        {
-                            "name": "order_id",
-                            "semantic_name": "adv_orders.order_id",
-                            "kind": "dimension",
-                            "type": "string",
-                            "description": "Unique order identifier.",
-                        }
-                    ],
-                }
-            ],
-            "joins": [
-                {
-                    "left": "adv_order_items.order_id",
-                    "right": "adv_orders.order_id",
-                    "relationship": "many_to_one",
-                    "description": "Many item rows can belong to one order.",
-                }
-            ],
-            "rules": ["Use only the adv_* tables and columns returned by this tool."],
-        }
-
     def query_view(self, measures, dimensions=None, filters=None,
-                   time_dimensions=None, order=None, limit=1000):
+                   time_dimensions=None, segments=None, order=None, limit=1000,
+                   offset=None, total=None, timezone=None):
         self.query_view_calls.append(
             {"measures": measures, "dimensions": dimensions, "filters": filters,
-             "time_dimensions": time_dimensions, "order": order, "limit": limit}
+             "time_dimensions": time_dimensions, "segments": segments, "order": order,
+             "limit": limit, "offset": offset, "total": total, "timezone": timezone}
         )
         return self.rows
 
@@ -98,11 +68,9 @@ class ErrorCubeRestClient:
     def get_view_schema(self, view_name: str):
         raise CubeRestServiceError("unavailable")
 
-    def get_advanced_schema(self):
-        raise CubeRestServiceError("unavailable")
-
     def query_view(self, measures, dimensions=None, filters=None,
-                   time_dimensions=None, order=None, limit=1000):
+                   time_dimensions=None, segments=None, order=None, limit=1000,
+                   offset=None, total=None, timezone=None):
         raise CubeRestServiceError("unavailable")
 
 
@@ -113,11 +81,9 @@ class InvalidQueryCubeRestClient:
     def get_view_schema(self, view_name: str):
         raise ValueError(f"View '{view_name}' not found. Available: []")
 
-    def get_advanced_schema(self):
-        return {"mode": "advanced", "tables": [], "joins": [], "rules": []}
-
     def query_view(self, measures, dimensions=None, filters=None,
-                   time_dimensions=None, order=None, limit=1000):
+                   time_dimensions=None, segments=None, order=None, limit=1000,
+                   offset=None, total=None, timezone=None):
         raise CubeRestQueryError(
             'Cube rejected query: Invalid query format: "timeDimensions[0].granularity" must be a string',
             query={
@@ -125,6 +91,7 @@ class InvalidQueryCubeRestClient:
                 "dimensions": dimensions or [],
                 "filters": filters or [],
                 "timeDimensions": time_dimensions or [],
+                "segments": segments or [],
                 "limit": limit,
             },
             status_code=400,
@@ -278,31 +245,6 @@ def test_describe_view_tool_returns_error_json_when_cube_unavailable():
 
 
 # ---------------------------------------------------------------------------
-# describe_advanced_schema tool
-# ---------------------------------------------------------------------------
-
-def test_describe_advanced_schema_tool_returns_tables_joins_and_rules():
-    fake = FakeCubeRestClient()
-    describe_advanced_schema = get_tool(make_tools(fake), "describe_advanced_schema")
-
-    result = json.loads(describe_advanced_schema.invoke({}))
-
-    assert result["mode"] == "advanced"
-    assert result["tables"][0]["name"] == "adv_orders"
-    assert result["tables"][0]["columns"][0]["name"] == "order_id"
-    assert result["joins"][0]["left"] == "adv_order_items.order_id"
-    assert "adv_*" in result["rules"][0]
-
-
-def test_describe_advanced_schema_tool_returns_error_json_when_cube_unavailable():
-    describe_advanced_schema = get_tool(make_tools(ErrorCubeRestClient()), "describe_advanced_schema")
-
-    result = json.loads(describe_advanced_schema.invoke({}))
-
-    assert "error" in result
-
-
-# ---------------------------------------------------------------------------
 # query_view tool
 # ---------------------------------------------------------------------------
 
@@ -341,6 +283,112 @@ def test_query_view_tool_passes_order_parameter():
 
     assert json.loads(result) == rows
     assert fake.query_view_calls[0]["order"] == {"catalog_sales.total_revenue": "desc"}
+
+
+def test_query_view_tool_passes_segments_pagination_total_and_timezone():
+    rows = [{"orders_overview.order_status": "delivered", "orders_overview.count": 10}]
+    fake = FakeCubeRestClient(rows=rows)
+    query_view = get_tool(make_tools(fake), "query_view")
+
+    result = query_view.invoke({
+        "view": "orders_overview",
+        "measures": ["orders_overview.count"],
+        "dimensions": ["orders_overview.order_status"],
+        "segments": ["orders_overview.delivered_orders"],
+        "limit": 50,
+        "offset": 100,
+        "total": True,
+        "timezone": "Europe/Paris",
+    })
+
+    assert json.loads(result) == rows
+    call = fake.query_view_calls[0]
+    assert call["segments"] == ["orders_overview.delivered_orders"]
+    assert call["offset"] == 100
+    assert call["total"] is True
+    assert call["timezone"] == "Europe/Paris"
+
+
+def test_query_view_tool_passes_nested_boolean_and_measure_filters():
+    fake = FakeCubeRestClient()
+    query_view = get_tool(make_tools(fake), "query_view")
+
+    result = query_view.invoke({
+        "view": "category_satisfaction",
+        "measures": [
+            "category_satisfaction.review_count",
+            "category_satisfaction.avg_review_score",
+        ],
+        "dimensions": ["category_satisfaction.product_category_name_english"],
+        "filters": [
+            {
+                "and": [
+                    {
+                        "member": "category_satisfaction.review_count",
+                        "operator": "gte",
+                        "values": [50],
+                    },
+                    {
+                        "or": [
+                            {
+                                "member": "category_satisfaction.avg_review_score",
+                                "operator": "gte",
+                                "values": [4],
+                            },
+                            {
+                                "member": "category_satisfaction.product_category_name_english",
+                                "operator": "contains",
+                                "values": ["books"],
+                            },
+                        ],
+                    },
+                ],
+            }
+        ],
+    })
+
+    assert json.loads(result) == []
+    assert fake.query_view_calls[0]["filters"] == [
+        {
+            "and": [
+                {
+                    "member": "category_satisfaction.review_count",
+                    "operator": "gte",
+                    "values": [50],
+                },
+                {
+                    "or": [
+                        {
+                            "member": "category_satisfaction.avg_review_score",
+                            "operator": "gte",
+                            "values": [4],
+                        },
+                        {
+                            "member": "category_satisfaction.product_category_name_english",
+                            "operator": "contains",
+                            "values": ["books"],
+                        },
+                    ],
+                },
+            ],
+        }
+    ]
+
+
+def test_query_view_tool_rejects_members_outside_declared_view():
+    fake = FakeCubeRestClient()
+    query_view = get_tool(make_tools(fake), "query_view")
+
+    result = query_view.invoke({
+        "view": "orders_overview",
+        "measures": ["catalog_sales.total_revenue"],
+        "dimensions": ["orders_overview.order_status"],
+    })
+
+    parsed = json.loads(result)
+    assert parsed["error"] == "query_view members do not match the declared view."
+    assert parsed["details"]["invalid_members"] == ["catalog_sales.total_revenue"]
+    assert fake.query_view_calls == []
 
 
 def test_query_view_tool_omits_empty_time_granularity_for_date_filter():
@@ -411,11 +459,11 @@ def test_query_view_tool_validation_error_is_returned_to_llm():
 # make_tools
 # ---------------------------------------------------------------------------
 
-def test_make_tools_returns_four_tools_with_correct_names():
+def test_make_tools_returns_three_tools_with_correct_names():
     tools = make_tools(FakeCubeRestClient())
 
     names = {t.name for t in tools}
-    assert names == {"list_views", "describe_view", "describe_advanced_schema", "query_view"}
+    assert names == {"list_views", "describe_view", "query_view"}
 
 
 def test_make_tools_does_not_require_env_vars_when_client_is_injected(monkeypatch):
@@ -424,5 +472,5 @@ def test_make_tools_does_not_require_env_vars_when_client_is_injected(monkeypatc
 
     tools = make_tools(FakeCubeRestClient())
 
-    assert len(tools) == 4
-    assert {t.name for t in tools} == {"list_views", "describe_view", "describe_advanced_schema", "query_view"}
+    assert len(tools) == 3
+    assert {t.name for t in tools} == {"list_views", "describe_view", "query_view"}

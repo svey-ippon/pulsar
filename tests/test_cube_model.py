@@ -21,10 +21,10 @@ def by_name(items: list[dict], name: str) -> dict:
 def test_all_cube_models_read_from_marts_not_raw():
     for path in sorted(CUBE_MODEL_DIR.glob("*.yml")):
         cube = load_cube(str(path.relative_to(ROOT)))
-        sql_table = cube["sql_table"]
+        sql_source = cube.get("sql_table") or cube.get("sql") or ""
 
-        assert "RAW" not in sql_table, f"{path.name} reads from {sql_table}"
-        assert sql_table.startswith("ECOMMERCE_DB.MARTS."), f"{path.name} reads from {sql_table}"
+        assert "RAW" not in sql_source, f"{path.name} reads from {sql_source}"
+        assert "ECOMMERCE_DB.MARTS." in sql_source, f"{path.name} reads from {sql_source}"
 
 
 def test_orders_cube_points_to_marts_and_has_primary_key_time_dimension():
@@ -107,6 +107,8 @@ def test_orders_cube_has_delivery_status_and_delay_days():
     dims = {d["name"]: d for d in orders["dimensions"]}
     assert "delivery_status" in dims
     assert dims["delivery_status"]["type"] == "string"
+    assert "delivery_late_status" in dims
+    assert dims["delivery_late_status"]["type"] == "string"
     assert "delay_days" in dims
     assert dims["delay_days"]["type"] == "number"
     assert "is_delivered" in dims
@@ -123,6 +125,8 @@ def test_order_payments_has_multi_installment_members():
     assert dims["is_multi_installment"]["type"] == "boolean"
     measures = {m["name"]: m for m in payments["measures"]}
     assert "count_multi_installment" in measures
+    assert "orders_with_multi_installment" in measures
+    assert "multi_installment_payment_share" in measures
     assert "avg_installments" in measures
 
 
@@ -145,7 +149,7 @@ def load_view(path: str) -> dict:
 def test_all_views_have_description_and_meta_summary():
     view_files = [p for p in sorted(CUBE_VIEWS_DIR.glob("*.yml"))
                   if p.name != "example_view.yml"]
-    assert len(view_files) == 12, f"Expected 12 view files, found {len(view_files)}"
+    assert len(view_files) == 9, f"Expected 9 view files, found {len(view_files)}"
     for path in view_files:
         view = load_view(str(path.relative_to(ROOT)))
         assert view.get("description"), f"{path.name} is missing description"
@@ -168,6 +172,7 @@ def test_orders_overview_exposes_delivery_status_and_review_measures():
     view = load_view("cube/model/views/orders_overview.yml")
     all_includes = include_names(view)
     assert "delivery_status" in all_includes
+    assert "delivery_late_status" in all_includes
     assert "avg_review_score" in all_includes
     assert "count" in all_includes
     assert "unique_customer_count" in all_includes
@@ -178,12 +183,16 @@ def test_catalog_sales_exposes_english_category_name_and_revenue():
     all_includes = include_names(view)
     assert "product_category_name_english" in all_includes
     assert "total_revenue" in all_includes
+    assert "seller_count" in all_includes
+    assert "revenue_per_seller" in all_includes
 
 
 def test_payments_overview_exposes_multi_installment_measures():
     view = load_view("cube/model/views/payments_overview.yml")
     all_includes = include_names(view)
     assert "count_multi_installment" in all_includes
+    assert "orders_with_multi_installment" in all_includes
+    assert "multi_installment_payment_share" in all_includes
     assert "payment_value" in all_includes
     assert "is_multi_installment" in all_includes
 
@@ -194,75 +203,53 @@ def test_reviews_overview_does_not_expose_product_category():
     assert "product_category_name_english" not in all_includes
     assert "avg_review_score" in all_includes
     assert "delivery_status" in all_includes
+    assert "delivery_late_status" in all_includes
 
 
-def advanced_views() -> dict[str, dict]:
-    return {
-        path.stem: load_view(str(path.relative_to(ROOT)))
-        for path in sorted(CUBE_VIEWS_DIR.glob("adv_*.yml"))
-    }
+def test_no_advanced_entity_views_are_exposed():
+    assert not list(CUBE_VIEWS_DIR.glob("adv_*.yml"))
 
 
-def test_advanced_views_cover_all_core_cubes():
-    views = advanced_views()
-
-    assert set(views) == {
-        "adv_orders",
-        "adv_order_items",
-        "adv_products",
-        "adv_categories",
-        "adv_sellers",
-        "adv_customers",
-        "adv_reviews",
-        "adv_payments",
-    }
-    assert views["adv_orders"]["meta"]["source_cube"] == "orders"
-    assert views["adv_order_items"]["meta"]["source_cube"] == "order_items"
-    assert views["adv_products"]["meta"]["source_cube"] == "products"
-    assert views["adv_categories"]["meta"]["source_cube"] == "product_category_name_translation"
-    assert views["adv_sellers"]["meta"]["source_cube"] == "sellers"
-    assert views["adv_customers"]["meta"]["source_cube"] == "customers"
-    assert views["adv_reviews"]["meta"]["source_cube"] == "order_reviews"
-    assert views["adv_payments"]["meta"]["source_cube"] == "order_payments"
+def test_category_satisfaction_view_exposes_attribution_metrics():
+    view = load_view("cube/model/views/category_satisfaction.yml")
+    all_includes = include_names(view)
+    assert "product_category_name_english" in all_includes
+    assert "review_count" in all_includes
+    assert "avg_review_score" in all_includes
+    assert "Attribution convention" in view["description"]
 
 
-def test_advanced_views_define_sql_contract_metadata_without_folders():
-    for name, view in advanced_views().items():
-        meta = view["meta"]
-        assert meta["mode"] == "advanced", f"{name} is not marked advanced"
-        assert meta["sql_table"] == name
-        assert meta["grain"], f"{name} is missing grain"
-        assert meta["primary_key"], f"{name} is missing primary_key"
-        assert "ai_context" in meta, f"{name} is missing ai_context"
-        assert "folders" not in view
+def test_customer_cohorts_view_exposes_90_day_retention_metrics():
+    view = load_view("cube/model/views/customer_cohorts.yml")
+    all_includes = include_names(view)
+    assert "cohort_month" in all_includes
+    assert "cohort_size" in all_includes
+    assert "retained_90d" in all_includes
+    assert "retention_90d_pct" in all_includes
 
 
-def test_advanced_views_expose_full_cube_surfaces_needed_for_sql():
-    views = advanced_views()
-
-    assert {"order_id", "customer_id", "delivery_status", "delay_days", "count"} <= set(include_names(views["adv_orders"]))
-    assert {"order_item_key", "order_id", "product_id", "seller_id", "total_revenue", "freight_value"} <= set(include_names(views["adv_order_items"]))
-    assert {"product_id", "product_category_name", "product_photos_qty"} <= set(include_names(views["adv_products"]))
-    assert {"product_category_name", "product_category_name_english"} <= set(include_names(views["adv_categories"]))
-    assert {"seller_id", "seller_state", "seller_city", "count"} <= set(include_names(views["adv_sellers"]))
-    assert {"customer_id", "customer_unique_id", "customer_state", "unique_customer_count"} <= set(include_names(views["adv_customers"]))
-    assert {"review_id", "order_id", "review_score", "avg_review_score"} <= set(include_names(views["adv_reviews"]))
-    assert {"order_payment_key", "order_id", "payment_type", "payment_value", "avg_installments"} <= set(include_names(views["adv_payments"]))
+def test_customer_revenue_segments_view_exposes_repeat_customer_metrics():
+    view = load_view("cube/model/views/customer_revenue_segments.yml")
+    all_includes = include_names(view)
+    assert "customer_segment" in all_includes
+    assert "customer_count" in all_includes
+    assert "total_revenue" in all_includes
+    assert "pct_revenue" in all_includes
 
 
-def test_advanced_views_document_expected_join_keys():
-    views = advanced_views()
+def test_seller_delivery_performance_view_exposes_thresholdable_measures():
+    view = load_view("cube/model/views/seller_delivery_performance.yml")
+    all_includes = include_names(view)
+    assert "seller_state" in all_includes
+    assert "delivery_count" in all_includes
+    assert "avg_delay_days" in all_includes
+    assert "pct_late" in all_includes
 
-    joins = {
-        (view_name, join["column"], join["joins_to"])
-        for view_name, view in views.items()
-        for join in view["meta"].get("join_keys", [])
-    }
 
-    assert ("adv_orders", "customer_id", "adv_customers.customer_id") in joins
-    assert ("adv_order_items", "order_id", "adv_orders.order_id") in joins
-    assert ("adv_order_items", "product_id", "adv_products.product_id") in joins
-    assert ("adv_order_items", "seller_id", "adv_sellers.seller_id") in joins
-    assert ("adv_products", "product_category_name", "adv_categories.product_category_name") in joins
-    assert ("adv_reviews", "order_id", "adv_orders.order_id") in joins
-    assert ("adv_payments", "order_id", "adv_orders.order_id") in joins
+def test_top_customer_state_categories_view_exposes_ranked_categories():
+    view = load_view("cube/model/views/top_customer_state_categories.yml")
+    all_includes = include_names(view)
+    assert "customer_state" in all_includes
+    assert "product_category_name_english" in all_includes
+    assert "category_rank" in all_includes
+    assert "total_revenue" in all_includes

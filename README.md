@@ -47,7 +47,7 @@ uv run pulsar-ui
 
 ```bash
 # Copy and fill in secrets
-cp cube/example.env cube/.env   # Snowflake credentials + CUBEJS_API_SECRET
+cp cube/example.env cube/.env   # Snowflake credentials + CUBEJS_API_SECRET + CUBEJS_SQL_*
 cp .env.example .env            # CUBE_API_TOKEN + ANTHROPIC_API_KEY
 
 docker compose up -d
@@ -61,7 +61,7 @@ See [`docs/deployment.md`](docs/deployment.md) for details.
 ## Tests
 
 ```bash
-# Full workspace suite (43 tests)
+# Full workspace suite
 uv run pytest
 
 # Agent tests only (no Streamlit, no Cube YAML)

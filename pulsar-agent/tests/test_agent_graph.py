@@ -68,11 +68,9 @@ class FakeCubeRestClient:
     def get_view_schema(self, view_name: str) -> dict:
         return {"name": view_name, "title": view_name, "description": "", "measures": [], "dimensions": []}
 
-    def get_advanced_schema(self) -> dict:
-        return {"mode": "advanced", "tables": [], "joins": [], "rules": []}
-
     def query_view(self, measures, dimensions=None, filters=None,
-                   time_dimensions=None, order=None, limit=1000):
+                   time_dimensions=None, segments=None, order=None, limit=1000,
+                   offset=None, total=None, timezone=None):
         return []
 
 

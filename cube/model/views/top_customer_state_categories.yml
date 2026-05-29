@@ -1,0 +1,16 @@
+views:
+  - name: top_customer_state_categories
+    description: >
+      View for ranked product category revenue within each customer state.
+      Grain: customer_state x English category. Revenue is delivered merchandise revenue.
+      Use category_rank filters to answer top-N category questions within each state.
+    meta:
+      summary: "Ranked category revenue within each customer state. Grain state x category."
+
+    cubes:
+      - join_path: helper_top_customer_state_categories
+        includes:
+          - customer_state
+          - product_category_name_english
+          - category_rank
+          - total_revenue

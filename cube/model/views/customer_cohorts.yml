@@ -1,0 +1,16 @@
+views:
+  - name: customer_cohorts
+    description: >
+      View for customer acquisition cohorts and 90-day repeat-purchase retention.
+      Grain: cohort_month. Customers are identified by customer_unique_id, not
+      order-scoped customer_id. Use this for monthly cohort retention questions.
+    meta:
+      summary: "Customer cohorts: monthly first-order cohorts and 90-day repeat retention."
+
+    cubes:
+      - join_path: helper_customer_cohorts
+        includes:
+          - cohort_month
+          - cohort_size
+          - retained_90d
+          - retention_90d_pct

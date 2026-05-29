@@ -17,6 +17,8 @@ views:
           - count
           - payment_value
           - count_multi_installment
+          - orders_with_multi_installment
+          - multi_installment_payment_share
           - avg_installments
 
       - join_path: order_payments.orders

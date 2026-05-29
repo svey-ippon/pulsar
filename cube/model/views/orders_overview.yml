@@ -16,6 +16,7 @@ views:
           - order_purchase_timestamp
           - order_delivered_customer_date
           - delivery_status
+          - delivery_late_status
           - delay_days
           - is_delivered
           - count
