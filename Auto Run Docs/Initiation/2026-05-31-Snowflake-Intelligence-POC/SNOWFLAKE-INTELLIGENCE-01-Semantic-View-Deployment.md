@@ -4,7 +4,7 @@ This phase creates all files needed for the Snowflake Intelligence POC and deplo
 
 ## Tasks
 
-- [ ] Create the `semantic/` folder structure and operational README:
+- [x] Create the `semantic/` folder structure and operational README:
   - `semantic/README.md` with the following sections:
     - **Prerequisites**: role needs `CREATE SEMANTIC VIEW` on `ECOMMERCE_DB.GOLD` and `SELECT` on all referenced Gold tables; Gold layer must be built (`cd transformations && uv run dbt build --project-dir dbt --profiles-dir dbt_profiles`)
     - **Naming conventions**: logical table names are snake_case business names (not Gold model names); revenue means merchandise revenue from `ORDER_ITEMS.price`; collected value means `ORDER_PAYMENTS.payment_value`
