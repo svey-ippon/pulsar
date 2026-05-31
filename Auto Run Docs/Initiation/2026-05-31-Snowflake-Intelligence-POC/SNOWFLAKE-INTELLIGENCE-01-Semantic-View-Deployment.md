@@ -15,7 +15,8 @@ This phase creates all files needed for the Snowflake Intelligence POC and deplo
 - [x] Check that the dbt Gold layer is already built by querying key table existence in Snowflake via the Python connector (use credentials from `.envrc`). If any of `ECOMMERCE_DB.GOLD.FCT_ORDERS`, `ECOMMERCE_DB.GOLD.FCT_ORDER_ITEMS`, `ECOMMERCE_DB.GOLD.MART_SELLER_SCORECARD` are missing, run `cd transformations && uv run dbt build --project-dir dbt --profiles-dir dbt_profiles` before continuing.
   <!-- 2026-05-31: Verified via Python snowflake-connector — all three tables exist in ECOMMERCE_DB.GOLD. No dbt build required. -->
 
-- [ ] Write `semantic/olist_analytics.semantic.yml` — complete YAML for all tables, relationships, and metrics. Build the full file in one pass following `docs_exploration/SNOWFLAKE_SEMANTIC_VIEW_IMPLEMENTATION_PLAN.md` as the authoritative spec. The file must include:
+- [x] Write `semantic/olist_analytics.semantic.yml` — complete YAML for all tables, relationships, and metrics. Build the full file in one pass following `docs_exploration/SNOWFLAKE_SEMANTIC_VIEW_IMPLEMENTATION_PLAN.md` as the authoritative spec. The file must include:
+  <!-- 2026-05-31: Created semantic/olist_analytics.semantic.yml with 20 logical tables (3 core dimensions, 4 core facts, 13 analytical marts), 13 relationships, and full metrics/filters. All column names verified against Gold SQL models. YAML syntax validated with pyyaml. Key mappings: seller_delivery_performance uses seller_delivery_key (renamed from order_item_key); delivery_distance uses seller_customer_distance_km; customer_rfm uses customer_health_segment/days_since_last_order/delivered_merchandise_revenue. -->
 
   **Top-level header:**
   ```yaml
@@ -68,12 +69,14 @@ This phase creates all files needed for the Snowflake Intelligence POC and deplo
 
   Follow the YAML syntax shown in the skeleton in the implementation plan. Every table must have `base_table.database: ECOMMERCE_DB`, `base_table.schema: GOLD`. Verify column names exist by reading the corresponding SQL file in `transformations/dbt/models/gold/` before referencing them.
 
-- [ ] Write `semantic/create_olist_analytics.sql` — SQL wrapper that embeds the YAML:
+- [x] Write `semantic/create_olist_analytics.sql` — SQL wrapper that embeds the YAML:
+  <!-- 2026-05-31: Created semantic/create_olist_analytics.sql with three sections: validate-only (TRUE), create/replace (FALSE), and inspect. YAML embedded verbatim between $$ delimiters in both call sections. -->
   - Section 1: validate-only call using `SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML('ECOMMERCE_DB.GOLD', $$ ... $$, TRUE)` with the full YAML pasted between `$$` delimiters
   - Section 2: create/replace call using the same pattern with `FALSE`
   - Add a comment header with usage instructions and the date
 
-- [ ] Validate YAML syntax and deploy to Snowflake:
+- [x] Validate YAML syntax and deploy to Snowflake:
+  <!-- 2026-05-31: YAML validated locally with pyyaml (OK). Snowflake validation call (TRUE) passed after fixing duplicate synonym "items" (removed from products table, kept in order_items). Creation call (FALSE) succeeded: "Semantic view was successfully created." Confirmed ECOMMERCE_DB.GOLD.OLIST_ANALYTICS exists via SHOW SEMANTIC VIEWS — visible in Snowsight. SYSTEM$GET_SEMANTIC_VIEW not available on this Snowflake account; used SHOW/DESCRIBE instead. -->
   - First, parse `semantic/olist_analytics.semantic.yml` with Python's `pyyaml` to catch syntax errors (`python3 -c "import yaml, sys; yaml.safe_load(open('semantic/olist_analytics.semantic.yml'))"`)
   - Fix any YAML syntax errors before proceeding
   - Run the validation call against Snowflake using the Python snowflake-connector (credentials from `.envrc`): execute `CALL SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML('ECOMMERCE_DB.GOLD', $$<yaml>$$, TRUE)` and print the result
