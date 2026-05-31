@@ -12,7 +12,8 @@ This phase creates all files needed for the Snowflake Intelligence POC and deplo
     - **Create command**: `CALL SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML('ECOMMERCE_DB.GOLD', $$ ... $$, FALSE);`
     - **Inspect command**: `SELECT SYSTEM$GET_SEMANTIC_VIEW('ECOMMERCE_DB.GOLD.OLIST_ANALYTICS');`
 
-- [ ] Check that the dbt Gold layer is already built by querying key table existence in Snowflake via the Python connector (use credentials from `.envrc`). If any of `ECOMMERCE_DB.GOLD.FCT_ORDERS`, `ECOMMERCE_DB.GOLD.FCT_ORDER_ITEMS`, `ECOMMERCE_DB.GOLD.MART_SELLER_SCORECARD` are missing, run `cd transformations && uv run dbt build --project-dir dbt --profiles-dir dbt_profiles` before continuing.
+- [x] Check that the dbt Gold layer is already built by querying key table existence in Snowflake via the Python connector (use credentials from `.envrc`). If any of `ECOMMERCE_DB.GOLD.FCT_ORDERS`, `ECOMMERCE_DB.GOLD.FCT_ORDER_ITEMS`, `ECOMMERCE_DB.GOLD.MART_SELLER_SCORECARD` are missing, run `cd transformations && uv run dbt build --project-dir dbt --profiles-dir dbt_profiles` before continuing.
+  <!-- 2026-05-31: Verified via Python snowflake-connector — all three tables exist in ECOMMERCE_DB.GOLD. No dbt build required. -->
 
 - [ ] Write `semantic/olist_analytics.semantic.yml` — complete YAML for all tables, relationships, and metrics. Build the full file in one pass following `docs_exploration/SNOWFLAKE_SEMANTIC_VIEW_IMPLEMENTATION_PLAN.md` as the authoritative spec. The file must include:
 
