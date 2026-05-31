@@ -22,6 +22,7 @@ transformations/
     dbt_project.yml
     macros/
       generate_schema_name.sql
+      set_query_tag.sql
     models/
       sources/
         <one source YAML per SILVER table>
@@ -65,8 +66,24 @@ The formatter excludes generated dbt artifacts under `dbt/target/` and `dbt/dbt_
 ## Query Tags
 
 Snowflake query tags should be used for dbt observability and cost attribution. See
-[QUERY_TAGS.md](QUERY_TAGS.md) for the recommended JSON query tag format and example
+[`docs_exploration/QUERY_TAGS_DOC.md`](../docs_exploration/QUERY_TAGS_DOC.md) for the recommended JSON query tag format and example
 `QUERY_HISTORY` queries.
+
+The project-level `+query_tag` value in `dbt_project.yml` is only a trigger/default. The custom
+`set_query_tag` macro replaces it with a JSON payload that includes the dbt project, target,
+database, schema, resource type, model, and invocation id. The data layer is inferred from the
+Snowflake schema, for example `GOLD`; it is not duplicated in model metadata.
+
+## Persisted Documentation
+
+`dbt_project.yml` enables `persist_docs` for relations and columns. During a successful dbt run,
+model descriptions are written to Snowflake table comments, and column descriptions are written to
+Snowflake column comments.
+
+The `config.meta` fields in model YAML files remain dbt metadata. They are useful in dbt artifacts
+and can later be pushed to Snowflake tags if a cataloging or discovery tool needs structured fields
+such as grain, model type, or short description. See
+[`docs_exploration/DBT_META_TO_SNOWFLAKE_METADATA.md`](../docs_exploration/DBT_META_TO_SNOWFLAKE_METADATA.md).
 
 The profile expects these environment variables:
 
