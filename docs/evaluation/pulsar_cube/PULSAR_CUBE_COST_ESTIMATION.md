@@ -7,8 +7,8 @@ excludes Snowflake compute/storage and LLM inference unless explicitly stated.
 
 ## Session Cost Notes
 
-- **Cout LLM**: 2,45€ - seule l'inférence - toutes les questions posées à la suite dans le même contexte
-- **Cout Requete Snowflake**: requêtes, insignifiant (système de cache côté cube-core). On compte le temps warehouse de la session ~10 minutes 1/6 crédit ($3/crédit) -> ~0.50 €
+- **Cout LLM**: 2,40$ - seule l'inférence - toutes les questions posées à la suite dans le même contexte
+- **Cout Requete Snowflake**: requêtes, insignifiant (système de cache côté cube-core). On compte le temps warehouse de la session ~10 minutes 1/6 crédit ($3/crédit) -> ~0.50$
 - **Cout Infra 'H24'**: ~$126/mois, voir l'estimation AWS ci-dessous. Hors Snowflake et hors cout LLM.
 
 ## AWS Runtime Cost Estimate
