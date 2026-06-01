@@ -6,11 +6,11 @@ view through a functional Snowflake Intelligence agent.
 The first target is a working agent, not answer-quality optimization. The current semantic view is
 kept as-is for the initial setup:
 
-- Semantic view: `ECOMMERCE_DB.GOLD.OLIST_ANALYTICS`
+- Semantic view: `PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS`
 - Semantic source file: `snowflake_intelligence/semantic/olist_analytics.semantic.yml`
 - Current design: 22 logical tables and 13 relationships
 - Deferred for later: verified queries, semantic view split by domain, advanced quality tuning
-- POC access model: creation and evaluation are performed with `ACCOUNTADMIN`; detailed RBAC is
+- POC access model: creation and evaluation are performed with `PULSAR_ADM`; detailed RBAC is
   intentionally deferred.
 
 ## Target Architecture
@@ -21,8 +21,8 @@ The intended runtime flow is:
 Snowflake Intelligence UI
   -> Cortex Agent object
     -> Cortex Analyst text-to-SQL tool
-      -> ECOMMERCE_DB.GOLD.OLIST_ANALYTICS semantic view
-        -> ECOMMERCE_DB.GOLD tables produced by dbt
+      -> PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS semantic view
+        -> PULSAR_DB.GOLD tables produced by dbt
 ```
 
 For this POC, the Snowflake Intelligence path replaces the custom runtime stack:
@@ -45,7 +45,7 @@ The Gold layer remains the governed analytical foundation. It is produced by the
 `transformations/` and materialized in:
 
 ```text
-ECOMMERCE_DB.GOLD
+PULSAR_DB.GOLD
 ```
 
 The agent setup assumes that all Gold tables referenced by the semantic view already exist. The
@@ -65,7 +65,7 @@ uv run dbt build --project-dir dbt --profiles-dir dbt_profiles
 The existing semantic view is the structured business contract consumed by Cortex Analyst.
 
 ```text
-ECOMMERCE_DB.GOLD.OLIST_ANALYTICS
+PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS
 ```
 
 It defines business-facing logical tables, dimensions, time dimensions, facts, metrics,
@@ -82,13 +82,13 @@ Validation and creation use:
 
 ```sql
 CALL SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML(
-  'ECOMMERCE_DB.GOLD',
+  'PULSAR_DB.INTELLIGENCE',
   $$ ... semantic YAML ... $$,
   TRUE
 );
 
 CALL SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML(
-  'ECOMMERCE_DB.GOLD',
+  'PULSAR_DB.INTELLIGENCE',
   $$ ... semantic YAML ... $$,
   FALSE
 );
@@ -105,13 +105,13 @@ outside the Gold schema separates analytical data contracts from conversational 
 Recommended target:
 
 ```text
-ECOMMERCE_DB.INTELLIGENCE
+PULSAR_DB.INTELLIGENCE
 ```
 
 Suggested setup:
 
 ```sql
-CREATE SCHEMA IF NOT EXISTS ECOMMERCE_DB.INTELLIGENCE;
+CREATE SCHEMA IF NOT EXISTS PULSAR_DB.INTELLIGENCE;
 ```
 
 This schema should hold:
@@ -134,7 +134,7 @@ cortex_analyst_text_to_sql
 That tool points to:
 
 ```text
-ECOMMERCE_DB.GOLD.OLIST_ANALYTICS
+PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS
 ```
 
 An optional `data_to_chart` tool can be included because Snowflake Intelligence can render
@@ -144,7 +144,7 @@ category rankings, and seller-state comparisons.
 Minimal SQL shape:
 
 ```sql
-CREATE OR REPLACE AGENT ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT
+CREATE OR REPLACE AGENT PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT
   COMMENT = 'Snowflake Intelligence agent for the Olist analytics POC.'
   PROFILE = '{"display_name": "Olist Analytics", "avatar": "analytics", "color": "blue"}'
   FROM SPECIFICATION
@@ -174,7 +174,7 @@ CREATE OR REPLACE AGENT ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT
 
   tool_resources:
     OlistAnalytics:
-      semantic_view: "ECOMMERCE_DB.GOLD.OLIST_ANALYTICS"
+      semantic_view: "PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS"
   $$;
 ```
 
@@ -188,7 +188,7 @@ Snowflake Intelligence uses the user's Snowflake identity, default role, and def
 the long term, the role used in the UI must be able to see and use the agent, semantic view, and
 warehouse.
 
-For this POC, evaluation is performed with `ACCOUNTADMIN`, so no dedicated runtime role is required
+For this POC, evaluation is performed with `PULSAR_ADM`, so no dedicated runtime role is required
 yet. The following role pattern is kept as future production guidance, not as a prerequisite for the
 first working agent.
 
@@ -201,8 +201,8 @@ OLIST_INTELLIGENCE_USER
 Required access areas:
 
 - warehouse usage for generated SQL execution;
-- database and schema usage for `ECOMMERCE_DB.GOLD`;
-- database and schema usage for `ECOMMERCE_DB.INTELLIGENCE`;
+- database and schema usage for `PULSAR_DB.GOLD`;
+- database and schema usage for `PULSAR_DB.INTELLIGENCE`;
 - `USAGE` on the Cortex Agent;
 - `REFERENCES` and `SELECT` on the semantic view for Cortex Analyst;
 - Cortex / Snowflake Intelligence privileges required by the account configuration.
@@ -212,18 +212,18 @@ Suggested grant skeleton:
 ```sql
 CREATE ROLE IF NOT EXISTS OLIST_INTELLIGENCE_USER;
 
-GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE OLIST_INTELLIGENCE_USER;
+GRANT USAGE ON WAREHOUSE SVEY_WH_XS TO ROLE OLIST_INTELLIGENCE_USER;
 
-GRANT USAGE ON DATABASE ECOMMERCE_DB TO ROLE OLIST_INTELLIGENCE_USER;
-GRANT USAGE ON SCHEMA ECOMMERCE_DB.GOLD TO ROLE OLIST_INTELLIGENCE_USER;
-GRANT USAGE ON SCHEMA ECOMMERCE_DB.INTELLIGENCE TO ROLE OLIST_INTELLIGENCE_USER;
+GRANT USAGE ON DATABASE PULSAR_DB TO ROLE OLIST_INTELLIGENCE_USER;
+GRANT USAGE ON SCHEMA PULSAR_DB.GOLD TO ROLE OLIST_INTELLIGENCE_USER;
+GRANT USAGE ON SCHEMA PULSAR_DB.INTELLIGENCE TO ROLE OLIST_INTELLIGENCE_USER;
 
 GRANT REFERENCES, SELECT
-  ON SEMANTIC VIEW ECOMMERCE_DB.GOLD.OLIST_ANALYTICS
+  ON SEMANTIC VIEW PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS
   TO ROLE OLIST_INTELLIGENCE_USER;
 
 GRANT USAGE
-  ON AGENT ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT
+  ON AGENT PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT
   TO ROLE OLIST_INTELLIGENCE_USER;
 ```
 
@@ -234,7 +234,7 @@ and a default warehouse set.
 
 The role that creates the agent needs stronger privileges than the role that only uses it.
 
-For this POC, use `ACCOUNTADMIN` to create and replace the agent. The following creator role pattern
+For this POC, use `PULSAR_ADM` to create and replace the agent. The following creator role pattern
 is kept as future production guidance.
 
 Suggested creator role:
@@ -245,7 +245,7 @@ OLIST_INTELLIGENCE_ADMIN
 
 Required access areas:
 
-- `CREATE AGENT` on `ECOMMERCE_DB.INTELLIGENCE`;
+- `CREATE AGENT` on `PULSAR_DB.INTELLIGENCE`;
 - `USAGE` on the target database and schema;
 - sufficient privileges to reference the semantic view;
 - ownership or grant management privileges if it will publish the agent to user roles.
@@ -255,13 +255,13 @@ Suggested grant skeleton:
 ```sql
 CREATE ROLE IF NOT EXISTS OLIST_INTELLIGENCE_ADMIN;
 
-GRANT USAGE ON DATABASE ECOMMERCE_DB TO ROLE OLIST_INTELLIGENCE_ADMIN;
-GRANT USAGE ON SCHEMA ECOMMERCE_DB.INTELLIGENCE TO ROLE OLIST_INTELLIGENCE_ADMIN;
-GRANT CREATE AGENT ON SCHEMA ECOMMERCE_DB.INTELLIGENCE TO ROLE OLIST_INTELLIGENCE_ADMIN;
+GRANT USAGE ON DATABASE PULSAR_DB TO ROLE OLIST_INTELLIGENCE_ADMIN;
+GRANT USAGE ON SCHEMA PULSAR_DB.INTELLIGENCE TO ROLE OLIST_INTELLIGENCE_ADMIN;
+GRANT CREATE AGENT ON SCHEMA PULSAR_DB.INTELLIGENCE TO ROLE OLIST_INTELLIGENCE_ADMIN;
 
-GRANT USAGE ON SCHEMA ECOMMERCE_DB.GOLD TO ROLE OLIST_INTELLIGENCE_ADMIN;
+GRANT USAGE ON SCHEMA PULSAR_DB.GOLD TO ROLE OLIST_INTELLIGENCE_ADMIN;
 GRANT REFERENCES, SELECT
-  ON SEMANTIC VIEW ECOMMERCE_DB.GOLD.OLIST_ANALYTICS
+  ON SEMANTIC VIEW PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS
   TO ROLE OLIST_INTELLIGENCE_ADMIN;
 ```
 
@@ -277,7 +277,7 @@ there.
 
 For this POC, there are two acceptable approaches:
 
-- keep the agent in `ECOMMERCE_DB.INTELLIGENCE`, close to the Olist domain;
+- keep the agent in `PULSAR_DB.INTELLIGENCE`, close to the Olist domain;
 - use a central `SNOWFLAKE_INTELLIGENCE.AGENTS` database/schema if the account already follows
   Snowflake's shared setup pattern.
 

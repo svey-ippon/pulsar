@@ -1,5 +1,5 @@
 -- ============================================================
--- Snowflake Intelligence Agent: ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT
+-- Snowflake Intelligence Agent: PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT
 --
 -- Purpose:
 --   Create the Cortex Agent used by Snowflake Intelligence for the
@@ -9,17 +9,17 @@
 --   Run this script in Snowsight with ACCOUNTADMIN.
 --
 -- Prerequisites:
---   - ECOMMERCE_DB.GOLD.OLIST_ANALYTICS semantic view exists.
---   - COMPUTE_WH exists and can be used for generated SQL execution.
+--   - PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS semantic view exists.
+--   - SVEY_WH_XS exists and can be used for generated SQL execution.
 -- ============================================================
 
-USE ROLE ACCOUNTADMIN;
-USE WAREHOUSE COMPUTE_WH;
-USE DATABASE ECOMMERCE_DB;
+USE ROLE PULSAR_ADM;
+USE WAREHOUSE SVEY_WH_XS;
+USE DATABASE PULSAR_DB;
 
 CREATE SCHEMA IF NOT EXISTS INTELLIGENCE;
 
-CREATE OR REPLACE AGENT ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT
+CREATE OR REPLACE AGENT PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT
   COMMENT = 'Snowflake Intelligence agent for the Olist analytics POC.'
   PROFILE = '{"display_name": "Olist Analytics", "avatar": "analytics", "color": "blue"}'
   FROM SPECIFICATION
@@ -51,8 +51,8 @@ CREATE OR REPLACE AGENT ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT
 
   tool_resources:
     OlistAnalytics:
-      semantic_view: "ECOMMERCE_DB.GOLD.OLIST_ANALYTICS"
+      semantic_view: "PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS"
   $$;
 
-SHOW AGENTS LIKE 'OLIST_ANALYTICS_AGENT' IN SCHEMA ECOMMERCE_DB.INTELLIGENCE;
-DESCRIBE AGENT ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT;
+SHOW AGENTS LIKE 'OLIST_ANALYTICS_AGENT' IN SCHEMA PULSAR_DB.INTELLIGENCE;
+DESCRIBE AGENT PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT;

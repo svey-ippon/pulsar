@@ -10,8 +10,8 @@ The first goal is a functional agent. Answer-quality tuning is intentionally def
 | Path | Purpose |
 |---|---|
 | `semantic/olist_analytics.semantic.yml` | Source definition of the native semantic view. |
-| `semantic/create_olist_analytics.sql` | Validates and creates `ECOMMERCE_DB.GOLD.OLIST_ANALYTICS`. |
-| `agent/create_olist_agent.sql` | Creates `ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT`. |
+| `semantic/create_olist_analytics.sql` | Validates and creates `PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS`. |
+| `agent/create_olist_agent.sql` | Creates `PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT`. |
 | `agent/smoke_test_olist_agent.sql` | Smoke tests the agent with `SNOWFLAKE.CORTEX.DATA_AGENT_RUN`. |
 | `docs/snowflake_intelligence_agent_components.md` | Component-level setup notes. |
 | `docs/snowflake_intelligence_agent_runbook.md` | Execution runbook. |
@@ -20,15 +20,15 @@ The first goal is a functional agent. Answer-quality tuning is intentionally def
 
 | Object | Name |
 |---|---|
-| Semantic view | `ECOMMERCE_DB.GOLD.OLIST_ANALYTICS` |
-| Agent schema | `ECOMMERCE_DB.INTELLIGENCE` |
-| Cortex Agent | `ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT` |
+| Semantic view | `PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS` |
+| Agent schema | `PULSAR_DB.INTELLIGENCE` |
+| Cortex Agent | `PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT` |
 | Cortex Analyst tool | `OlistAnalytics` |
-| Warehouse | `COMPUTE_WH` |
+| Warehouse | `SVEY_WH_XS` |
 
 ## POC Assumptions
 
-- Scripts are run in Snowsight with `ACCOUNTADMIN`.
+- Scripts are run in Snowsight with `PULSAR_ADM`.
 - Dedicated RBAC is out of scope for the POC.
 - The semantic view keeps its current 22 logical tables.
 - Verified queries are out of scope until the agent is functional and evaluated.

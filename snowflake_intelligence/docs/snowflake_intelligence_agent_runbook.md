@@ -4,18 +4,18 @@ This runbook explains how to create and smoke-test the Olist Snowflake Intellige
 POC.
 
 For this POC, RBAC is intentionally simplified: creation and evaluation are performed with
-`ACCOUNTADMIN`. There are no end-user access-control requirements beyond the evaluation workflow.
+`PULSAR_ADM`. There are no end-user access-control requirements beyond the evaluation workflow.
 
 ## Objects
 
 | Object | Name |
 |---|---|
-| Semantic view | `ECOMMERCE_DB.GOLD.OLIST_ANALYTICS` |
-| Agent schema | `ECOMMERCE_DB.INTELLIGENCE` |
-| Cortex Agent | `ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT` |
+| Semantic view | `PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS` |
+| Agent schema | `PULSAR_DB.INTELLIGENCE` |
+| Cortex Agent | `PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT` |
 | Cortex Analyst tool | `OlistAnalytics` |
 | Chart tool | `data_to_chart` |
-| Warehouse | `COMPUTE_WH` |
+| Warehouse | `SVEY_WH_XS` |
 
 ## Files
 
@@ -30,7 +30,7 @@ For this POC, RBAC is intentionally simplified: creation and evaluation are perf
 
 ### 1. Confirm The Gold Layer Exists
 
-The semantic view depends on Gold tables in `ECOMMERCE_DB.GOLD`.
+The semantic view depends on Gold tables in `PULSAR_DB.GOLD`.
 
 If needed, rebuild the Gold layer from the dbt project:
 
@@ -44,11 +44,11 @@ uv run dbt build --project-dir dbt --profiles-dir dbt_profiles
 If the semantic view is already deployed, confirm it:
 
 ```sql
-USE ROLE ACCOUNTADMIN;
-USE WAREHOUSE COMPUTE_WH;
+USE ROLE PULSAR_ADM;
+USE WAREHOUSE SVEY_WH_XS;
 
-SHOW SEMANTIC VIEWS LIKE 'OLIST_ANALYTICS' IN SCHEMA ECOMMERCE_DB.GOLD;
-DESCRIBE SEMANTIC VIEW ECOMMERCE_DB.GOLD.OLIST_ANALYTICS;
+SHOW SEMANTIC VIEWS LIKE 'OLIST_ANALYTICS' IN SCHEMA PULSAR_DB.INTELLIGENCE;
+DESCRIBE SEMANTIC VIEW PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS;
 ```
 
 If it is missing or outdated, run:
@@ -69,8 +69,8 @@ snowflake_intelligence/agent/create_olist_agent.sql
 
 Expected result:
 
-- schema `ECOMMERCE_DB.INTELLIGENCE` exists;
-- agent `ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT` exists;
+- schema `PULSAR_DB.INTELLIGENCE` exists;
+- agent `PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT` exists;
 - `SHOW AGENTS` returns the agent;
 - `DESCRIBE AGENT` returns the agent metadata and specification.
 
@@ -85,9 +85,9 @@ snowflake_intelligence/agent/smoke_test_olist_agent.sql
 Run the object checks first:
 
 ```sql
-SHOW AGENTS LIKE 'OLIST_ANALYTICS_AGENT' IN SCHEMA ECOMMERCE_DB.INTELLIGENCE;
-DESCRIBE AGENT ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT;
-SHOW SEMANTIC VIEWS LIKE 'OLIST_ANALYTICS' IN SCHEMA ECOMMERCE_DB.GOLD;
+SHOW AGENTS LIKE 'OLIST_ANALYTICS_AGENT' IN SCHEMA PULSAR_DB.INTELLIGENCE;
+DESCRIBE AGENT PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT;
+SHOW SEMANTIC VIEWS LIKE 'OLIST_ANALYTICS' IN SCHEMA PULSAR_DB.INTELLIGENCE;
 ```
 
 Then run one `SNOWFLAKE.CORTEX.DATA_AGENT_RUN` statement at a time. Running one statement at a time
@@ -143,7 +143,7 @@ For each smoke test, record:
 
 ### Agent Creation Fails With Privilege Errors
 
-For this POC, rerun with `ACCOUNTADMIN`. If the error still occurs, check whether Cortex Agents are
+For this POC, rerun with `PULSAR_ADM`. If the error still occurs, check whether Cortex Agents are
 enabled in the account and region.
 
 ### Semantic View Not Found
@@ -151,7 +151,7 @@ enabled in the account and region.
 Confirm:
 
 ```sql
-SHOW SEMANTIC VIEWS LIKE 'OLIST_ANALYTICS' IN SCHEMA ECOMMERCE_DB.GOLD;
+SHOW SEMANTIC VIEWS LIKE 'OLIST_ANALYTICS' IN SCHEMA PULSAR_DB.INTELLIGENCE;
 ```
 
 If missing, redeploy `snowflake_intelligence/semantic/create_olist_analytics.sql`.
@@ -161,8 +161,8 @@ If missing, redeploy `snowflake_intelligence/semantic/create_olist_analytics.sql
 Confirm:
 
 ```sql
-SHOW AGENTS LIKE 'OLIST_ANALYTICS_AGENT' IN SCHEMA ECOMMERCE_DB.INTELLIGENCE;
-DESCRIBE AGENT ECOMMERCE_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT;
+SHOW AGENTS LIKE 'OLIST_ANALYTICS_AGENT' IN SCHEMA PULSAR_DB.INTELLIGENCE;
+DESCRIBE AGENT PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT;
 ```
 
 ### The Agent Answers Without Data

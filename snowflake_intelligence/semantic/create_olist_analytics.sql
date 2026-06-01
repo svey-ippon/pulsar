@@ -1,5 +1,5 @@
 -- ============================================================
--- Snowflake Semantic View: ECOMMERCE_DB.GOLD.OLIST_ANALYTICS
+-- Snowflake Semantic View: PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS
 -- Source YAML:  snowflake_intelligence/semantic/olist_analytics.semantic.yml
 -- Generated:    2026-05-31
 --
@@ -10,14 +10,20 @@
 --   3. Confirm the deployed object with Section 3.
 --
 -- Prerequisites:
---   Role must have CREATE SEMANTIC VIEW on ECOMMERCE_DB.GOLD
+--   Role must have CREATE SEMANTIC VIEW on PULSAR_DB.INTELLIGENCE
 --   and SELECT on all referenced Gold tables.
 -- ============================================================
+
+USE ROLE PULSAR_ADM;
+USE WAREHOUSE SVEY_WH_XS;
+USE DATABASE PULSAR_DB;
+
+CREATE SCHEMA IF NOT EXISTS INTELLIGENCE;
 
 -- ─── SECTION 1: VALIDATE ONLY (validate_only = TRUE) ────────────────────────
 
 CALL SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML(
-  'ECOMMERCE_DB.GOLD',
+  'PULSAR_DB.INTELLIGENCE',
   $$
 name: OLIST_ANALYTICS
 description: "Business semantic view for Olist commerce analytics on top of governed Gold tables."
@@ -30,7 +36,7 @@ tables:
     synonyms: ["customers", "buyers", "clients"]
     description: "Customer dimension at customer_id grain. One row per order-scoped customer. Use customer_unique_id for physical-customer analytics."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: DIM_CUSTOMERS
     primary_key:
@@ -66,7 +72,7 @@ tables:
     synonyms: ["products", "goods", "catalog"]
     description: "Product dimension at product_id grain."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: DIM_PRODUCTS
     primary_key:
@@ -111,7 +117,7 @@ tables:
     synonyms: ["sellers", "vendors", "merchants"]
     description: "Seller dimension at seller_id grain."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: DIM_SELLERS
     primary_key:
@@ -144,7 +150,7 @@ tables:
     synonyms: ["orders", "sales orders", "purchases"]
     description: "Order lifecycle table at order_id grain. Use for order status, delivery performance, and customer identity."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: FCT_ORDERS
     primary_key:
@@ -253,7 +259,7 @@ tables:
     synonyms: ["items", "order lines", "merchandise sales"]
     description: "Order-item fact table at order_item_key grain. Authoritative source for merchandise revenue."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: FCT_ORDER_ITEMS
     primary_key:
@@ -336,7 +342,7 @@ tables:
     synonyms: ["payments", "collected payments", "order payments"]
     description: "Payment fact table at order_payment_key grain. Source for collected payment value — distinct from merchandise revenue."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: FCT_ORDER_PAYMENTS
     primary_key:
@@ -405,7 +411,7 @@ tables:
     synonyms: ["reviews", "order reviews", "customer satisfaction"]
     description: "Order review fact table at order_review_key grain. Provides order-level satisfaction scores and time-to-review metrics."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: FCT_ORDER_REVIEWS
     primary_key:
@@ -479,7 +485,7 @@ tables:
     synonyms: ["baskets", "order baskets", "order value"]
     description: "Order-level aggregation of items, products, sellers, revenues, and payments. Use for basket analysis without item-level fan-out."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_ORDER_BASKETS
     primary_key:
@@ -552,7 +558,7 @@ tables:
     synonyms: ["category reviews", "category satisfaction", "category quality"]
     description: "Category-level review attribution at order-category-review grain. Fan-out safe for category review and revenue analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_CATEGORY_SATISFACTION
     primary_key:
@@ -610,7 +616,7 @@ tables:
     synonyms: ["cohorts", "retention cohorts", "customer retention"]
     description: "Monthly acquisition cohort retention table. Use for cohort retention analysis at 90 and 180 days."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_CUSTOMER_COHORTS
     time_dimensions:
@@ -649,7 +655,7 @@ tables:
     synonyms: ["customer segmentation", "customer types", "repeat vs one-time"]
     description: "Customer segmentation by purchase frequency. Two segments: repeat (2+ delivered orders) and one_time."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_CUSTOMER_SEGMENTS
     dimensions:
@@ -685,7 +691,7 @@ tables:
     synonyms: ["RFM", "customer health", "customer activity"]
     description: "Customer-level recency, frequency, and monetary value table. Use for at-risk customer and customer health analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_CUSTOMER_RFM
     primary_key:
@@ -727,7 +733,7 @@ tables:
     synonyms: ["customer value", "customer revenue distribution", "revenue concentration"]
     description: "Customer-level delivered revenue ranking and quintile distribution. Use for top-20-percent customer concentration analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_CUSTOMER_VALUE_DISTRIBUTION
     primary_key:
@@ -770,7 +776,7 @@ tables:
     synonyms: ["seller delivery", "delivery performance", "seller fulfillment"]
     description: "Order-item delivery performance for delivered orders at seller and item grain."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_SELLER_DELIVERY_PERFORMANCE
     primary_key:
@@ -840,7 +846,7 @@ tables:
     synonyms: ["multi-seller orders", "order complexity", "seller complexity"]
     description: "Order-level seller complexity analysis. Use for multi-seller order impact on delivery and performance."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_ORDER_SELLER_COMPLEXITY
     primary_key:
@@ -894,7 +900,7 @@ tables:
     synonyms: ["monthly sales", "revenue trend", "monthly merchandise revenue"]
     description: "Month-over-month delivered merchandise revenue. Use for revenue trend and growth analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_MONTHLY_REVENUE
     time_dimensions:
@@ -939,7 +945,7 @@ tables:
     synonyms: ["category pareto", "revenue pareto", "category revenue share"]
     description: "Category-level delivered revenue with cumulative Pareto share. Use for identifying top revenue categories."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_CATEGORY_REVENUE_PARETO
     dimensions:
@@ -974,7 +980,7 @@ tables:
     synonyms: ["product revenue rank", "top products by category", "product ranking"]
     description: "Product-level delivered revenue ranked within each category. Use for top-product-within-category questions."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_PRODUCT_CATEGORY_REVENUE_RANK
     dimensions:
@@ -1013,7 +1019,7 @@ tables:
     synonyms: ["seller local share", "state revenue share", "local seller share"]
     description: "Seller share of delivered revenue within each customer state. Use for local vs. out-of-state seller analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_STATE_SELLER_REVENUE_SHARE
     dimensions:
@@ -1055,7 +1061,7 @@ tables:
     synonyms: ["installment impact", "installment review", "payment installments"]
     description: "Order-level payment installment profile and review score aggregated by installment bucket. Pre-aggregated — no relationships needed."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_PAYMENT_INSTALLMENT_REVIEW_IMPACT
     primary_key:
@@ -1102,7 +1108,7 @@ tables:
     synonyms: ["delivery distance", "shipping distance", "distance analysis"]
     description: "Order-item delivery distance between seller and customer with freight and delay analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_DELIVERY_DISTANCE
     primary_key:
@@ -1164,7 +1170,7 @@ tables:
     synonyms: ["seller performance", "seller ranking", "seller scorecard"]
     description: "Seller-level scorecard combining delivered revenue, reviews, and delivery performance. Use for top-seller analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_SELLER_SCORECARD
     primary_key:
@@ -1321,7 +1327,7 @@ relationships:
 -- ─── SECTION 2: CREATE OR REPLACE (validate_only = FALSE) ───────────────────
 
 CALL SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML(
-  'ECOMMERCE_DB.GOLD',
+  'PULSAR_DB.INTELLIGENCE',
   $$
 name: OLIST_ANALYTICS
 description: "Business semantic view for Olist commerce analytics on top of governed Gold tables."
@@ -1334,7 +1340,7 @@ tables:
     synonyms: ["customers", "buyers", "clients"]
     description: "Customer dimension at customer_id grain. One row per order-scoped customer. Use customer_unique_id for physical-customer analytics."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: DIM_CUSTOMERS
     primary_key:
@@ -1370,7 +1376,7 @@ tables:
     synonyms: ["products", "goods", "catalog"]
     description: "Product dimension at product_id grain."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: DIM_PRODUCTS
     primary_key:
@@ -1415,7 +1421,7 @@ tables:
     synonyms: ["sellers", "vendors", "merchants"]
     description: "Seller dimension at seller_id grain."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: DIM_SELLERS
     primary_key:
@@ -1448,7 +1454,7 @@ tables:
     synonyms: ["orders", "sales orders", "purchases"]
     description: "Order lifecycle table at order_id grain. Use for order status, delivery performance, and customer identity."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: FCT_ORDERS
     primary_key:
@@ -1557,7 +1563,7 @@ tables:
     synonyms: ["items", "order lines", "merchandise sales"]
     description: "Order-item fact table at order_item_key grain. Authoritative source for merchandise revenue."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: FCT_ORDER_ITEMS
     primary_key:
@@ -1640,7 +1646,7 @@ tables:
     synonyms: ["payments", "collected payments", "order payments"]
     description: "Payment fact table at order_payment_key grain. Source for collected payment value — distinct from merchandise revenue."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: FCT_ORDER_PAYMENTS
     primary_key:
@@ -1709,7 +1715,7 @@ tables:
     synonyms: ["reviews", "order reviews", "customer satisfaction"]
     description: "Order review fact table at order_review_key grain. Provides order-level satisfaction scores and time-to-review metrics."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: FCT_ORDER_REVIEWS
     primary_key:
@@ -1783,7 +1789,7 @@ tables:
     synonyms: ["baskets", "order baskets", "order value"]
     description: "Order-level aggregation of items, products, sellers, revenues, and payments. Use for basket analysis without item-level fan-out."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_ORDER_BASKETS
     primary_key:
@@ -1856,7 +1862,7 @@ tables:
     synonyms: ["category reviews", "category satisfaction", "category quality"]
     description: "Category-level review attribution at order-category-review grain. Fan-out safe for category review and revenue analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_CATEGORY_SATISFACTION
     primary_key:
@@ -1914,7 +1920,7 @@ tables:
     synonyms: ["cohorts", "retention cohorts", "customer retention"]
     description: "Monthly acquisition cohort retention table. Use for cohort retention analysis at 90 and 180 days."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_CUSTOMER_COHORTS
     time_dimensions:
@@ -1953,7 +1959,7 @@ tables:
     synonyms: ["customer segmentation", "customer types", "repeat vs one-time"]
     description: "Customer segmentation by purchase frequency. Two segments: repeat (2+ delivered orders) and one_time."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_CUSTOMER_SEGMENTS
     dimensions:
@@ -1989,7 +1995,7 @@ tables:
     synonyms: ["RFM", "customer health", "customer activity"]
     description: "Customer-level recency, frequency, and monetary value table. Use for at-risk customer and customer health analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_CUSTOMER_RFM
     primary_key:
@@ -2031,7 +2037,7 @@ tables:
     synonyms: ["customer value", "customer revenue distribution", "revenue concentration"]
     description: "Customer-level delivered revenue ranking and quintile distribution. Use for top-20-percent customer concentration analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_CUSTOMER_VALUE_DISTRIBUTION
     primary_key:
@@ -2074,7 +2080,7 @@ tables:
     synonyms: ["seller delivery", "delivery performance", "seller fulfillment"]
     description: "Order-item delivery performance for delivered orders at seller and item grain."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_SELLER_DELIVERY_PERFORMANCE
     primary_key:
@@ -2144,7 +2150,7 @@ tables:
     synonyms: ["multi-seller orders", "order complexity", "seller complexity"]
     description: "Order-level seller complexity analysis. Use for multi-seller order impact on delivery and performance."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_ORDER_SELLER_COMPLEXITY
     primary_key:
@@ -2198,7 +2204,7 @@ tables:
     synonyms: ["monthly sales", "revenue trend", "monthly merchandise revenue"]
     description: "Month-over-month delivered merchandise revenue. Use for revenue trend and growth analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_MONTHLY_REVENUE
     time_dimensions:
@@ -2243,7 +2249,7 @@ tables:
     synonyms: ["category pareto", "revenue pareto", "category revenue share"]
     description: "Category-level delivered revenue with cumulative Pareto share. Use for identifying top revenue categories."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_CATEGORY_REVENUE_PARETO
     dimensions:
@@ -2278,7 +2284,7 @@ tables:
     synonyms: ["product revenue rank", "top products by category", "product ranking"]
     description: "Product-level delivered revenue ranked within each category. Use for top-product-within-category questions."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_PRODUCT_CATEGORY_REVENUE_RANK
     dimensions:
@@ -2317,7 +2323,7 @@ tables:
     synonyms: ["seller local share", "state revenue share", "local seller share"]
     description: "Seller share of delivered revenue within each customer state. Use for local vs. out-of-state seller analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_STATE_SELLER_REVENUE_SHARE
     dimensions:
@@ -2359,7 +2365,7 @@ tables:
     synonyms: ["installment impact", "installment review", "payment installments"]
     description: "Order-level payment installment profile and review score aggregated by installment bucket. Pre-aggregated — no relationships needed."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_PAYMENT_INSTALLMENT_REVIEW_IMPACT
     primary_key:
@@ -2406,7 +2412,7 @@ tables:
     synonyms: ["delivery distance", "shipping distance", "distance analysis"]
     description: "Order-item delivery distance between seller and customer with freight and delay analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_DELIVERY_DISTANCE
     primary_key:
@@ -2468,7 +2474,7 @@ tables:
     synonyms: ["seller performance", "seller ranking", "seller scorecard"]
     description: "Seller-level scorecard combining delivered revenue, reviews, and delivery performance. Use for top-seller analysis."
     base_table:
-      database: ECOMMERCE_DB
+      database: PULSAR_DB
       schema: GOLD
       table: MART_SELLER_SCORECARD
     primary_key:
@@ -2624,6 +2630,6 @@ relationships:
 
 -- ─── SECTION 3: CONFIRM DEPLOYMENT ─────────────────────────────────────────
 
-SHOW SEMANTIC VIEWS IN SCHEMA ECOMMERCE_DB.GOLD;
+SHOW SEMANTIC VIEWS IN SCHEMA PULSAR_DB.INTELLIGENCE;
 
-DESCRIBE SEMANTIC VIEW ECOMMERCE_DB.GOLD.OLIST_ANALYTICS;
+DESCRIBE SEMANTIC VIEW PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS;
