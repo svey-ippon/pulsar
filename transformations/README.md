@@ -5,7 +5,7 @@ This project contains the dbt transformations for the Olist Snowflake semantic-l
 The project materializes the Gold layer as Snowflake tables in:
 
 ```text
-ECOMMERCE_DB.GOLD
+PULSAR_DB.GOLD
 ```
 
 The former Snowsight-oriented Gold SQL scripts have been replaced by one dbt model per Gold object.
@@ -96,7 +96,7 @@ DEV_DBT_SNOWFLAKE_ROLE
 DEV_DBT_SNOWFLAKE_WAREHOUSE
 ```
 
-The database and schema are fixed by the project/profile to `ECOMMERCE_DB.GOLD`.
+The database and schema are fixed by the project/profile to `PULSAR_DB.GOLD`.
 
 ## Why Gold Before Semantic
 
@@ -152,7 +152,7 @@ business calendars.
 
 ## Execution Notes
 
-- Sources are declared from `ECOMMERCE_DB.SILVER`.
+- Sources are declared from `PULSAR_DB.SILVER`.
 - All Gold models are materialized as tables.
 - Revenue means merchandise revenue from `ORDER_ITEMS.PRICE`.
 - Collected value means `ORDER_PAYMENTS.PAYMENT_VALUE`.

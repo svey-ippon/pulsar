@@ -2,7 +2,7 @@ version: 2
 
 sources:
   - name: silver
-    database: ECOMMERCE_DB
+    database: PULSAR_DB
     schema: SILVER
     tables:
       - name: customers
