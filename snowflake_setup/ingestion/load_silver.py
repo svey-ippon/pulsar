@@ -13,7 +13,8 @@ import yaml
 
 
 PROJECT_DIR: Final[Path] = Path(__file__).resolve().parents[1]
-DEFAULT_DATABASE: Final[str] = "ECOMMERCE_DB"
+DEFAULT_DATABASE: Final[str] = "PULSAR_DB"
+DEFAULT_ROLE: Final[str] = "PULSAR_ADM"
 DEFAULT_SCHEMA: Final[str] = "SILVER"
 DEFAULT_DATA_DIR: Final[Path] = PROJECT_DIR / "data"
 DEFAULT_SCHEMA_DIR: Final[Path] = PROJECT_DIR / "schemas"
@@ -35,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--schema-dir", type=Path, default=DEFAULT_SCHEMA_DIR)
     parser.add_argument("--database", default=DEFAULT_DATABASE)
     parser.add_argument("--schema", default=DEFAULT_SCHEMA)
+    parser.add_argument("--role", default=DEFAULT_ROLE)
     parser.add_argument("--connection-name", default=None)
     return parser.parse_args()
 
@@ -106,43 +108,45 @@ def create_or_replace_table_sql(
     )
 
 
-def candidate_connections_files() -> list[Path]:
+def candidate_config_files() -> list[Path]:
     candidates: list[Path] = []
     snowflake_home = os.environ.get("SNOWFLAKE_HOME")
     if snowflake_home:
+        candidates.append(Path(snowflake_home) / "config.toml")
         candidates.append(Path(snowflake_home) / "connections.toml")
+    candidates.append(Path.home() / ".snowflake" / "config.toml")
     candidates.append(Path.home() / ".snowflake" / "connections.toml")
-    candidates.append(
-        Path.home() / "Library" / "Application Support" / "snowflake" / "connections.toml"
-    )
     return candidates
 
 
-def discover_single_connection_name() -> str | None:
-    for path in candidate_connections_files():
+def load_connection_params(connection_name: str | None) -> dict:
+    env_default = os.environ.get("SNOWFLAKE_DEFAULT_CONNECTION_NAME")
+    for path in candidate_config_files():
         if not path.exists():
             continue
         with path.open("rb") as handle:
             config = tomllib.load(handle)
+        name = connection_name or env_default or config.get("default_connection_name")
+        if not name:
+            continue
+        # snow CLI uses [connections.X]; connections.toml uses [X]
         if "connections" in config and isinstance(config["connections"], dict):
-            names = list(config["connections"].keys())
+            params = config["connections"].get(name)
         else:
-            names = [key for key, value in config.items() if isinstance(value, dict)]
-        if len(names) == 1:
-            return names[0]
-    return None
+            params = config.get(name)
+        if isinstance(params, dict):
+            return dict(params)
+    raise RuntimeError(
+        f"Snowflake connection {connection_name!r} not found in any config file. "
+        f"Searched: {[str(p) for p in candidate_config_files()]}"
+    )
 
 
-def open_connection(connection_name: str | None):
-    if connection_name:
-        return snowflake.connector.connect(connection_name=connection_name)
-    try:
-        return snowflake.connector.connect()
-    except snowflake.connector.errors.Error:
-        discovered_name = discover_single_connection_name()
-        if discovered_name:
-            return snowflake.connector.connect(connection_name=discovered_name)
-        raise
+def open_connection(connection_name: str | None, role: str | None = None):
+    params = load_connection_params(connection_name)
+    if role:
+        params["role"] = role
+    return snowflake.connector.connect(**params)
 
 
 def put_file(
@@ -205,8 +209,9 @@ def main() -> None:
     files = csv_files(args.data_dir)
     load_timestamp = datetime.now()
 
-    with open_connection(args.connection_name) as connection:
+    with open_connection(args.connection_name, role=args.role) as connection:
         with connection.cursor() as cursor:
+            cursor.execute("USE SECONDARY ROLES NONE")
             cursor.execute(f"CREATE DATABASE IF NOT EXISTS {sql_identifier(args.database)}")
             cursor.execute(
                 f"CREATE SCHEMA IF NOT EXISTS "

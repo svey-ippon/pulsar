@@ -4,39 +4,34 @@ This project contains the Snowflake setup assets for the Brazilian e-commerce PO
 
 It currently covers two tasks:
 
-1. Create the reader role/user grants needed by the POC.
-2. Load the Brazilian e-commerce CSV dataset into `ECOMMERCE_DB.SILVER`.
+1. Create the `PULSAR_ADM` role and provision `PULSAR_DB`.
+2. Load the Brazilian e-commerce CSV dataset into `PULSAR_DB.SILVER`.
 
 ## Layout
 
 ```text
 snowflake_setup/
   data/       # Local CSV files, ignored by git except DESCRIPTION.md
-  access_control/ # SQL scripts for roles, users, and grants
+  access_control/ # SQL scripts for roles and grants
   ingestion/  # Executable Python ingestion scripts
   schemas/    # YAML source schemas for Snowflake tables
 ```
 
-## Permissions
+## Access Control
 
-Review and run this SQL in Snowsight with an admin role:
-
-```text
-access_control/pulsar_cube_permissions.sql
-```
-
-Before running it, replace:
+Review and run this SQL in Snowsight **as ACCOUNTADMIN**:
 
 ```text
-<REPLACE_WITH_SECURE_PASSWORD>
+access_control/pulsar_adm_setup.sql
 ```
 
-The script creates, if missing:
+The script:
 
-- role `CUBE_READER`
-- user `CUBE_SVC`
-
-It grants read access on `ECOMMERCE_DB.SILVER`.
+- creates role `PULSAR_ADM`
+- grants `CREATE DATABASE` on the account to `PULSAR_ADM`
+- grants `USAGE, MONITOR` on warehouse `SVEY_WH_XS` to `PULSAR_ADM`
+- grants `PULSAR_ADM` to user `SVEY`
+- switches to `PULSAR_ADM` and creates `PULSAR_DB`
 
 ## Ingestion
 
@@ -45,8 +40,9 @@ The ingestion script loads all CSV files from `data/` into Snowflake using the Y
 
 Target location:
 
-- database: `ECOMMERCE_DB`
+- database: `PULSAR_DB`
 - schema: `SILVER`
+- role: `PULSAR_ADM` (default)
 
 Run with the default Snowflake connection profile:
 
@@ -54,21 +50,25 @@ Run with the default Snowflake connection profile:
 uv run python ingestion/load_silver.py
 ```
 
-Run with an explicit Snowflake connection profile:
+Run with an explicit connection profile:
 
 ```bash
 uv run python ingestion/load_silver.py --connection-name dev
 ```
 
-The POC assumes this script is run with the existing default profile using an admin role.
+Override role or database if needed:
+
+```bash
+uv run python ingestion/load_silver.py --role PULSAR_ADM --database PULSAR_DB
+```
 
 ## Ingestion Behavior
 
 For each CSV file, the script:
 
 1. reads the matching YAML schema from `schemas/`;
-2. creates `ECOMMERCE_DB` if needed;
-3. creates `ECOMMERCE_DB.SILVER` if needed;
+2. creates `PULSAR_DB` if needed;
+3. creates `PULSAR_DB.SILVER` if needed;
 4. creates or replaces the target table;
 5. applies table and column comments from YAML;
 6. adds an `updated_at` column of type `TIMESTAMP_NTZ`;

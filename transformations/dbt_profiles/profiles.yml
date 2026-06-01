@@ -3,13 +3,12 @@ transformations:
   outputs:
     dev:
       type: snowflake
-      account: "{{ env_var('DEV_SNOWFLAKE_ACCOUNT') }}"
-      user: "{{ env_var('DEV_SNOWFLAKE_USER') }}"
-      private_key: "{{ env_var('DEV_SNOWFLAKE_USER_PRIVATE_KEY') }}"
-      private_key_passphrase: "{{ env_var('DEV_SNOWFLAKE_USER_PRIVATE_KEY_PASSPHRASE') }}"
-      role: "{{ env_var('DEV_DBT_SNOWFLAKE_ROLE') }}"
-      database: ECOMMERCE_DB
-      warehouse: "{{ env_var('DEV_DBT_SNOWFLAKE_WAREHOUSE') }}"
+      account: "{{ env_var('DBT_SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('DBT_SNOWFLAKE_USER') }}"
+      private_key: "{{ env_var('DBT_SNOWFLAKE_USER_PRIVATE_KEY') }}"
+      private_key_passphrase: "{{ env_var('DBT_SNOWFLAKE_USER_PRIVATE_KEY_PASSPHRASE') }}"
+      role: "{{ env_var('DBT_SNOWFLAKE_ROLE') }}"
+      database: PULSAR_DB
+      warehouse: "{{ env_var('DBT_SNOWFLAKE_WAREHOUSE') }}"
       schema: GOLD
       threads: 4
-
