@@ -24,6 +24,9 @@ CREATE OR REPLACE AGENT PULSAR_DB.INTELLIGENCE.OLIST_ANALYTICS_AGENT
   PROFILE = '{"display_name": "Olist Analytics", "avatar": "analytics", "color": "blue"}'
   FROM SPECIFICATION
   $$
+  models:
+    orchestration: claude-sonnet-4-6
+
   orchestration:
     budget:
       seconds: 60
