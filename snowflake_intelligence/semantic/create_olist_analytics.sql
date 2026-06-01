@@ -1,6 +1,6 @@
 -- ============================================================
 -- Snowflake Semantic View: ECOMMERCE_DB.GOLD.OLIST_ANALYTICS
--- Source YAML:  semantic/olist_analytics.semantic.yml
+-- Source YAML:  snowflake_intelligence/semantic/olist_analytics.semantic.yml
 -- Generated:    2026-05-31
 --
 -- Usage:

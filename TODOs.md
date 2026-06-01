@@ -7,9 +7,3 @@ on l'applique aux tables avec une valeur (set)
 
 
 https://docs.getdbt.com/reference/resource-configs/meta?version=1.11
-
-
-
-# WHAT ?!? SNOWFLAKE -> TABLE -> LINEAGE
-
-Mais comment il sait ça ?
