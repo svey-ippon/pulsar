@@ -1,0 +1,31 @@
+[project]
+name = "pulsar-bare-workspace"
+version = "0.1.0"
+description = "Workspace root for the 'bare' agent — raw SQL over a governed Snowflake gold layer (no Cube / no Semantic View)"
+requires-python = "~=3.14.2"
+dependencies = [
+    "pulsar-bare-agent",
+    "pulsar-bare-ui",
+]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1",
+    "pytest>=8.2",
+]
+
+[tool.uv.workspace]
+members = ["pulsar-agent", "pulsar-ui"]
+
+[tool.uv.sources]
+pulsar-bare-agent = { workspace = true }
+pulsar-bare-ui = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["pulsar-agent/tests", "pulsar-ui/tests"]
+addopts = "--import-mode=importlib"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"
