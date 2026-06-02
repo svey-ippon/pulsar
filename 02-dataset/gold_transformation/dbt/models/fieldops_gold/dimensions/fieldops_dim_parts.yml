@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: fieldops_dim_parts
+    description: "Spare-parts catalogue. Referenced by PART lines only (LABOR lines carry a NULL part_id)."
+    config:
+      alias: DIM_PARTS
+      meta:
+        grain: "part_id"
+        model_type: dimension
+    columns:
+      - name: part_id
+        description: "Part identifier."
+        data_tests:
+          - not_null
+          - unique
+      - name: part_name
+        description: "Part display name."
+      - name: part_family
+        description: "filter, bearing, valve, belt, seal, sensor, motor, gasket, hose or lubricant."

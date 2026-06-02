@@ -1,0 +1,18 @@
+table: sites
+description: 'Client locations where interventions happen.'
+columns:
+- name: site_id
+  type: varchar
+  description: 'Unique site identifier. Primary key.'
+- name: client_id
+  type: varchar
+  description: 'Owning client (FK to clients).'
+- name: site_name
+  type: varchar
+  description: 'Site name.'
+- name: site_type
+  type: varchar
+  description: 'Type/category of the site.'
+- name: zip_code_prefix
+  type: varchar
+  description: 'Site location zip prefix (FK to geography).'

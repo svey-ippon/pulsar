@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: fieldops_dim_technicians
+    description: "Technicians (crew leads), each dispatched from a depot. Depot geography via dim_geography (depot-location role)."
+    config:
+      alias: DIM_TECHNICIANS
+      meta:
+        grain: "technician_id"
+        model_type: dimension
+    columns:
+      - name: technician_id
+        description: "Technician identifier."
+        data_tests:
+          - not_null
+          - unique
+      - name: depot_code
+        description: "Dispatch depot code."
+      - name: depot_zip_code_prefix
+        description: "Depot location; foreign key to dim_geography (depot role)."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_geography')
+                field: zip_code_prefix
+      - name: seniority_level
+        description: "junior, senior or expert."

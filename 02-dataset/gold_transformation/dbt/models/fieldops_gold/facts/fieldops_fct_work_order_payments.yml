@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: fieldops_fct_work_order_payments
+    description: "Payment fact at (work_order_id x payment_sequence) grain: collected cash settling the invoice with a lag — NOT service revenue."
+    config:
+      alias: FCT_WORK_ORDER_PAYMENTS
+      meta:
+        grain: "work_order_id x payment_sequence"
+        model_type: fact
+        business_conventions:
+          - "payment_amount is collected value; monthly collected differs from monthly revenue (collection lag, partial payments)."
+    columns:
+      - name: work_order_payment_key
+        description: "Synthetic key work_order_id-payment_sequence."
+        data_tests:
+          - not_null
+          - unique
+      - name: work_order_id
+        description: "Settled work order; foreign key to fct_work_orders."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fieldops_fct_work_orders')
+                field: work_order_id
+      - name: payment_sequence
+        description: "Payment sequence (partial payments possible; degenerate dimension)."
+      - name: payment_method
+        description: "bank_transfer, purchase_order or corporate_card (degenerate dimension)."
+      - name: paid_date_key
+        description: "Payment date; foreign key to dim_date (paid role)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_date')
+                field: date_day
+      - name: payment_amount
+        description: "Collected amount."

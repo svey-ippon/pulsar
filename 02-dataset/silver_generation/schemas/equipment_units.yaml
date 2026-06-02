@@ -1,0 +1,18 @@
+table: equipment_units
+description: 'Installed equipment units per site (silver-only: not exposed in gold; grounds the work_order <-> category bridge).'
+columns:
+- name: equipment_unit_id
+  type: varchar
+  description: 'Unique installed-equipment-unit identifier. Primary key.'
+- name: site_id
+  type: varchar
+  description: 'Site where the unit is installed (FK to sites).'
+- name: equipment_category
+  type: varchar
+  description: 'Equipment category (FK to equipment_categories).'
+- name: serial_number
+  type: varchar
+  description: 'Manufacturer serial number of the unit.'
+- name: installed_date
+  type: date
+  description: 'Date the unit was installed on site.'

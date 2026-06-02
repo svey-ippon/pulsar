@@ -1,0 +1,50 @@
+version: 2
+
+# FieldOps operational (silver) layer. Generated and loaded into Snowflake by
+# 02-dataset/silver_generation (uv run fieldops-generate && uv run fieldops-load).
+# The gold star in models/fieldops_gold builds on these tables via source().
+
+sources:
+  - name: fieldops_silver
+    database: PULSAR_DB
+    schema: FIELDOPS_SILVER
+    tables:
+      - name: geography
+        identifier: GEOGRAPHY
+        description: "Fictional geography referential: zip prefix -> city, state."
+      - name: clients
+        identifier: CLIENTS
+        description: "Contract-holding client companies (the FieldOps 'customer' of record)."
+      - name: sites
+        identifier: SITES
+        description: "Client locations where interventions happen."
+      - name: depots
+        identifier: DEPOTS
+        description: "Dispatch depots (one per state)."
+      - name: technicians
+        identifier: TECHNICIANS
+        description: "Technicians, each attached to a dispatch depot."
+      - name: equipment_categories
+        identifier: EQUIPMENT_CATEGORIES
+        description: "Equipment category referential."
+      - name: equipment_units
+        identifier: EQUIPMENT_UNITS
+        description: "Installed equipment units per site (silver-only; grounds the work_order <-> category bridge)."
+      - name: parts
+        identifier: PARTS
+        description: "Spare-parts catalogue (list_price is silver-only)."
+      - name: work_orders
+        identifier: WORK_ORDERS
+        description: "Work orders with their lifecycle milestones (opened -> promised -> scheduled -> started -> completed -> validated). NULL milestone = not reached yet."
+      - name: work_order_lines
+        identifier: WORK_ORDER_LINES
+        description: "Intervention lines: PART lines (part_id, quantity) and LABOR lines (billed_hours). part_id is NULL on LABOR lines."
+      - name: work_order_servicing
+        identifier: WORK_ORDER_SERVICING
+        description: "Equipment units serviced by each work order (silver-only; source of the gold bridge)."
+      - name: payments
+        identifier: PAYMENTS
+        description: "Payments settling the work-order invoice (lines + call-out fee), with a collection lag; partial payments possible."
+      - name: surveys
+        identifier: SURVEYS
+        description: "Post-intervention satisfaction survey responses (1-10); several responses per work order possible (re-surveys)."

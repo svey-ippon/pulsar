@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: fieldops_dim_sites
+    description: "Client locations where interventions happen. Snowflaked to dim_clients; geography via dim_geography (site-location role)."
+    config:
+      alias: DIM_SITES
+      meta:
+        grain: "site_id"
+        model_type: dimension
+    columns:
+      - name: site_id
+        description: "Site identifier."
+        data_tests:
+          - not_null
+          - unique
+      - name: client_id
+        description: "Owning client company; foreign key to dim_clients (snowflake)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_clients')
+                field: client_id
+      - name: site_name
+        description: "Site display name."
+      - name: site_type
+        description: "plant, warehouse or office."
+      - name: site_zip_code_prefix
+        description: "Site location; foreign key to dim_geography (site role)."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_geography')
+                field: zip_code_prefix

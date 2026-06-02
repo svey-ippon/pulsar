@@ -1,0 +1,15 @@
+table: clients
+description: "Contract-holding client companies (the FieldOps 'customer' of record)."
+columns:
+- name: client_id
+  type: varchar
+  description: 'Unique client company identifier. Primary key.'
+- name: client_name
+  type: varchar
+  description: 'Client company name.'
+- name: industry
+  type: varchar
+  description: 'Industry the client operates in.'
+- name: contract_tier
+  type: varchar
+  description: 'Service contract tier for the client.'

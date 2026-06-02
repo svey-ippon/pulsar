@@ -1,0 +1,45 @@
+table: work_orders
+description: 'Work orders with their lifecycle milestones (opened -> promised -> scheduled -> started -> completed -> validated). NULL milestone = not reached yet.'
+columns:
+- name: work_order_id
+  type: varchar
+  description: 'Unique work-order identifier. Primary key.'
+- name: site_id
+  type: varchar
+  description: 'Serviced site (FK to sites).'
+- name: technician_id
+  type: varchar
+  description: 'Lead technician assigned (FK to technicians).'
+- name: work_order_type
+  type: varchar
+  description: 'Type of work order.'
+- name: priority
+  type: varchar
+  description: 'Work-order priority.'
+- name: crew_size
+  type: number(2,0)
+  description: 'Number of technicians on the crew.'
+- name: opened_date
+  type: date
+  description: 'Milestone: work order opened.'
+- name: promised_date
+  type: date
+  description: 'Milestone: date promised to the client (SLA target).'
+- name: scheduled_date
+  type: date
+  description: 'Milestone: intervention scheduled. NULL if not reached.'
+- name: started_date
+  type: date
+  description: 'Milestone: intervention started. NULL if not reached.'
+- name: completed_date
+  type: date
+  description: 'Milestone: intervention completed. NULL if not reached.'
+- name: validated_date
+  type: date
+  description: 'Milestone: work validated / closed. NULL if not reached.'
+- name: duration_hours
+  type: number(6,2)
+  description: 'On-site intervention duration in hours.'
+- name: call_out_fee
+  type: number(12,2)
+  description: 'Fixed call-out fee billed per work order.'

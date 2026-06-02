@@ -1,0 +1,9 @@
+table: equipment_categories
+description: 'Equipment category referential.'
+columns:
+- name: equipment_category
+  type: varchar
+  description: 'Equipment category code. Primary key.'
+- name: category_group
+  type: varchar
+  description: 'Higher-level group the category belongs to.'

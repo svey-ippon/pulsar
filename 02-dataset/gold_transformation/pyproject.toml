@@ -1,0 +1,20 @@
+[project]
+name = "transformations"
+version = "0.1.0"
+description = "dbt transformations building the FieldOps gold star (PULSAR_DB.FIELDOPS_GOLD) from the FIELDOPS_SILVER sources"
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "dbt-core~=1.11.8",
+    "dbt-snowflake~=1.11.4",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.8",
+    "shandy-sqlfmt[jinjafmt]>=0.28.2",
+    "polars>=1.35.2",
+]
+
+[tool.sqlfmt]
+exclude = ["dbt/target/**/*", "dbt/dbt_packages/**/*"]

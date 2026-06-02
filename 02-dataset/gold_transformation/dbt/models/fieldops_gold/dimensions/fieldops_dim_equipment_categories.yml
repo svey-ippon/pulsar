@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: fieldops_dim_equipment_categories
+    description: "Equipment category referential. Work orders reach categories through the weighted bridge."
+    config:
+      alias: DIM_EQUIPMENT_CATEGORIES
+      meta:
+        grain: "equipment_category"
+        model_type: dimension
+    columns:
+      - name: equipment_category
+        description: "Equipment category (natural key): compressor, hvac_unit, ..."
+        data_tests:
+          - not_null
+          - unique
+      - name: category_group
+        description: "rotating, climate, thermal, electrical or static."

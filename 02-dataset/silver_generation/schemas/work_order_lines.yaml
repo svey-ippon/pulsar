@@ -1,0 +1,24 @@
+table: work_order_lines
+description: 'Intervention lines: PART lines (part_id, quantity) and LABOR lines (billed_hours). part_id is NULL on LABOR lines.'
+columns:
+- name: work_order_id
+  type: varchar
+  description: 'Parent work order (FK to work_orders).'
+- name: line_number
+  type: number(4,0)
+  description: 'Line sequence within the work order.'
+- name: line_kind
+  type: varchar
+  description: "Line kind: 'PART' or 'LABOR'."
+- name: part_id
+  type: varchar
+  description: 'Part used on a PART line (FK to parts); NULL on LABOR lines.'
+- name: quantity
+  type: number(4,0)
+  description: 'Quantity of the part on a PART line; NULL on LABOR lines.'
+- name: billed_hours
+  type: number(8,2)
+  description: 'Billed labor hours on a LABOR line; NULL on PART lines.'
+- name: line_amount
+  type: number(12,2)
+  description: 'Monetary amount of the line.'

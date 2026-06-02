@@ -1,0 +1,15 @@
+table: surveys
+description: 'Post-intervention satisfaction survey responses (1-10); several responses per work order possible (re-surveys).'
+columns:
+- name: work_order_id
+  type: varchar
+  description: 'Surveyed work order (FK to work_orders).'
+- name: response_sequence
+  type: number(2,0)
+  description: 'Response sequence within the work order (re-surveys possible).'
+- name: responded_date
+  type: date
+  description: 'Date the survey response was recorded.'
+- name: satisfaction_score
+  type: number(2,0)
+  description: 'Satisfaction score, 1-10.'

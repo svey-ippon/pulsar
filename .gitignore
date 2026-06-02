@@ -22,7 +22,11 @@ env/
 .coverage
 htmlcov/
 
+# Node
+node_modules/
+
 # Project-specific
 .worktrees/
 .claude/
-pulsar_cube/cube/.env
+agent_pulsar_cube/cube/.env
+agent_pulsar_bare/data/

@@ -1,0 +1,436 @@
+{
+  "version": "2.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "currentViewName": null,
+  "defaultView": {
+    "detailLevel": "All",
+    "tablePositions": [
+      {
+        "name": "DIM_DATE",
+        "schemaName": "public",
+        "x": 2015.453615702142,
+        "y": 337.2127638301944
+      },
+      {
+        "name": "DIM_CLIENTS",
+        "schemaName": "public",
+        "x": 312.1036010450027,
+        "y": 145.33462220514753
+      },
+      {
+        "name": "DIM_SITES",
+        "schemaName": "public",
+        "x": 700.2941671586863,
+        "y": 113.33462220514753
+      },
+      {
+        "name": "DIM_TECHNICIANS",
+        "schemaName": "public",
+        "x": 683.6252218461863,
+        "y": 402.9613138494034
+      },
+      {
+        "name": "DIM_GEOGRAPHY",
+        "schemaName": "public",
+        "x": 314.3849082020712,
+        "y": 337.2127638301944
+      },
+      {
+        "name": "DIM_EQUIPMENT_CATEGORIES",
+        "schemaName": "public",
+        "x": 289.80076932385396,
+        "y": -40.822035708786615
+      },
+      {
+        "name": "DIM_PARTS",
+        "schemaName": "public",
+        "x": 582.3520219746382,
+        "y": -285.46808042642755
+      },
+      {
+        "name": "FCT_WORK_ORDERS",
+        "schemaName": "public",
+        "x": 1168.890306084926,
+        "y": 81.37524166346509
+      },
+      {
+        "name": "FCT_WORK_ORDER_LINES",
+        "schemaName": "public",
+        "x": 1510.6903544533982,
+        "y": -265.8007693238539
+      },
+      {
+        "name": "FCT_WORK_ORDER_PAYMENTS",
+        "schemaName": "public",
+        "x": 1525.440837780328,
+        "y": 49.37524166346509
+      },
+      {
+        "name": "FCT_SATISFACTION_SURVEYS",
+        "schemaName": "public",
+        "x": 1512.4073954690232,
+        "y": 485.7040639454493
+      },
+      {
+        "name": "BRIDGE_WORK_ORDER_CATEGORIES",
+        "schemaName": "public",
+        "x": 755.9572908921311,
+        "y": -72.82203570878661
+      }
+    ],
+    "tableGroupCollapseStates": [],
+    "stickyNoteLayouts": [],
+    "referencePaths": [
+      {
+        "firstFieldNames": [
+          "CLIENT_ID"
+        ],
+        "firstTableName": "DIM_CLIENTS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CLIENT_ID"
+        ],
+        "secondTableName": "DIM_SITES",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "ZIP_CODE_PREFIX"
+        ],
+        "firstTableName": "DIM_GEOGRAPHY",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SITE_ZIP_CODE_PREFIX"
+        ],
+        "secondTableName": "DIM_SITES",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "ZIP_CODE_PREFIX"
+        ],
+        "firstTableName": "DIM_GEOGRAPHY",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "DEPOT_ZIP_CODE_PREFIX"
+        ],
+        "secondTableName": "DIM_TECHNICIANS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "SITE_ID"
+        ],
+        "firstTableName": "DIM_SITES",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SITE_ID"
+        ],
+        "secondTableName": "FCT_WORK_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "TECHNICIAN_ID"
+        ],
+        "firstTableName": "DIM_TECHNICIANS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "TECHNICIAN_ID"
+        ],
+        "secondTableName": "FCT_WORK_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "OPENED_DATE_KEY"
+        ],
+        "secondTableName": "FCT_WORK_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 1509.1875226646448,
+            "y": 385.2127638301944
+          },
+          {
+            "x": 1509.1875226646448,
+            "y": 289.3752416634651
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PROMISED_DATE_KEY"
+        ],
+        "secondTableName": "FCT_WORK_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 1506.729108776823,
+            "y": 385.2127638301944
+          },
+          {
+            "x": 1506.729108776823,
+            "y": 321.3752416634651
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SCHEDULED_DATE_KEY"
+        ],
+        "secondTableName": "FCT_WORK_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 1509.1875226646448,
+            "y": 385.2127638301944
+          },
+          {
+            "x": 1509.1875226646448,
+            "y": 353.3752416634651
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "STARTED_DATE_KEY"
+        ],
+        "secondTableName": "FCT_WORK_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "COMPLETED_DATE_KEY"
+        ],
+        "secondTableName": "FCT_WORK_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 1509.1875226646448,
+            "y": 385.2127638301944
+          },
+          {
+            "x": 1509.1875226646448,
+            "y": 417.3752416634651
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "VALIDATED_DATE_KEY"
+        ],
+        "secondTableName": "FCT_WORK_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 1509.1875226646448,
+            "y": 385.2127638301944
+          },
+          {
+            "x": 1509.1875226646448,
+            "y": 449.3752416634651
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "WORK_ORDER_ID"
+        ],
+        "firstTableName": "FCT_WORK_ORDERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "WORK_ORDER_ID"
+        ],
+        "secondTableName": "FCT_WORK_ORDER_LINES",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "PART_ID"
+        ],
+        "firstTableName": "DIM_PARTS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PART_ID"
+        ],
+        "secondTableName": "FCT_WORK_ORDER_LINES",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "WORK_ORDER_ID"
+        ],
+        "firstTableName": "FCT_WORK_ORDERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "WORK_ORDER_ID"
+        ],
+        "secondTableName": "FCT_WORK_ORDER_PAYMENTS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PAID_DATE_KEY"
+        ],
+        "secondTableName": "FCT_WORK_ORDER_PAYMENTS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 1905.427535251085,
+            "y": 385.2127638301944
+          },
+          {
+            "x": 1905.427535251085,
+            "y": 225.3752416634651
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "WORK_ORDER_ID"
+        ],
+        "firstTableName": "FCT_WORK_ORDERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "WORK_ORDER_ID"
+        ],
+        "secondTableName": "FCT_SATISFACTION_SURVEYS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "RESPONDED_DATE_KEY"
+        ],
+        "secondTableName": "FCT_SATISFACTION_SURVEYS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 1903.5400067916864,
+            "y": 385.2127638301944
+          },
+          {
+            "x": 1903.5400067916864,
+            "y": 629.7040639454493
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "WORK_ORDER_ID"
+        ],
+        "firstTableName": "FCT_WORK_ORDERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "WORK_ORDER_ID"
+        ],
+        "secondTableName": "BRIDGE_WORK_ORDER_CATEGORIES",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "EQUIPMENT_CATEGORY"
+        ],
+        "firstTableName": "DIM_EQUIPMENT_CATEGORIES",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "EQUIPMENT_CATEGORY"
+        ],
+        "secondTableName": "BRIDGE_WORK_ORDER_CATEGORIES",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      }
+    ]
+  },
+  "views": {}
+}

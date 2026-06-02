@@ -1,0 +1,9 @@
+table: work_order_servicing
+description: 'Equipment units serviced by each work order (silver-only; source of the gold bridge).'
+columns:
+- name: work_order_id
+  type: varchar
+  description: 'Work order (FK to work_orders).'
+- name: equipment_unit_id
+  type: varchar
+  description: 'Equipment unit serviced by the work order (FK to equipment_units).'

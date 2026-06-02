@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: fieldops_dim_geography
+    description: "Conformed fictional geography (zip prefix grain). Role-played as site location and depot location."
+    config:
+      alias: DIM_GEOGRAPHY
+      meta:
+        grain: "zip_code_prefix"
+        model_type: dimension
+    columns:
+      - name: zip_code_prefix
+        description: "Fictional 3-digit zip prefix (natural key)."
+        data_tests:
+          - not_null
+          - unique
+      - name: city
+        description: "Fictional city."
+      - name: state
+        description: "Fictional state."

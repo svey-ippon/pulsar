@@ -1,0 +1,18 @@
+table: payments
+description: 'Payments settling the work-order invoice (lines + call-out fee), with a collection lag; partial payments possible.'
+columns:
+- name: work_order_id
+  type: varchar
+  description: 'Work order being settled (FK to work_orders).'
+- name: payment_sequence
+  type: number(2,0)
+  description: 'Payment sequence within the work order (partial payments possible).'
+- name: payment_method
+  type: varchar
+  description: 'Payment method used.'
+- name: paid_date
+  type: date
+  description: 'Date the payment was collected.'
+- name: payment_amount
+  type: number(12,2)
+  description: 'Amount of this payment.'

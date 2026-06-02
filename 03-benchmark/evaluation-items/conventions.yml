@@ -1,0 +1,68 @@
+# Conventions the contracts MUST carry (coverage checklist).
+#
+# Every convention an eval question presupposes is registered here with the
+# items that depend on it. When writing the pulsar contract (fieldops.yaml)
+# and the Snowflake semantic view, walk this list: a missing convention makes
+# the dependent items unfair (the agent would be scored on an undeclared rule).
+#
+# A required convention is something the semantic model DEFINES and that a
+# question needs to be answerable. It is not a capability under test: without
+# the convention defined in the contract, there is no correct answer to give.
+#
+# kind: anti_prior — contradicts an industry default (FIELDOPS_SPEC.md §5, dosed: 3)
+#       ordinary   — resolves an ambiguity without contradicting any default
+#       vocabulary — internal jargon only the model's synonyms can resolve
+
+conventions:
+  - id: CV-1
+    kind: anti_prior
+    statement: >-
+      Service revenue INCLUDES the call-out fee: revenue = SUM(line_amount) +
+      call-out fees. FieldOps prices interventions all-in.
+    required_by: [A2-T, A4-T, A4-C, B1-T, B1-C, C1, C2-T, C3-T, D1-T, F1-C]
+
+  - id: CV-2
+    kind: anti_prior
+    statement: >-
+      "Customer" means the contract-holding client company (dim_clients),
+      never the site. Counting customers = COUNT(DISTINCT client_id).
+    required_by: [A1-T]
+
+  - id: CV-3
+    kind: anti_prior
+    statement: >-
+      "Late" = completed more than 2 business days after the promised date
+      (sla_delay_bdays > 2). Business days, promised anchor, 2-day grace.
+    required_by: [B2-T, E1-T]
+
+  - id: SY-1
+    kind: vocabulary
+    statement: >-
+      "Site hours" is FieldOps internal jargon for billed man-hours
+      (billed_hours) — NOT on-site elapsed duration, despite the lexical
+      surface. The semantic model must carry the synonym on the billed-hours
+      metric/measure; without it the term is unresolvable.
+    required_by: [A5-T]
+
+  - id: GC-REV-ANCHOR
+    kind: ordinary
+    statement: >-
+      Revenue is recognized at completion. Time-scoped questions on revenue,
+      billing lines or hours anchor on the work order's completed date
+      (lines have no date of their own).
+    required_by: [A2-T, A3-T, A4-T, B1-T, B1-C, C1, C2-T, C2-C, C3-T, D1-T, D1-C, D2-T, D2-C, E2-C, F1-C]
+
+  - id: GC-SURVEY-LATEST
+    kind: ordinary
+    statement: >-
+      Several survey responses per work order are possible (re-surveys); the
+      LATEST response (highest response_sequence) is the one that counts.
+    required_by: [D3-T]
+
+  - id: GC-DELAY-COMPLETED
+    kind: ordinary
+    statement: >-
+      sla_delay_bdays is NULL when the work order is not completed: delay and
+      punctuality statistics are computed among COMPLETED work orders only —
+      an open work order is neither late nor on time.
+    required_by: [B2-T, B2-C, E1-T]

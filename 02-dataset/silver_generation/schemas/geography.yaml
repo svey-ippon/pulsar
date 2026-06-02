@@ -1,0 +1,12 @@
+table: geography
+description: 'Fictional geography referential: zip prefix -> city, state.'
+columns:
+- name: zip_code_prefix
+  type: varchar
+  description: 'Zip-code prefix (text; leading zeros are significant). Primary key.'
+- name: city
+  type: varchar
+  description: 'City name for the zip prefix.'
+- name: state
+  type: varchar
+  description: 'State code for the zip prefix.'

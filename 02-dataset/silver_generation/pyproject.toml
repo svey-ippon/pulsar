@@ -1,0 +1,36 @@
+[project]
+name = "fieldops-silver"
+version = "0.1.0"
+description = "FieldOps silver dataset: deterministic generator (simulates the operational layer, runs the divergence pre-flight checks — FIELDOPS_SPEC.md §6) and Snowflake loader (pushes to PULSAR_DB.FIELDOPS_SILVER)."
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "numpy>=2.1",
+    "pandas>=2.2",
+    "pyyaml>=6.0",
+    "snowflake-connector-python>=3.18.0",
+]
+
+[project.scripts]
+fieldops-generate = "fieldops_generator.cli:main"
+fieldops-load = "fieldops_generator.load:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.14.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fieldops_generator"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

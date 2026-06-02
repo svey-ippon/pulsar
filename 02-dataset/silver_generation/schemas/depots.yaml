@@ -1,0 +1,9 @@
+table: depots
+description: 'Dispatch depots (one per state).'
+columns:
+- name: depot_code
+  type: varchar
+  description: 'Dispatch depot code (one per state). Primary key.'
+- name: zip_code_prefix
+  type: varchar
+  description: 'Depot location zip prefix (FK to geography).'

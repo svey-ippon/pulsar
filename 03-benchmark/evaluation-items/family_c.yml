@@ -1,0 +1,254 @@
+gold: PULSAR_DB.FIELDOPS_GOLD
+items:
+- id: C1
+  family: C
+  kind: control
+  capability: 'multi-hop navigation: lines -> work_orders -> sites -> geography (site role); doubles as
+    the control of C3-T'
+  question: Which 3 states generated the most service revenue in 2019?
+  requires_conventions:
+  - CV-1
+  - GC-REV-ANCHOR
+  pass_criterion: numeric
+  tolerance:
+    mode: relative
+    value: 0.005
+  answer_format: top 3 (state, revenue), ranking must match
+  certified_sql: |
+    with wo_rev as (
+        select
+            wo.work_order_id,
+            wo.site_id,
+            wo.completed_date_key,
+            coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as revenue
+        from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+        left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+            on wo.work_order_id = l.work_order_id
+        where wo.completed_date_key is not null
+        group by wo.work_order_id, wo.site_id, wo.completed_date_key
+    )
+    select g.state, round(sum(r.revenue), 2) as revenue
+    from wo_rev as r
+    inner join PULSAR_DB.FIELDOPS_GOLD.DIM_SITES as s on r.site_id = s.site_id
+    inner join PULSAR_DB.FIELDOPS_GOLD.DIM_GEOGRAPHY as g
+        on s.site_zip_code_prefix = g.zip_code_prefix
+    where r.completed_date_key >= '2019-01-01' and r.completed_date_key < '2020-01-01'
+    group by g.state
+    order by revenue desc
+    limit 3
+  expected_answer:
+  - state: Ostbrook
+    revenue: 521979.1
+  - state: Westhollow
+    revenue: 330225.09
+  - state: Sablewood
+    revenue: 327788.69
+  naive_signatures:
+  - indicates: C3
+    description: depot state (technician role) used instead of site state
+    sql: |
+      with wo_rev as (
+          select
+              wo.work_order_id,
+              wo.technician_id,
+              wo.completed_date_key,
+              coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as revenue
+          from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+              on wo.work_order_id = l.work_order_id
+          where wo.completed_date_key is not null
+          group by wo.work_order_id, wo.technician_id, wo.completed_date_key
+      )
+      select g.state, round(sum(r.revenue), 2) as revenue
+      from wo_rev as r
+      inner join PULSAR_DB.FIELDOPS_GOLD.DIM_TECHNICIANS as t
+          on r.technician_id = t.technician_id
+      inner join PULSAR_DB.FIELDOPS_GOLD.DIM_GEOGRAPHY as g
+          on t.depot_zip_code_prefix = g.zip_code_prefix
+      where r.completed_date_key >= '2019-01-01' and r.completed_date_key < '2020-01-01'
+      group by g.state
+      order by revenue desc
+      limit 3
+    value:
+    - state: Ostbrook
+      revenue: 359384.94
+    - state: Eastmere
+      revenue: 353257.8
+    - state: Bryceland
+      revenue: 352137.61
+    diverges: true
+- id: C2-T
+  family: C
+  kind: trap
+  capability: use allocation_weight when slicing work-order revenue by category
+  question: Which 3 equipment categories generated the most service revenue in 2019, and how much each?
+  control_id: C2-C
+  requires_conventions:
+  - CV-1
+  - GC-REV-ANCHOR
+  pass_criterion: numeric
+  tolerance:
+    mode: relative
+    value: 0.005
+  answer_format: top 3 (category, weighted revenue), ranking must match
+  certified_sql: |
+    with wo_rev as (
+        select
+            wo.work_order_id,
+            wo.completed_date_key,
+            coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as revenue
+        from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+        left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+            on wo.work_order_id = l.work_order_id
+        where wo.completed_date_key is not null
+        group by wo.work_order_id, wo.completed_date_key
+    )
+    select b.equipment_category, round(sum(r.revenue * b.allocation_weight), 2) as revenue
+    from wo_rev as r
+    inner join PULSAR_DB.FIELDOPS_GOLD.BRIDGE_WORK_ORDER_CATEGORIES as b
+        on r.work_order_id = b.work_order_id
+    where r.completed_date_key >= '2019-01-01' and r.completed_date_key < '2020-01-01'
+    group by b.equipment_category
+    order by revenue desc
+    limit 3
+  expected_answer:
+  - equipment_category: conveyor_system
+    revenue: 414540.08
+  - equipment_category: compressor
+    revenue: 397454
+  - equipment_category: control_panel
+    revenue: 395895.1
+  naive_signatures:
+  - indicates: C2
+    description: 'unweighted bridge join: multi-category work orders double-counted'
+    sql: |
+      with wo_rev as (
+          select
+              wo.work_order_id,
+              wo.completed_date_key,
+              coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as revenue
+          from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+              on wo.work_order_id = l.work_order_id
+          where wo.completed_date_key is not null
+          group by wo.work_order_id, wo.completed_date_key
+      )
+      select b.equipment_category, round(sum(r.revenue), 2) as revenue
+      from wo_rev as r
+      inner join PULSAR_DB.FIELDOPS_GOLD.BRIDGE_WORK_ORDER_CATEGORIES as b
+          on r.work_order_id = b.work_order_id
+      where r.completed_date_key >= '2019-01-01' and r.completed_date_key < '2020-01-01'
+      group by b.equipment_category
+      order by revenue desc
+      limit 3
+    value:
+    - equipment_category: conveyor_system
+      revenue: 681102.8
+    - equipment_category: control_panel
+      revenue: 678828.84
+    - equipment_category: switchgear
+      revenue: 666435.62
+    diverges: true
+- id: C2-C
+  family: C
+  kind: control
+  capability: counting through the bridge needs NO weight (a WO touching 2 categories counts once in each)
+  question: How many work orders completed in 2018 involved each equipment category? Give the top 3.
+  requires_conventions:
+  - GC-REV-ANCHOR
+  pass_criterion: numeric
+  tolerance:
+    mode: exact
+  answer_format: top 3 (category, work-order count), ranking must match
+  certified_sql: |
+    select b.equipment_category, count(distinct b.work_order_id) as wo_count
+    from PULSAR_DB.FIELDOPS_GOLD.BRIDGE_WORK_ORDER_CATEGORIES as b
+    inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+        on b.work_order_id = wo.work_order_id
+    where wo.completed_date_key >= '2018-01-01' and wo.completed_date_key < '2019-01-01'
+    group by b.equipment_category
+    order by wo_count desc
+    limit 3
+  expected_answer:
+  - equipment_category: switchgear
+    wo_count: 616
+  - equipment_category: conveyor_system
+    wo_count: 562
+  - equipment_category: hvac_unit
+    wo_count: 553
+- id: C3-T
+  family: C
+  kind: trap
+  capability: 'geography role-playing: depot (dispatch) state, not site state'
+  question: How much service revenue was delivered by technicians dispatched from depots in Northvale
+    in 2019?
+  control_id: C1
+  requires_conventions:
+  - CV-1
+  - GC-REV-ANCHOR
+  pass_criterion: numeric
+  tolerance:
+    mode: relative
+    value: 0.005
+  certified_sql: |
+    with wo_rev as (
+        select
+            wo.work_order_id,
+            wo.technician_id,
+            wo.completed_date_key,
+            coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as revenue
+        from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+        left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+            on wo.work_order_id = l.work_order_id
+        where wo.completed_date_key is not null
+        group by wo.work_order_id, wo.technician_id, wo.completed_date_key
+    )
+    select round(sum(r.revenue), 2) as answer
+    from wo_rev as r
+    inner join PULSAR_DB.FIELDOPS_GOLD.DIM_TECHNICIANS as t
+        on r.technician_id = t.technician_id
+    inner join PULSAR_DB.FIELDOPS_GOLD.DIM_GEOGRAPHY as g
+        on t.depot_zip_code_prefix = g.zip_code_prefix
+    where g.state = 'Northvale'
+      and r.completed_date_key >= '2019-01-01' and r.completed_date_key < '2020-01-01'
+  expected_answer: 276434.26
+  naive_signatures:
+  - indicates: C3
+    description: site state used instead of depot state
+    sql: |
+      with wo_rev as (
+          select
+              wo.work_order_id,
+              wo.site_id,
+              wo.completed_date_key,
+              coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as revenue
+          from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+              on wo.work_order_id = l.work_order_id
+          where wo.completed_date_key is not null
+          group by wo.work_order_id, wo.site_id, wo.completed_date_key
+      )
+      select round(sum(r.revenue), 2) as answer
+      from wo_rev as r
+      inner join PULSAR_DB.FIELDOPS_GOLD.DIM_SITES as s on r.site_id = s.site_id
+      inner join PULSAR_DB.FIELDOPS_GOLD.DIM_GEOGRAPHY as g
+          on s.site_zip_code_prefix = g.zip_code_prefix
+      where g.state = 'Northvale'
+        and r.completed_date_key >= '2019-01-01' and r.completed_date_key < '2020-01-01'
+    value: 247415.97
+    diverges: true
+  - indicates: B1
+    description: call-out fees excluded from the depot-state revenue
+    sql: |
+      select round(sum(l.line_amount), 2) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+      inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          on l.work_order_id = wo.work_order_id
+      inner join PULSAR_DB.FIELDOPS_GOLD.DIM_TECHNICIANS as t
+          on wo.technician_id = t.technician_id
+      inner join PULSAR_DB.FIELDOPS_GOLD.DIM_GEOGRAPHY as g
+          on t.depot_zip_code_prefix = g.zip_code_prefix
+      where g.state = 'Northvale'
+        and wo.completed_date_key >= '2019-01-01' and wo.completed_date_key < '2020-01-01'
+    value: 243712.97
+    diverges: true

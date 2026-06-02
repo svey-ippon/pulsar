@@ -1,0 +1,33 @@
+# Instructions the AGENT layer must carry (coverage checklist).
+#
+# The agent-instruction counterpart of conventions.yml: a required instruction
+# is a behaviour the agent's instructions must PRESCRIBE for the item to be
+# fair — on the pulsar side it lives in the system prompt (prompt.py response
+# rules), on the Snowflake side in the agent's instructions.response /
+# instructions.orchestration. It is not a capability under test: without the
+# prescription, there is no correct behaviour to give, and a failure measures
+# the prompt author's omission, not the agent.
+#
+# The SEMANTIC part of the F items (detecting absence or ambiguity from the
+# contract) stays a tested capability; only the response FORM is prescribed.
+
+instructions:
+  - id: IN-MISSING
+    statement: >-
+      When a question needs data, a concept or a linkage the semantic model
+      does not provide, say precisely what is missing instead of inventing an
+      answer.
+    required_by: [F1-T, F3-T]
+
+  - id: IN-AMBIGUITY
+    statement: >-
+      When two readings of a question differ materially and no documented
+      convention decides, ask the user to choose (or present both figures
+      explicitly labeled) rather than silently picking one.
+    required_by: [F4-T]
+
+  - id: IN-ADHOC-DISCLOSURE
+    statement: >-
+      Any ad-hoc aggregation or proxy (a figure not backed by a defined metric
+      or derivable concept) must be disclosed as such in the answer.
+    required_by: [F3-T]

@@ -1,0 +1,118 @@
+gold: PULSAR_DB.FIELDOPS_GOLD
+items:
+- id: B1-T
+  family: B
+  kind: trap
+  capability: follow CV-1 (revenue INCLUDES the call-out fee) against the exclude-transport prior
+  question: What was our total service revenue in 2019?
+  control_id: B1-C
+  requires_conventions:
+  - CV-1
+  - GC-REV-ANCHOR
+  pass_criterion: numeric
+  tolerance:
+    mode: relative
+    value: 0.005
+  certified_sql: |
+    with wo_rev as (
+        select
+            wo.work_order_id,
+            wo.completed_date_key,
+            coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as revenue
+        from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+        left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+            on wo.work_order_id = l.work_order_id
+        where wo.completed_date_key is not null
+        group by wo.work_order_id, wo.completed_date_key
+    )
+    select round(sum(revenue), 2) as answer
+    from wo_rev
+    where completed_date_key >= '2019-01-01' and completed_date_key < '2020-01-01'
+  expected_answer: 3756386.15
+  naive_signatures:
+  - indicates: B1
+    description: 'call-out fees excluded (industry default: transport not in revenue)'
+    sql: |
+      select round(sum(l.line_amount), 2) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+      inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          on l.work_order_id = wo.work_order_id
+      where wo.completed_date_key >= '2019-01-01' and wo.completed_date_key < '2020-01-01'
+    value: 3328322.94
+    diverges: true
+  - indicates: A2
+    description: collected payments instead of service revenue
+    sql: |
+      select round(sum(payment_amount), 2) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_PAYMENTS
+      where paid_date_key >= '2019-01-01' and paid_date_key < '2020-01-01'
+    value: 4078765.96
+    diverges: true
+- id: B1-C
+  family: B
+  kind: control
+  capability: compute the call-out fees directly when asked
+  question: What was the total amount of call-out fees charged on interventions completed in 2019?
+  requires_conventions:
+  - GC-REV-ANCHOR
+  pass_criterion: numeric
+  tolerance:
+    mode: relative
+    value: 0.005
+  certified_sql: |
+    select round(sum(call_out_fee), 2) as answer
+    from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+    where completed_date_key >= '2019-01-01' and completed_date_key < '2020-01-01'
+  expected_answer: 428063.21
+- id: B2-T
+  family: B
+  kind: trap
+  capability: follow CV-3 (late = sla_delay_bdays > 2) against the calendar/zero-grace prior
+  question: What percentage of work orders completed in 2018 were late?
+  control_id: B2-C
+  requires_conventions:
+  - CV-3
+  - GC-DELAY-COMPLETED
+  pass_criterion: numeric
+  tolerance:
+    mode: absolute
+    value: 0.005
+  answer_format: ratio 0-1 (the agent may express it as a percentage)
+  certified_sql: |
+    select round(count_if(sla_delay_bdays > 2) / count(*), 4) as answer
+    from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+    where completed_date_key >= '2018-01-01' and completed_date_key < '2019-01-01'
+  expected_answer: 0.1192
+  naive_signatures:
+  - indicates: B2
+    description: calendar comparison against the scheduled date (completed > scheduled)
+    sql: |
+      select round(count_if(completed_date_key > scheduled_date_key) / count(*), 4) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+      where completed_date_key >= '2018-01-01' and completed_date_key < '2019-01-01'
+    value: 0.5669
+    diverges: true
+  - indicates: B2
+    description: no grace period (sla_delay_bdays > 0)
+    sql: |
+      select round(count_if(sla_delay_bdays > 0) / count(*), 4) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+      where completed_date_key >= '2018-01-01' and completed_date_key < '2019-01-01'
+    value: 0.2029
+    diverges: true
+- id: B2-C
+  family: B
+  kind: control
+  capability: use sla_delay_bdays directly when asked
+  question: What is the average SLA delay in business days for work orders completed in 2018?
+  requires_conventions:
+  - GC-DELAY-COMPLETED
+  pass_criterion: numeric
+  tolerance:
+    mode: absolute
+    value: 0.05
+  certified_sql: |
+    select round(avg(sla_delay_bdays), 2) as answer
+    from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+    where completed_date_key >= '2018-01-01' and completed_date_key < '2019-01-01'
+  expected_answer: -2.54

@@ -1,0 +1,12 @@
+table: technicians
+description: 'Technicians, each attached to a dispatch depot.'
+columns:
+- name: technician_id
+  type: varchar
+  description: 'Unique technician identifier. Primary key.'
+- name: depot_code
+  type: varchar
+  description: 'Home dispatch depot (FK to depots).'
+- name: seniority_level
+  type: varchar
+  description: 'Technician seniority level.'

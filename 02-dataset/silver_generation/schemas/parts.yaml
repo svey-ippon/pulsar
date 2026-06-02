@@ -1,0 +1,15 @@
+table: parts
+description: 'Spare-parts catalogue (list_price is silver-only).'
+columns:
+- name: part_id
+  type: varchar
+  description: 'Unique spare-part identifier. Primary key.'
+- name: part_name
+  type: varchar
+  description: 'Part name.'
+- name: part_family
+  type: varchar
+  description: 'Part family / grouping.'
+- name: list_price
+  type: number(12,2)
+  description: 'Catalogue list price (silver-only; not exposed in gold).'

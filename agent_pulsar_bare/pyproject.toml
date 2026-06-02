@@ -1,0 +1,35 @@
+[project]
+name = "pulsar-bare-workspace"
+version = "0.1.0"
+description = "Workspace root for the 'bare' agent — raw SQL over a governed Snowflake gold layer (no semantic-layer engine / no Semantic View)"
+requires-python = "~=3.14.2"
+dependencies = [
+    "pulsar-bare-agent",
+    "pulsar-bare-api",
+]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1",
+    "pytest>=8.2",
+]
+
+[tool.uv.workspace]
+members = ["pulsar-agent", "pulsar-api"]
+
+[tool.uv.sources]
+pulsar-bare-agent = { workspace = true }
+pulsar-bare-api = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["pulsar-agent/tests", "pulsar-api/tests"]
+addopts = "--import-mode=importlib"
+filterwarnings = [
+    # Third-party deprecation from FastAPI's TestClient (starlette + httpx) — not our code.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "basic"

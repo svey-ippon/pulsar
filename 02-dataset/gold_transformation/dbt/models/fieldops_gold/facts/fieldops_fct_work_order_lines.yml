@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: fieldops_fct_work_order_lines
+    description: "Intervention line fact at (work_order_id x line_number) grain. PART lines (parts used) and LABOR lines (man-hours delivered)."
+    config:
+      alias: FCT_WORK_ORDER_LINES
+      meta:
+        grain: "work_order_id x line_number"
+        model_type: fact
+        business_conventions:
+          - "Service revenue = SUM(line_amount) + call-out fees (CV-1) — not payments."
+          - "billed_hours = man-hours DELIVERED (sums across crew members); part_id is NULL on LABOR lines."
+    columns:
+      - name: work_order_line_key
+        description: "Synthetic key work_order_id-line_number."
+        data_tests:
+          - not_null
+          - unique
+      - name: work_order_id
+        description: "Owning work order; foreign key to fct_work_orders."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fieldops_fct_work_orders')
+                field: work_order_id
+      - name: line_number
+        description: "Line sequence within the work order (degenerate dimension)."
+      - name: line_kind
+        description: "PART or LABOR (degenerate dimension)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["PART", "LABOR"]
+      - name: part_id
+        description: "Part used; foreign key to dim_parts. NULL on LABOR lines (meaningful NULL)."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_parts')
+                field: part_id
+      - name: quantity
+        description: "Parts quantity (PART lines only)."
+      - name: billed_hours
+        description: "Man-hours delivered (LABOR lines only)."
+      - name: line_amount
+        description: "Billed amount of the line."

@@ -1,0 +1,11 @@
+equipment_category,category_group
+compressor,rotating
+industrial_pump,rotating
+conveyor_system,rotating
+hvac_unit,climate
+chiller,climate
+boiler,thermal
+furnace,thermal
+control_panel,electrical
+switchgear,electrical
+storage_tank,static
