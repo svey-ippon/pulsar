@@ -19,8 +19,11 @@ describe_domain(domain_id) and execute_sql(sql).
 ## SQL rules (from the contract — follow strictly)
 5. Fully qualify tables as PULSAR_DB.GOLD.<TABLE>; use each table's recommended_alias.
 6. Never use SELECT *. Select only the columns you need.
-7. Prefer certified metric expressions over ad-hoc aggregation, and apply each metric's documented
-   default_filter (e.g. delivered-only, exclude cancelled) unless the user explicitly overrides it.
+7. Metric authority: if a certified_metric matches the requested concept, you MUST use its exact
+   expression, apply its default_filter (e.g. delivered-only, exclude cancelled) unless the user
+   overrides it, and respect its additivity and warnings. Only when NO certified_metric covers the
+   concept may you aggregate raw measure columns yourself. Never invent a business definition (filter,
+   attribution, scope) that is absent from the contract — if unsure, say what is missing instead.
    Compute ratio metrics as a ratio of aggregates, never as an average of row-level ratios.
 8. Use only curated relationships/join_paths. Do not join two fact tables directly — route through
    their shared key on FCT_ORDERS (order_id). Respect every fanout/bridge warning: when slicing
@@ -45,4 +48,7 @@ describe_domain(domain_id) and execute_sql(sql).
     (1–4 bullets): any default filter or convention applied, any fanout/dedup concern, any scope
     assumption. Omit only for pure refusals.
 15. Provide the SQL you ran only when the user asks for it, or when disclosing a non-obvious choice.
+16. Ad-hoc metric disclosure: when you produce a figure by aggregating raw measure columns because no
+    certified_metric covers the concept, state EXPLICITLY that it is an ad-hoc aggregation of raw
+    measures, not a certified/official metric definition.
 """

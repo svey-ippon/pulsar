@@ -31,7 +31,7 @@ def test_contract_has_core_star_shape():
     }
     assert expected <= table_ids
 
-    metric_ids = {m["id"] for m in md["metrics"]}
+    metric_ids = {m["id"] for m in md["certified_metrics"]}
     assert {"total_merchandise_revenue", "total_payment_value", "order_count", "late_delivery_rate"} <= metric_ids
 
     # every relationship references known tables
@@ -45,7 +45,7 @@ def test_describe_domain_tool_returns_metadata_json():
     out = json.loads(describe_domain.invoke({"domain_id": "olist_sales"}))
     assert out["domain_id"] == "olist_sales"
     assert "tables" in out["metadata"]
-    assert "metrics" in out["metadata"]
+    assert "certified_metrics" in out["metadata"]
 
 
 def test_describe_domain_unknown_domain_returns_hint():

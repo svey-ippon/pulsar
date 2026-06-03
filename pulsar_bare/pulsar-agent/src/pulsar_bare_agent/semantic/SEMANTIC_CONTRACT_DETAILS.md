@@ -1,0 +1,180 @@
+# Semantic contract — authoring details & guidance
+
+> **Status: draft.** This document gives a human or an agent the detailed guidance needed to build a
+> good domain contract (e.g. `olist_sales.yaml`). It complements the format reference in
+> `SEMANTIC_CONTRACT.md` (which defines *what* fields exist); this document explains *when and why*
+> to populate them. It is refined iteratively — each pass adds or sharpens a section.
+>
+> Document set (all in this folder):
+> - `SEMANTIC_CONTRACT.md` — the contract **format** (what fields exist).
+> - `SEMANTIC_CONTRACT_DETAILS.md` — *this file*: how to **author** a contract + design rationale.
+> - `SEMANTIC_AGENT_PROMPTING.md` — how the agent **consumes** the contract (out-of-YAML rules).
+
+Guiding principle for everything here: **a field earns its place only when it varies and changes
+the SQL the agent writes.** If a value is constant, always-true, or trivially derivable from
+another field, omit it — it is prompt noise. The sections below apply this principle field by field.
+
+---
+
+## `grain` vs `primary_key`
+
+These two fields look redundant but answer different questions:
+
+| field | answers | nature |
+|---|---|---|
+| `primary_key` | "which column(s) are unique?" | **structural** — a uniqueness constraint |
+| `grain` | "what does one row *represent*?" | **semantic** — the unit of observation |
+
+They coincide **only when the primary key is the natural business key**. The moment the key is a
+surrogate (a hash or a `concat(...)` of several columns), the PK becomes opaque: it guarantees
+uniqueness but no longer tells you what a row *means*. In that case `grain` is the only field that
+states the natural composite.
+
+### Why it matters for the agent
+
+`grain` is the single strongest **fan-out** signal. Stating "`fct_order_items` is one row per order
+item" immediately tells the model: joining it to orders multiplies order rows → use
+`COUNT(DISTINCT order_id)`, and don't slice order-level facts through it. From a surrogate key like
+`ORDER_ITEM_KEY` alone, the model would have to *infer* that a synthetic key implies
+multiple-rows-per-order — exactly the kind of guess we don't want it to make.
+
+### When to populate `grain`
+
+**Populate it whenever the grain is not identical to the primary key**, i.e.:
+
+- The PK is a **surrogate / synthetic key** (hash, `concat`, generated id) — the common case for
+  fact and bridge tables. The grain must spell out the natural composite.
+  - e.g. PK `ORDER_ITEM_KEY` → `grain: one row per (order_id × order_item_id)`
+  - e.g. PK `ORDER_PAYMENT_KEY` → `grain: one row per (order_id × payment_sequential)`
+  - e.g. PK `ORDER_CATEGORY_KEY` → `grain: one row per (order_id × product_category_name_english)`
+- The table has **no declared primary key** but still has a meaningful unit of observation.
+- The natural unit is **subtler than the key suggests** and worth a business-language description.
+
+### When `grain` is NOT necessary
+
+Omit it when the **primary key is the natural business key** and already conveys the unit of
+observation:
+
+- Conformed dimensions: PK `CUSTOMER_ID` on `dim_customers`, PK `PRODUCT_ID` on `dim_products`, etc.
+- Facts whose PK is the real business key: PK `ORDER_ID` on `fct_orders` — "one row per order_id"
+  adds nothing over the PK.
+
+### Convention: omission means "grain == primary key"
+
+**If `grain` is absent, the contract implicitly asserts that the grain is exactly the primary key.**
+So:
+
+- Do **not** write `grain` just to restate the PK — that is noise; leave it out.
+- Only provide `grain` when it says something the PK does not.
+
+(Corollary worth keeping in mind: for a raw-SQL analytics agent, the surrogate PK is the more
+disposable of the two — the agent rarely selects or filters on `ORDER_ITEM_KEY` and friends, whereas
+it relies on grain for join/aggregation decisions. If forced to choose one, keep grain.)
+
+---
+
+## Field families: what to auto-generate vs what to enrich
+
+A contract will usually be **bootstrapped from gold metadata** (the dbt models / `INFORMATION_SCHEMA`
+of the gold layer). That source is rich on structure and poor on business meaning. So split every
+field into two families and treat them differently:
+
+**Structural fields — derive automatically, populate systematically.** These come straight from the
+gold metadata and require no business judgement:
+
+- `id`, `qualified_name`, `type`
+- `columns[].name`, `columns[].type`
+- `primary_key`, `columns[].references` (foreign keys)
+- `grain` *only when the PK is a surrogate* (see the `grain` section)
+
+**Semantic fields — enrichment, optional, add only when reliable AND non-trivial.** These require a
+trustworthy human/AI with context. They are *not* expected to be present at bootstrap time:
+
+- `description`, `business_name`
+- `synonyms`
+- `warnings`, `query_surface.conventions`
+- `certified_metrics`
+- `recommended_alias`, `default_date_column`, `columns[].default_aggregation`
+
+**Guiding rule:** *a contract containing only the structural fields must already be valid and useful.*
+Semantic enrichment is layered on top, and only when (a) the information is reliable and (b) a
+competent LLM would not already infer it. It is normal — expected — for a freshly generated contract
+to carry little or no `certified_metrics`.
+
+---
+
+## `certified_metrics`: when to author (and when not)
+
+`certified_metrics` is the **official, authoritative** metric surface (see
+`SEMANTIC_AGENT_PROMPTING.md` §1 for how the agent consumes it). Because of that authority, the bar
+to add one is high:
+
+- **Author a certified metric only when you are sure of its definition** — its exact expression,
+  its default filter, its additivity. Base it on a reliable source: dbt model meta / documented
+  business conventions / a verified query. 
+- **Never invent a metric.** A plausible-but-unverified definition is worse than none, because the
+  agent will treat it as governed truth.
+- **Absence is the safe default.** If no reliable metric definition exists at authoring time, leave
+  `certified_metrics` empty or partial. The agent can still answer by aggregating raw measures — and
+  it is required to disclose that the result is ad-hoc, not certified (see prompting doc §2).
+- **Prefer certifying the metrics that carry traps** — ratios, distinct counts, filtered measures —
+  over trivial `SUM(column)` metrics a competent agent computes correctly anyway.
+
+So the two metric surfaces are intentional and complementary: a small, trustworthy set of certified
+definitions sitting on top of a broad raw-measure surface the agent may aggregate when nothing
+certified applies.
+
+### `default_aggregation` on measure columns
+
+- **Optional. Populate only when the default aggregation is non-trivial.** If a competent agent would
+  obviously pick the right aggregate from the column's name and meaning (e.g. `SUM` on a revenue
+  amount, `AVG` on a score), omit it — it is noise.
+- Set it only when the natural aggregate is ambiguous or surprising (e.g. a snapshot/balance that
+  must not be summed across time, a pre-bucketed value, a rate stored per row).
+- Its *presence* should therefore be a signal in itself: "the obvious aggregate is not what you'd
+  guess."
+
+---
+
+## Synonyms policy
+
+- **Keep synonyms on columns (and on `certified_metrics`), but they are optional.** Add one only when
+  the value is clear: (a) it is **not** something a competent LLM would already infer from the
+  name/description, **and** (b) the mapping is **reliable**. Internal jargon, acronyms, and
+  domain-specific aliases qualify; generic restatements (`revenue` for `ITEM_REVENUE`) usually do not.
+- **A term has one canonical home.** If a concept has a `certified_metric`, its synonyms belong on the
+  metric; put synonyms on a measure column only for concepts with no certified metric. Avoid the same
+  synonym living in two places (it drifts and creates resolution ambiguity).
+- **Context store, later.** Semantic resolution will increasingly rely on the agent's own knowledge
+  plus a dedicated context store. YAML synonyms are a deliberate, minimal complement — not an attempt
+  to build a thesaurus in the contract.
+
+---
+
+## Design choices & rationale (decision log)
+
+Why the contract looks the way it does. Each entry is a deliberate departure from the generic
+`OVERALL_PLAN` example or from the Snowflake Semantic View shape.
+
+- **Dropped always-true / constant fields** (`relationships[].default`, `queryable`,
+  `query_surface.forbidden`, table-level `name`, `trust_level`, `default_timezone`). Each was constant
+  across all rows, so it carried no signal and only cost tokens. Kept only fields that vary and change
+  the generated SQL. (`forbidden` was also lossy duplication of `sql_generation_rules`.)
+- **One logical handle + physical name per table** (`id` + `qualified_name`, no bare `name`). Three
+  identifiers were one too many; `name` was just a case-variant twin contained in `qualified_name`.
+- **`grain` only when it differs from the PK.** Omission means "grain == primary key". See the grain
+  section.
+- **`certified_metrics` at the contract root, not nested per table.** The agent resolves *metric →
+  table*, not the reverse, so a flat, synonym-indexed registry matches its lookup path; `base_table`
+  already encodes the table link. A flat list also handles cross-table metrics in one shape, avoiding
+  the dual-location design Snowflake needs (table-scoped + a separate derived-metrics section).
+  - *Known boundary:* a genuine cross-fact metric (two different base tables) does not fit a single
+    `base_table`. When one appears, extend the metric with `required_join_paths` (and allow
+    `base_table` to be optional) rather than reintroducing a second metrics section.
+- **Two metric surfaces, hard and soft, with strict precedence.** `certified_metrics` (governed) shadow
+  raw `MEASURE` columns (ad-hoc). This keeps correctness for trapped concepts while preserving the
+  raw-SQL thesis: the agent can still aggregate the long tail of measures, provided it discloses that
+  the result is not certified.
+- **Optional, value-only semantic enrichment.** Driven by the bootstrap-from-gold reality: structure
+  is free, meaning is expensive and must be reliable. The contract is valid with structure alone;
+  enrichment is added only when trustworthy and non-inferable.
