@@ -1,0 +1,147 @@
+// Olist Sales — gold layer physical model (PULSAR_DB.GOLD)
+// Generated from the semantic contract olist_sales.yaml.
+// Paste into https://dbdiagram.io to visualize.
+//
+// Conventions:
+//   - Refs are the FK->PK edges declared as columns[].references in the contract
+//     ("présence exhaustive"). They are MANY_TO_ONE / LEFT / LOW by default.
+//   - The only non-default edge (fanout MEDIUM) is the bridge -> orders, noted below.
+
+Project olist_sales {
+  database_type: 'Snowflake'
+  Note: 'Olist Brazilian e-commerce gold layer. Star schema: 4 facts, 3 dimensions, 1 bridge.'
+}
+
+//============================== FACTS ==============================
+
+Table FCT_ORDERS {
+  ORDER_ID                     varchar        [pk, note: 'Unique order identifier']
+  CUSTOMER_ID                  varchar        [ref: > DIM_CUSTOMERS.CUSTOMER_ID, note: 'Order-scoped customer key']
+  CUSTOMER_UNIQUE_ID           varchar        [note: 'Physical customer id — distinct-customer counts']
+  CUSTOMER_CITY                varchar
+  CUSTOMER_STATE               varchar
+  ORDER_STATUS                 varchar        [note: 'delivered, shipped, canceled, ...']
+  ORDER_PURCHASE_TIMESTAMP     timestamp_ntz
+  ORDER_PURCHASE_DATE          date           [note: 'preferred for daily trends']
+  ORDER_PURCHASE_MONTH         date           [note: 'first day of month; monthly trends']
+  ORDER_PURCHASE_YEAR          number
+  ORDER_DELIVERED_CUSTOMER_DATE timestamp_ntz [note: 'null if not delivered']
+  ORDER_ESTIMATED_DELIVERY_DATE timestamp_ntz
+  DELAY_DAYS                   number         [note: 'measure; >0 means late; AVG']
+  DELIVERY_LATE_STATUS         varchar        [note: 'late | on_time | not_delivered']
+  DELIVERY_STATUS              varchar        [note: 'on_time | late | very_late | not_delivered']
+
+  Note: 'FACT — grain: one row per ORDER_ID. Customer attributes denormalized.'
+}
+
+Table FCT_ORDER_ITEMS {
+  ORDER_ITEM_KEY               varchar        [pk, note: 'synthetic: order_id-order_item_id']
+  ORDER_ID                     varchar        [ref: > FCT_ORDERS.ORDER_ID]
+  ORDER_ITEM_ID                number         [note: 'item sequence within order']
+  PRODUCT_ID                   varchar        [ref: > DIM_PRODUCTS.PRODUCT_ID]
+  PRODUCT_CATEGORY_NAME        varchar        [note: 'Portuguese category']
+  PRODUCT_CATEGORY_NAME_ENGLISH varchar       [note: 'English category — preferred for revenue slicing']
+  SELLER_ID                    varchar        [ref: > DIM_SELLERS.SELLER_ID]
+  SELLER_STATE                 varchar
+  CUSTOMER_STATE               varchar
+  ORDER_STATUS                 varchar
+  ORDER_PURCHASE_DATE          date
+  ORDER_PURCHASE_MONTH         date
+  ORDER_PURCHASE_YEAR          number
+  DELIVERY_STATUS              varchar
+  ITEM_REVENUE                 number         [note: 'measure: merchandise revenue (PRICE), excl. freight; SUM']
+  FREIGHT_VALUE                number         [note: 'measure; SUM']
+  ITEM_VALUE_WITH_FREIGHT      number         [note: 'measure: item_revenue + freight; SUM']
+
+  Note: 'FACT — grain: one row per (order_id x order_item_id). Base table for merchandise revenue. Multiple rows per order -> COUNT(DISTINCT ORDER_ID).'
+}
+
+Table FCT_ORDER_PAYMENTS {
+  ORDER_PAYMENT_KEY            varchar        [pk, note: 'synthetic payment key']
+  ORDER_ID                     varchar        [ref: > FCT_ORDERS.ORDER_ID]
+  PAYMENT_SEQUENTIAL           number         [note: 'payment sequence within order']
+  PAYMENT_TYPE                 varchar        [note: 'credit_card, boleto, voucher, debit_card']
+  PAYMENT_INSTALLMENTS         number         [note: 'measure; AVG']
+  INSTALLMENT_BUCKET           varchar        [note: 'single | 2_to_3 | 4_to_6 | 7_to_12 | 13_plus']
+  PAYMENT_VALUE                number         [note: 'measure: COLLECTED value (incl. freight/adj), NOT revenue; SUM']
+  CUSTOMER_STATE               varchar
+  ORDER_PURCHASE_MONTH         date
+
+  Note: 'FACT — grain: one row per (order_id x payment_sequential). Multiple rows per order -> COUNT(DISTINCT ORDER_ID).'
+}
+
+Table FCT_ORDER_REVIEWS {
+  ORDER_REVIEW_KEY             varchar        [pk, note: 'synthetic review/order key']
+  REVIEW_ID                    varchar        [note: 'review identifier']
+  ORDER_ID                     varchar        [ref: > FCT_ORDERS.ORDER_ID]
+  REVIEW_SCORE                 number         [note: 'measure: 1..5; AVG']
+  IS_NEGATIVE_REVIEW           boolean        [note: 'true when score <= 2']
+  REVIEW_CREATION_DATE         timestamp_ntz
+  DELIVERY_STATUS              varchar
+  CUSTOMER_STATE               varchar
+  ORDER_PURCHASE_MONTH         date
+
+  Note: 'FACT — grain: one row per (review_id, order_id). Reviews are ORDER-level, not item/category.'
+}
+
+//=========================== DIMENSIONS ===========================
+
+Table DIM_CUSTOMERS {
+  CUSTOMER_ID                  varchar        [pk, note: 'order-scoped customer key']
+  CUSTOMER_UNIQUE_ID           varchar        [note: 'physical customer id (repeat-purchase)']
+  CUSTOMER_CITY                varchar
+  CUSTOMER_STATE               varchar
+  CUSTOMER_ZIP_CODE_PREFIX     varchar
+
+  Note: 'DIMENSION — grain: one row per CUSTOMER_ID (order-scoped). Physical customer = CUSTOMER_UNIQUE_ID.'
+}
+
+Table DIM_PRODUCTS {
+  PRODUCT_ID                   varchar        [pk]
+  PRODUCT_CATEGORY_NAME        varchar        [note: 'Portuguese category']
+  PRODUCT_CATEGORY_NAME_ENGLISH varchar       [note: 'English category']
+  PRODUCT_WEIGHT_G             number         [note: 'measure; AVG']
+  PRODUCT_PHOTOS_QTY           number         [note: 'measure; AVG']
+
+  Note: 'DIMENSION — grain: one row per PRODUCT_ID.'
+}
+
+Table DIM_SELLERS {
+  SELLER_ID                    varchar        [pk]
+  SELLER_CITY                  varchar
+  SELLER_STATE                 varchar
+  SELLER_ZIP_CODE_PREFIX       varchar
+
+  Note: 'DIMENSION — grain: one row per SELLER_ID.'
+}
+
+//============================== BRIDGE ==============================
+
+Table BRIDGE_ORDER_CATEGORIES {
+  ORDER_CATEGORY_KEY           varchar        [pk, note: 'synthetic order/category key']
+  ORDER_ID                     varchar        [ref: > FCT_ORDERS.ORDER_ID, note: 'FANOUT MEDIUM: N categories -> N rows per order']
+  PRODUCT_CATEGORY_NAME_ENGLISH varchar       [note: 'category present in the order']
+  ITEM_COUNT_IN_CATEGORY       number         [note: 'measure; SUM']
+  CATEGORY_MERCHANDISE_REVENUE number         [note: 'measure; SUM']
+
+  Note: 'BRIDGE — grain: one row per (order_id x category). Slice ORDER-LEVEL facts by category through here. An order with N categories yields N rows -> COUNT(DISTINCT ORDER_ID).'
+}
+
+//===================== TABLE GROUPS (layout) ======================
+
+TableGroup facts {
+  FCT_ORDERS
+  FCT_ORDER_ITEMS
+  FCT_ORDER_PAYMENTS
+  FCT_ORDER_REVIEWS
+}
+
+TableGroup dimensions {
+  DIM_CUSTOMERS
+  DIM_PRODUCTS
+  DIM_SELLERS
+}
+
+TableGroup bridges {
+  BRIDGE_ORDER_CATEGORIES
+}

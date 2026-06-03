@@ -1,36 +1,19 @@
+-- Order-item fact at (order_id, order_item_id) grain. Thin Kimball fact: keys +
+-- degenerate dimensions + measures. Product, seller, order, customer, category and
+-- date attributes are reached through the conformed dimensions, not denormalized.
 select
     concat(oi."ORDER_ID", '-', oi."ORDER_ITEM_ID") as order_item_key,
+
+    -- foreign keys
     oi."ORDER_ID" as order_id,
-    oi."ORDER_ITEM_ID" as order_item_id,
     oi."PRODUCT_ID" as product_id,
-    p.product_category_name,
-    p.product_category_name_english,
     oi."SELLER_ID" as seller_id,
-    s.seller_city,
-    s.seller_state,
-    s.seller_zip_code_prefix,
-    s.seller_latitude,
-    s.seller_longitude,
-    o.customer_id,
-    o.customer_unique_id,
-    o.customer_city,
-    o.customer_state,
-    o.customer_zip_code_prefix,
-    o.customer_latitude,
-    o.customer_longitude,
-    o.order_status,
-    o.order_purchase_timestamp,
-    o.order_purchase_date,
-    o.order_purchase_month,
-    o.order_purchase_year,
-    o.delivery_late_status,
-    o.delivery_status,
-    o.delay_days,
-    oi."SHIPPING_LIMIT_DATE" as shipping_limit_date,
+    cast(oi."SHIPPING_LIMIT_DATE" as date) as shipping_limit_date_key,
+
+    -- degenerate dimension
+    oi."ORDER_ITEM_ID" as order_item_id,
+
+    -- measures
     oi."PRICE" as item_revenue,
-    oi."FREIGHT_VALUE" as freight_value,
-    oi."PRICE" + oi."FREIGHT_VALUE" as item_value_with_freight
+    oi."FREIGHT_VALUE" as freight_value
 from {{ source("silver", "order_items") }} as oi
-left join {{ ref("fct_orders") }} as o on oi."ORDER_ID" = o.order_id
-left join {{ ref("dim_products") }} as p on oi."PRODUCT_ID" = p.product_id
-left join {{ ref("dim_sellers") }} as s on oi."SELLER_ID" = s.seller_id

@@ -1,0 +1,170 @@
+// Olist Sales — TARGET gold model (pure Kimball star)
+// Companion to GOLD_MODEL_TARGET.md. Paste into https://dbdiagram.io to visualize.
+//
+// Design philosophy (decided): PURE KIMBALL STAR.
+//   - Facts hold ONLY: keys (FK to dims) + degenerate dimensions + measures.
+//   - NO dimensional attribute is denormalized onto a fact. Every attribute is
+//     reached by joining the conformed dimension. (Goal: stress-test the agent's joins.)
+//   - Conformed dimensions: DATE (role-playing), CUSTOMER (physical), GEOGRAPHY
+//     (role-playing customer/seller), PRODUCT -> CATEGORY (snowflaked), SELLER.
+//   - Scope = Tier 1 + Tier 2. Tier 3 (surrogate keys + SCD, junk dimension,
+//     DIM_TIME, reviews-grain) is documented in GOLD_MODEL_TARGET.md, not built here.
+//
+// Keys: natural/business keys for now (Tier 3 would replace with integer surrogates).
+
+Project olist_gold_target {
+  database_type: 'Snowflake'
+  Note: 'Olist gold — pure Kimball star. 4 facts, 5 conformed dimensions, 1 keys-only bridge.'
+}
+
+//============================ CONFORMED DIMENSIONS ============================
+
+Table DIM_DATE {
+  DATE_DAY        date    [pk, note: 'calendar day; natural key (Tier 3: INT yyyymmdd surrogate)']
+  YEAR            number
+  QUARTER         number
+  MONTH_NUMBER    number
+  MONTH_NAME      varchar
+  MONTH_START_DATE date   [note: 'first day of month — monthly trends']
+  DAY_OF_MONTH    number
+  DAY_OF_WEEK     number
+  DAY_NAME        varchar
+  WEEK_OF_YEAR    number
+  IS_WEEKEND      boolean
+
+  Note: 'Conformed date dimension built from a generated date spine. Role-played by every date FK below. Replaces all per-fact DATE/MONTH/YEAR truncation columns.'
+}
+
+Table DIM_CUSTOMER {
+  CUSTOMER_UNIQUE_ID  varchar [pk, note: 'PHYSICAL customer — the conformed grain']
+
+  Note: 'Conformed physical customer. Deliberately thin: Olist exposes no stable customer attribute (geography varies per order -> lives at order grain via DIM_GEOGRAPHY). order-scoped customer_id is a degenerate dim on FCT_ORDERS. Anchor for COUNT(DISTINCT customer).'
+}
+
+Table DIM_GEOGRAPHY {
+  ZIP_CODE_PREFIX  varchar [pk, note: 'Brazilian zip prefix']
+  CITY             varchar
+  STATE            varchar
+  LATITUDE         number  [note: 'zip centroid']
+  LONGITUDE        number  [note: 'zip centroid']
+
+  Note: 'Conformed geography (was dim_geolocation_zip_prefix). Role-played as customer location (FCT_ORDERS) and seller location (DIM_SELLER).'
+}
+
+Table DIM_CATEGORY {
+  PRODUCT_CATEGORY_NAME          varchar [pk, note: 'Portuguese category — natural key']
+  PRODUCT_CATEGORY_NAME_ENGLISH  varchar [note: 'English translation (null if untranslated)']
+
+  Note: 'New. Promotes product_category_name_translation to a conformed dimension. English name is a CATEGORY attribute, not a product attribute -> snowflaked out of DIM_PRODUCT.'
+}
+
+Table DIM_PRODUCT {
+  PRODUCT_ID               varchar [pk]
+  PRODUCT_CATEGORY_NAME    varchar [ref: > DIM_CATEGORY.PRODUCT_CATEGORY_NAME, note: 'snowflake to category']
+  PRODUCT_NAME_LENGTH      number
+  PRODUCT_DESCRIPTION_LENGTH number
+  PRODUCT_PHOTOS_QTY       number  [note: 'measure-like attribute']
+  PRODUCT_WEIGHT_G         number
+  PRODUCT_LENGTH_CM        number
+  PRODUCT_HEIGHT_CM        number
+  PRODUCT_WIDTH_CM         number
+
+  Note: 'Product dimension. English category removed (now in DIM_CATEGORY).'
+}
+
+Table DIM_SELLER {
+  SELLER_ID               varchar [pk]
+  SELLER_ZIP_CODE_PREFIX  varchar [ref: > DIM_GEOGRAPHY.ZIP_CODE_PREFIX, note: 'seller location role']
+
+  Note: 'Seller dimension. city/state/lat/lng removed -> reached via DIM_GEOGRAPHY.'
+}
+
+//================================== FACTS ====================================
+
+Table FCT_ORDERS {
+  ORDER_ID                          varchar [pk, note: 'degenerate dim (order natural key)']
+  CUSTOMER_UNIQUE_ID                varchar [ref: > DIM_CUSTOMER.CUSTOMER_UNIQUE_ID, note: 'physical customer']
+  CUSTOMER_ID                       varchar [note: 'degenerate dim — order-scoped customer']
+  CUSTOMER_ZIP_CODE_PREFIX          varchar [ref: > DIM_GEOGRAPHY.ZIP_CODE_PREFIX, note: 'customer location role']
+  ORDER_STATUS                      varchar [note: 'degenerate dim (low-card); Tier 3: junk dimension']
+  ORDER_PURCHASE_TIMESTAMP          timestamp_ntz [note: 'event time kept for intra-day/recency (no DIM_TIME)']
+  ORDER_PURCHASE_DATE_KEY           date    [ref: > DIM_DATE.DATE_DAY, note: 'role: purchase']
+  ORDER_APPROVED_DATE_KEY           date    [ref: > DIM_DATE.DATE_DAY, note: 'role: approval']
+  ORDER_DELIVERED_CARRIER_DATE_KEY  date    [ref: > DIM_DATE.DATE_DAY, note: 'role: carrier handoff']
+  ORDER_DELIVERED_CUSTOMER_DATE_KEY date    [ref: > DIM_DATE.DATE_DAY, note: 'role: delivery to customer']
+  ORDER_ESTIMATED_DELIVERY_DATE_KEY date    [ref: > DIM_DATE.DATE_DAY, note: 'role: estimated delivery']
+  DELAY_DAYS                        number  [note: 'measure: delivered - estimated; null=not delivered. Delivery status derivable from this.']
+  APPROVAL_DELAY_DAYS               number  [note: 'measure: approved - purchase']
+  PURCHASE_TO_DELIVERY_DAYS         number  [note: 'measure: delivered - purchase']
+
+  Note: 'FACT — grain: one row per ORDER_ID. Thin: no customer/geo/date attributes denormalized; reach them via joins. delivery_status / delivery_late_status / flags REMOVED (derivable from DELAY_DAYS).'
+}
+
+Table FCT_ORDER_ITEMS {
+  ORDER_ITEM_KEY        varchar [pk, note: 'synthetic order_id-order_item_id']
+  ORDER_ID              varchar [ref: > FCT_ORDERS.ORDER_ID, note: 'degenerate / order link']
+  ORDER_ITEM_ID         number  [note: 'degenerate dim — item sequence']
+  PRODUCT_ID            varchar [ref: > DIM_PRODUCT.PRODUCT_ID]
+  SELLER_ID             varchar [ref: > DIM_SELLER.SELLER_ID]
+  SHIPPING_LIMIT_DATE_KEY date  [ref: > DIM_DATE.DATE_DAY, note: 'role: shipping limit']
+  ITEM_REVENUE          number  [note: 'measure: merchandise revenue (PRICE), excl. freight']
+  FREIGHT_VALUE         number  [note: 'measure: freight']
+
+  Note: 'FACT — grain: one row per (order_id x order_item_id). item_value_with_freight REMOVED (derived A+B). All denormalized category/seller/customer/order/date attributes REMOVED.'
+}
+
+Table FCT_ORDER_PAYMENTS {
+  ORDER_PAYMENT_KEY     varchar [pk, note: 'synthetic order_id-payment_sequential']
+  ORDER_ID              varchar [ref: > FCT_ORDERS.ORDER_ID]
+  PAYMENT_SEQUENTIAL    number  [note: 'degenerate dim']
+  PAYMENT_TYPE          varchar [note: 'degenerate dim (credit_card, boleto, voucher, debit_card)']
+  PAYMENT_INSTALLMENTS  number  [note: 'measure / attribute']
+  PAYMENT_VALUE         number  [note: 'measure: collected value (incl. freight/adjustments)']
+
+  Note: 'FACT — grain: one row per (order_id x payment_sequential). installment_bucket & is_multi_installment REMOVED (derived). customer/order/date denorm REMOVED.'
+}
+
+Table FCT_ORDER_REVIEWS {
+  ORDER_REVIEW_KEY        varchar [pk, note: 'synthetic review_id::order_id']
+  REVIEW_ID               varchar [note: 'degenerate dim']
+  ORDER_ID                varchar [ref: > FCT_ORDERS.ORDER_ID]
+  REVIEW_CREATION_DATE_KEY date   [ref: > DIM_DATE.DATE_DAY, note: 'role: review created']
+  REVIEW_ANSWER_DATE_KEY  date    [ref: > DIM_DATE.DATE_DAY, note: 'role: review answered']
+  REVIEW_SCORE            number  [note: 'measure: 1..5']
+  REVIEW_COMMENT_TITLE    varchar [note: 'degenerate text (optional)']
+  REVIEW_COMMENT_MESSAGE  varchar [note: 'degenerate text (optional)']
+
+  Note: 'FACT — grain: one row per (review_id, order_id). is_negative_review REMOVED (score<=2, derived). delivery_to_review_days REMOVED (cross-fact derived). order/customer/delivery denorm REMOVED. Grain review<->order to confirm (Tier 3).'
+}
+
+//=============================== REAL BRIDGE =================================
+
+Table BRIDGE_ORDER_CATEGORY {
+  ORDER_ID               varchar [ref: > FCT_ORDERS.ORDER_ID, note: 'rive 1']
+  PRODUCT_CATEGORY_NAME  varchar [ref: > DIM_CATEGORY.PRODUCT_CATEGORY_NAME, note: 'rive 2 — now a REAL second side']
+  ALLOCATION_WEIGHT      number  [note: '1 / #categories in order — Kimball weighting factor for correct allocation']
+
+  Note: 'BRIDGE (keys-only) — grain: one row per (order_id x category). Resolves the order<->category M2M so ORDER-LEVEL facts (reviews, order counts) can be sliced by category without item fan-out. MEASURES REMOVED: category revenue / item counts belong to FCT_ORDER_ITEMS (aggregate by product->category). Use ALLOCATION_WEIGHT to avoid double counting order-level measures across categories.'
+}
+
+//============================ TABLE GROUPS (layout) ==========================
+
+TableGroup facts {
+  FCT_ORDERS
+  FCT_ORDER_ITEMS
+  FCT_ORDER_PAYMENTS
+  FCT_ORDER_REVIEWS
+}
+
+TableGroup conformed_dimensions {
+  DIM_DATE
+  DIM_CUSTOMER
+  DIM_GEOGRAPHY
+  DIM_PRODUCT
+  DIM_CATEGORY
+  DIM_SELLER
+}
+
+TableGroup bridges {
+  BRIDGE_ORDER_CATEGORY
+}

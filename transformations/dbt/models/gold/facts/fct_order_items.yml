@@ -2,11 +2,11 @@ version: 2
 
 models:
   - name: fct_order_items
-    description: "Order-item fact at order_id plus order_item_id grain."
+    description: "Order-item fact at order_id plus order_item_id grain (thin Kimball fact: keys + degenerate dims + measures)."
     config:
       meta:
         grain: "order_id, order_item_id"
-        why: "Defines governed merchandise revenue. item_revenue excludes freight and payment adjustments."
+        why: "Defines governed merchandise revenue. item_revenue excludes freight and payment adjustments. Product/seller/category/date attributes via conformed dimensions."
         model_type: fact
         business_conventions:
           - "item_revenue is merchandise revenue from ORDER_ITEMS.PRICE."
@@ -17,7 +17,7 @@ models:
           - not_null
           - unique
       - name: order_id
-        description: "Order identifier."
+        description: "Order identifier; foreign key to fct_orders."
         data_tests:
           - not_null
           - relationships:
@@ -25,19 +25,27 @@ models:
                 to: ref('fct_orders')
                 field: order_id
       - name: product_id
-        description: "Product identifier."
+        description: "Product identifier; foreign key to dim_products."
         data_tests:
           - relationships:
               arguments:
                 to: ref('dim_products')
                 field: product_id
       - name: seller_id
-        description: "Seller identifier."
+        description: "Seller identifier; foreign key to dim_sellers."
         data_tests:
           - relationships:
               arguments:
                 to: ref('dim_sellers')
                 field: seller_id
+      - name: shipping_limit_date_key
+        description: "Shipping-limit date; foreign key to dim_date (shipping-limit role)."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
       - name: item_revenue
         description: "Merchandise revenue excluding freight and payment adjustments."
-
+      - name: freight_value
+        description: "Freight charged for the item."

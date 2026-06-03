@@ -2,11 +2,11 @@ version: 2
 
 models:
   - name: dim_products
-    description: "Product dimension with Portuguese source category and English category translation."
+    description: "Product dimension with physical attributes; category translation is snowflaked to dim_categories."
     config:
       meta:
         grain: "product_id"
-        why: "Centralizes category translation so downstream models and semantic layers do not guess English names."
+        why: "Holds product physical attributes; references the conformed category dimension instead of carrying the English translation inline."
         model_type: dimension
     columns:
       - name: product_id
@@ -15,7 +15,13 @@ models:
           - not_null
           - unique
       - name: product_category_name
-        description: "Portuguese product category."
-      - name: product_category_name_english
-        description: "English product category from the translation table."
-
+        description: "Portuguese product category; foreign key to dim_categories."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_categories')
+                field: product_category_name
+      - name: product_weight_g
+        description: "Product weight in grams."
+      - name: product_photos_qty
+        description: "Number of product photos."

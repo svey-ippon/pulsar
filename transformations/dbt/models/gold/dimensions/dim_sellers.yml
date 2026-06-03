@@ -2,11 +2,11 @@ version: 2
 
 models:
   - name: dim_sellers
-    description: "Seller dimension enriched with representative zip-prefix coordinates."
+    description: "Seller dimension; geography is reached via dim_geography on seller_zip_code_prefix."
     config:
       meta:
         grain: "seller_id"
-        why: "Centralizes seller geography for scorecards, delivery performance, and seller-to-customer distance analysis."
+        why: "Holds seller identity and its zip prefix; geography (city/state/coordinates) is conformed in dim_geography."
         model_type: dimension
     columns:
       - name: seller_id
@@ -14,6 +14,10 @@ models:
         data_tests:
           - not_null
           - unique
-      - name: seller_state
-        description: "Seller state code."
-
+      - name: seller_zip_code_prefix
+        description: "Seller zip-code prefix; foreign key to dim_geography."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_geography')
+                field: zip_code_prefix

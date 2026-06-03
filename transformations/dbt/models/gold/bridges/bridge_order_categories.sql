@@ -1,14 +1,28 @@
+-- Keys-only bridge resolving the order <-> category many-to-many, at
+-- (order_id, product_category_name) grain. It exists so ORDER-LEVEL facts
+-- (reviews, order counts) can be sliced by category WITHOUT item fan-out.
+-- Category measures (revenue, item counts) deliberately do NOT live here: they
+-- come from fct_order_items aggregated by product -> category.
+-- allocation_weight = 1 / (#categories in the order) is the Kimball weighting
+-- factor to allocate order-level measures across categories without double counting.
+with
+    order_category as (
+        select distinct oi."ORDER_ID" as order_id, p.product_category_name
+        from {{ source("silver", "order_items") }} as oi
+        join {{ ref("dim_products") }} as p on oi."PRODUCT_ID" = p.product_id
+        where p.product_category_name is not null
+    ),
+
+    category_counts as (
+        select order_id, count(*) as category_count
+        from order_category
+        group by order_id
+    )
+
 select
-    concat(order_id, '::', product_category_name_english) as order_category_key,
-    order_id,
-    product_category_name_english,
-    min(order_purchase_timestamp) as order_purchase_timestamp,
-    min(order_purchase_month) as order_purchase_month,
-    min(order_purchase_year) as order_purchase_year,
-    min(order_status) as order_status,
-    min(customer_state) as customer_state,
-    count(*) as item_count_in_category,
-    sum(item_revenue) as category_merchandise_revenue
-from {{ ref("fct_order_items") }}
-where product_category_name_english is not null
-group by order_id, product_category_name_english
+    concat(oc.order_id, '::', oc.product_category_name) as order_category_key,
+    oc.order_id,
+    oc.product_category_name,
+    1.0 / cc.category_count as allocation_weight
+from order_category as oc
+join category_counts as cc on oc.order_id = cc.order_id

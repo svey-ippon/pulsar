@@ -2,11 +2,11 @@ version: 2
 
 models:
   - name: bridge_order_categories
-    description: "Bridge at order plus English category grain."
+    description: "Keys-only bridge resolving the order/category many-to-many at (order_id, product_category_name) grain."
     config:
       meta:
-        grain: "order_id, product_category_name_english"
-        why: "Deduplicates category membership inside an order and prevents category analysis from multiplying order-level facts by item rows."
+        grain: "order_id, product_category_name"
+        why: "Lets order-level facts (reviews, order counts) be sliced by category without item fan-out. Carries no measures; uses allocation_weight to allocate order-level measures across categories."
         model_type: bridge
     columns:
       - name: order_category_key
@@ -15,15 +15,20 @@ models:
           - not_null
           - unique
       - name: order_id
-        description: "Order identifier."
+        description: "Order identifier; foreign key to fct_orders."
         data_tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('fct_orders')
                 field: order_id
-      - name: product_category_name_english
-        description: "English category present in the order."
+      - name: product_category_name
+        description: "Portuguese category present in the order; foreign key to dim_categories."
         data_tests:
           - not_null
-
+          - relationships:
+              arguments:
+                to: ref('dim_categories')
+                field: product_category_name
+      - name: allocation_weight
+        description: "1 / number of categories in the order; weight for allocating order-level measures across categories without double counting."

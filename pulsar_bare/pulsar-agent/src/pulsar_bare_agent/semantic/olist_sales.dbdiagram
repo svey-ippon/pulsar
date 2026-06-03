@@ -1,0 +1,169 @@
+{
+  "version": "2.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "currentViewName": null,
+  "defaultView": {
+    "detailLevel": "All",
+    "tablePositions": [
+      {
+        "name": "FCT_ORDERS",
+        "schemaName": "public",
+        "x": 598.725746842048,
+        "y": 64.77200630560634
+      },
+      {
+        "name": "FCT_ORDER_ITEMS",
+        "schemaName": "public",
+        "x": 1261.2448085319656,
+        "y": 829.5475373393597
+      },
+      {
+        "name": "FCT_ORDER_PAYMENTS",
+        "schemaName": "public",
+        "x": 1542.6955088285324,
+        "y": -251.8600315280315
+      },
+      {
+        "name": "FCT_ORDER_REVIEWS",
+        "schemaName": "public",
+        "x": 1542.6955088285324,
+        "y": 135.63967474462294
+      },
+      {
+        "name": "DIM_CUSTOMERS",
+        "schemaName": "public",
+        "x": -17.317781280892405,
+        "y": 99.95334384267716
+      },
+      {
+        "name": "DIM_PRODUCTS",
+        "schemaName": "public",
+        "x": 434.17605044485043,
+        "y": 773.8110255519439
+      },
+      {
+        "name": "DIM_SELLERS",
+        "schemaName": "public",
+        "x": 545.5836193122415,
+        "y": 1046.992363089015
+      },
+      {
+        "name": "BRIDGE_ORDER_CATEGORIES",
+        "schemaName": "public",
+        "x": 1486.014465018807,
+        "y": 527.0484185213962
+      }
+    ],
+    "tableGroupCollapseStates": [],
+    "stickyNoteLayouts": [],
+    "referencePaths": [
+      {
+        "firstFieldNames": [
+          "CUSTOMER_ID"
+        ],
+        "firstTableName": "DIM_CUSTOMERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CUSTOMER_ID"
+        ],
+        "secondTableName": "FCT_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "ORDER_ID"
+        ],
+        "firstTableName": "FCT_ORDERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_ID"
+        ],
+        "secondTableName": "FCT_ORDER_ITEMS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "PRODUCT_ID"
+        ],
+        "firstTableName": "DIM_PRODUCTS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PRODUCT_ID"
+        ],
+        "secondTableName": "FCT_ORDER_ITEMS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "SELLER_ID"
+        ],
+        "firstTableName": "DIM_SELLERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SELLER_ID"
+        ],
+        "secondTableName": "FCT_ORDER_ITEMS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "ORDER_ID"
+        ],
+        "firstTableName": "FCT_ORDERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_ID"
+        ],
+        "secondTableName": "FCT_ORDER_PAYMENTS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "ORDER_ID"
+        ],
+        "firstTableName": "FCT_ORDERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_ID"
+        ],
+        "secondTableName": "FCT_ORDER_REVIEWS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "ORDER_ID"
+        ],
+        "firstTableName": "FCT_ORDERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_ID"
+        ],
+        "secondTableName": "BRIDGE_ORDER_CATEGORIES",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      }
+    ]
+  },
+  "views": {}
+}

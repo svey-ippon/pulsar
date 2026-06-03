@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: dim_geography
+    description: "Conformed geography dimension at zip-code-prefix grain, role-played as customer and seller location."
+    config:
+      meta:
+        grain: "zip_code_prefix"
+        why: "Single conformed geography shared by customers (via fct_orders) and sellers; removes city/state/coordinate duplication across the model."
+        model_type: dimension
+    columns:
+      - name: zip_code_prefix
+        description: "Brazilian zip-code prefix; natural key."
+        data_tests:
+          - not_null
+          - unique
+      - name: city
+        description: "Representative city for the zip prefix."
+      - name: state
+        description: "Representative state code for the zip prefix."
+      - name: latitude
+        description: "Centroid latitude for the zip prefix."
+      - name: longitude
+        description: "Centroid longitude for the zip prefix."
+      - name: geolocation_row_count
+        description: "Number of raw geolocation rows aggregated for this zip prefix (data-quality signal)."

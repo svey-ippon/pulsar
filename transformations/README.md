@@ -88,12 +88,12 @@ such as grain, model type, or short description. See
 The profile expects these environment variables:
 
 ```text
-DEV_SNOWFLAKE_ACCOUNT
-DEV_SNOWFLAKE_USER
-DEV_SNOWFLAKE_USER_PRIVATE_KEY
-DEV_SNOWFLAKE_USER_PRIVATE_KEY_PASSPHRASE
-DEV_DBT_SNOWFLAKE_ROLE
-DEV_DBT_SNOWFLAKE_WAREHOUSE
+DBT_SNOWFLAKE_ACCOUNT
+DBT_SNOWFLAKE_USER
+DBT_SNOWFLAKE_USER_PRIVATE_KEY
+DBT_SNOWFLAKE_USER_PRIVATE_KEY_PASSPHRASE
+DBT_SNOWFLAKE_ROLE
+DBT_SNOWFLAKE_WAREHOUSE
 ```
 
 The database and schema are fixed by the project/profile to `PULSAR_DB.GOLD`.
@@ -110,30 +110,40 @@ metrics, synonyms, descriptions, relationships, filters, and verified queries.
 
 ## Date Dimension Decision
 
-No `dim_dates` model is included.
+A conformed `dim_date` model **is** included.
 
-For this dataset and benchmark, a physical date dimension would mostly duplicate capabilities that
-Snowflake and modern BI/semantic tools already provide through date functions and time dimensions.
-The Gold models expose useful date columns such as `order_purchase_date`, `order_purchase_month`,
-`order_purchase_year`, and `order_purchase_day_of_week` where they reduce agent ambiguity.
+The Gold layer was redesigned as a pure Kimball star (see
+[`docs/GOLD_MODEL_TARGET.md`](docs/GOLD_MODEL_TARGET.md)): facts hold only keys, degenerate
+dimensions, and measures, and every analytical attribute is reached through a conformed dimension.
+That makes a single shared date dimension the right home for calendar attributes, replacing the
+per-fact `..._date` / `..._month` / `..._year` / `day_of_week` truncation columns that were
+previously denormalized onto each fact.
 
-Add a date dimension only if the business needs attributes that are not derivable from timestamps,
-such as fiscal periods, holiday calendars, working days, promotion calendars, or region-specific
-business calendars.
+`dim_date` is generated from a date spine (via `dbt_utils.date_spine`) and is **role-played** by
+every date foreign key in the facts: order purchase / approved / carrier / delivered / estimated,
+order-item shipping limit, and review created / answered. It currently carries generic calendar
+attributes; fiscal periods, holiday calendars, and working-day flags can be layered on later
+without touching the facts.
 
 ## Model Inventory
 
+> **Marts are currently disabled** (`+enabled: false` on the `marts` folder in `dbt_project.yml`).
+> They are downstream consumers of the previous denormalized facts and must be reworked against the
+> pure-Kimball star before re-enabling. The `mart_*` rows below describe their intended purpose.
+
 | Model | Folder | Grain | Why it exists |
 |---|---|---|---|
-| `dim_geolocation_zip_prefix` | `dimensions` | zip prefix | Deduplicates raw geolocation rows and provides representative coordinates. |
-| `dim_customers` | `dimensions` | `customer_id` | Makes the difference between order-scoped `customer_id` and physical `customer_unique_id` explicit. |
-| `dim_products` | `dimensions` | `product_id` | Centralizes English category translation. |
-| `dim_sellers` | `dimensions` | `seller_id` | Centralizes seller geography and coordinates. |
-| `fct_orders` | `facts` | `order_id` | Centralizes order lifecycle dates, customer identity, and delivery delay facts. |
-| `fct_order_items` | `facts` | `order_id`, `order_item_id` | Governed merchandise revenue grain. |
-| `fct_order_payments` | `facts` | `order_id`, `payment_sequential` | Governed collected-value/payment grain. |
-| `fct_order_reviews` | `facts` | review row | Review grain enriched with delivery status. |
-| `bridge_order_categories` | `bridges` | `order_id`, category | Deduplicates category membership inside an order. |
+| `dim_date` | `dimensions` | calendar day | Conformed calendar, role-played by every date FK; replaces per-fact date truncation columns. |
+| `dim_geography` | `dimensions` | zip prefix | Conformed geography (was `dim_geolocation_zip_prefix`); role-played as customer and seller location. |
+| `dim_customers` | `dimensions` | `customer_unique_id` | Conformed physical customer; anchor for distinct-customer analysis. |
+| `dim_categories` | `dimensions` | `product_category_name` | Conformed category dimension with English translation; referenced by products and the bridge. |
+| `dim_products` | `dimensions` | `product_id` | Product physical attributes; category snowflaked to `dim_categories`. |
+| `dim_sellers` | `dimensions` | `seller_id` | Seller identity; geography reached via `dim_geography`. |
+| `fct_orders` | `facts` | `order_id` | Thin order fact: keys + degenerate dims + delivery-delay measures. |
+| `fct_order_items` | `facts` | `order_id`, `order_item_id` | Governed merchandise revenue grain (thin fact). |
+| `fct_order_payments` | `facts` | `order_id`, `payment_sequential` | Governed collected-value/payment grain (thin fact). |
+| `fct_order_reviews` | `facts` | `review_id`, `order_id` | Order-level review grain (thin fact). |
+| `bridge_order_categories` | `bridges` | `order_id`, `product_category_name` | Keys-only order/category bridge with allocation weight; no measures. |
 | `mart_order_baskets` | `marts` | `order_id` | Prevents item/payment fan-out for basket and percentile analysis. |
 | `mart_category_satisfaction` | `marts` | order, category, review | Makes review-to-category attribution explicit and fan-out safe. |
 | `mart_customer_cohorts` | `marts` | cohort month | Provides 90-day and 180-day retention by acquisition month. |

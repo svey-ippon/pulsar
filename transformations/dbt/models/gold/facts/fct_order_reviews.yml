@@ -2,11 +2,11 @@ version: 2
 
 models:
   - name: fct_order_reviews
-    description: "Review fact at review row grain enriched with order delivery status."
+    description: "Review fact at (review_id, order_id) grain (thin Kimball fact: keys + degenerate dims + measure)."
     config:
       meta:
         grain: "review_id, order_id"
-        why: "Keeps reviews at order-level grain; category and seller attribution are handled by dedicated marts."
+        why: "Keeps reviews at order-level grain. is_negative_review (score<=2) and delivery-to-review timing are derived downstream; category attribution goes through the order-category bridge."
         model_type: fact
         business_conventions:
           - "Reviews are order-level, not item-level."
@@ -17,13 +17,19 @@ models:
           - not_null
           - unique
       - name: order_id
-        description: "Order identifier."
+        description: "Order identifier; foreign key to fct_orders."
         data_tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('fct_orders')
                 field: order_id
+      - name: review_creation_date_key
+        description: "Review creation date; foreign key to dim_date (review-created role)."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
       - name: review_score
         description: "Review score from 1 to 5."
-

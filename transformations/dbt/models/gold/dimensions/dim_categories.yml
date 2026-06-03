@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: dim_categories
+    description: "Conformed product-category dimension keyed on the Portuguese category name, with English translation."
+    config:
+      meta:
+        grain: "product_category_name"
+        why: "Centralizes category identity and translation as a conformed dimension; dim_products and the order-category bridge reference it."
+        model_type: dimension
+    columns:
+      - name: product_category_name
+        description: "Portuguese product category name; natural key."
+        data_tests:
+          - not_null
+          - unique
+      - name: product_category_name_english
+        description: "English translation of the category (null when no translation exists)."
+      - name: has_english_category
+        description: "True when an English translation exists."

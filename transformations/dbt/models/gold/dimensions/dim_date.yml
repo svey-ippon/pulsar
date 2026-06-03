@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: "Conformed date dimension (one row per calendar day), role-played by every date FK in the facts."
+    config:
+      meta:
+        grain: "date_day"
+        why: "Single conformed calendar shared by all facts; replaces per-fact date/month/year truncation columns and enables role-playing dates."
+        model_type: dimension
+    columns:
+      - name: date_day
+        description: "Calendar day; natural key of the date dimension."
+        data_tests:
+          - not_null
+          - unique
+      - name: year
+        description: "Calendar year."
+      - name: quarter
+        description: "Calendar quarter (1-4)."
+      - name: month_number
+        description: "Month number (1-12)."
+      - name: month_name
+        description: "Month name."
+      - name: month_start_date
+        description: "First day of the month; preferred grouping key for monthly trends."
+      - name: day_of_month
+        description: "Day of month (1-31)."
+      - name: day_of_week
+        description: "Day of week (0=Sunday .. 6=Saturday)."
+      - name: day_name
+        description: "Day name."
+      - name: week_of_year
+        description: "ISO-style week of year."
+      - name: is_weekend
+        description: "True for Saturday and Sunday."

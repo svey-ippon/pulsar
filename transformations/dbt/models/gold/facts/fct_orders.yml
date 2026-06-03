@@ -2,41 +2,59 @@ version: 2
 
 models:
   - name: fct_orders
-    description: "Order fact at order_id grain with customer identity, lifecycle timestamps, and delivery-delay facts."
+    description: "Order fact at order_id grain (thin Kimball fact: keys + degenerate dims + delivery-delay measures)."
     config:
       meta:
         grain: "order_id"
-        why: "Centralizes order lifecycle and delivery status logic before semantic exposure."
+        why: "Central order fact. Customer, geography, and date attributes are reached via conformed dimensions; delivery status is derived from delay_days downstream."
         model_type: fact
         business_conventions:
-          - "delay_days > 0 means late delivery."
+          - "delay_days > 0 means late delivery; null means not delivered."
           - "customer_unique_id is used for physical-customer analytics."
     columns:
       - name: order_id
-        description: "Unique order identifier."
+        description: "Unique order identifier (degenerate dimension)."
         data_tests:
           - not_null
           - unique
-      - name: customer_id
-        description: "Order-scoped customer key."
+      - name: customer_unique_id
+        description: "Physical customer; foreign key to dim_customers."
         data_tests:
-          - not_null
           - relationships:
               arguments:
                 to: ref('dim_customers')
-                field: customer_id
-      - name: customer_unique_id
-        description: "Physical customer identifier."
-      - name: delivery_late_status
-        description: "Binary delivery status: late, on_time, or not_delivered."
+                field: customer_unique_id
+      - name: customer_zip_code_prefix
+        description: "Customer zip prefix for this order; foreign key to dim_geography (customer-location role)."
         data_tests:
-          - accepted_values:
+          - relationships:
               arguments:
-                values: ['late', 'on_time', 'not_delivered']
-      - name: delivery_status
-        description: "Detailed delivery status: on_time, late, very_late, or not_delivered."
+                to: ref('dim_geography')
+                field: zip_code_prefix
+      - name: customer_id
+        description: "Order-scoped customer key (degenerate dimension)."
+      - name: order_purchase_date_key
+        description: "Purchase date; foreign key to dim_date (purchase role)."
         data_tests:
-          - accepted_values:
+          - relationships:
               arguments:
-                values: ['on_time', 'late', 'very_late', 'not_delivered']
-
+                to: ref('dim_date')
+                field: date_day
+      - name: order_delivered_customer_date_key
+        description: "Delivery-to-customer date; foreign key to dim_date (delivered role)."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: order_estimated_delivery_date_key
+        description: "Estimated delivery date; foreign key to dim_date (estimated role)."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: order_status
+        description: "Order status (degenerate dimension): delivered, shipped, canceled, etc."
+      - name: delay_days
+        description: "Delivered minus estimated delivery date, in days (>0 late, null not delivered)."

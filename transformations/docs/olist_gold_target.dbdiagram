@@ -1,0 +1,439 @@
+{
+  "version": "2.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "currentViewName": null,
+  "defaultView": {
+    "detailLevel": "All",
+    "tablePositions": [
+      {
+        "name": "DIM_DATE",
+        "schemaName": "public",
+        "x": 2273.6637325047045,
+        "y": 336.33924772365344
+      },
+      {
+        "name": "DIM_CUSTOMER",
+        "schemaName": "public",
+        "x": 438.6422911009919,
+        "y": 893.3883685469456
+      },
+      {
+        "name": "DIM_GEOGRAPHY",
+        "schemaName": "public",
+        "x": 452.3901319364054,
+        "y": 568.7056227250132
+      },
+      {
+        "name": "DIM_CATEGORY",
+        "schemaName": "public",
+        "x": 255.11443590846034,
+        "y": 151.76624379998418
+      },
+      {
+        "name": "DIM_PRODUCT",
+        "schemaName": "public",
+        "x": 1085.1419077471376,
+        "y": -220.99632990958435
+      },
+      {
+        "name": "DIM_SELLER",
+        "schemaName": "public",
+        "x": 1168.137427267684,
+        "y": 277.2478086083107
+      },
+      {
+        "name": "FCT_ORDERS",
+        "schemaName": "public",
+        "x": 1328.970716448445,
+        "y": 616.4834611914068
+      },
+      {
+        "name": "FCT_ORDER_ITEMS",
+        "schemaName": "public",
+        "x": 1785.98068121423,
+        "y": -79.34893450755573
+      },
+      {
+        "name": "FCT_ORDER_PAYMENTS",
+        "schemaName": "public",
+        "x": 1781.972136292355,
+        "y": 584.4173918924677
+      },
+      {
+        "name": "FCT_ORDER_REVIEWS",
+        "schemaName": "public",
+        "x": 1785.98068121423,
+        "y": 232.59079118439377
+      },
+      {
+        "name": "BRIDGE_ORDER_CATEGORY",
+        "schemaName": "public",
+        "x": 911.4579931839107,
+        "y": 448.87070246785447
+      }
+    ],
+    "tableGroupCollapseStates": [],
+    "stickyNoteLayouts": [],
+    "referencePaths": [
+      {
+        "firstFieldNames": [
+          "PRODUCT_CATEGORY_NAME"
+        ],
+        "firstTableName": "DIM_CATEGORY",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PRODUCT_CATEGORY_NAME"
+        ],
+        "secondTableName": "DIM_PRODUCT",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "ZIP_CODE_PREFIX"
+        ],
+        "firstTableName": "DIM_GEOGRAPHY",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SELLER_ZIP_CODE_PREFIX"
+        ],
+        "secondTableName": "DIM_SELLER",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 807.8230396659919,
+            "y": 616.7056227250132
+          },
+          {
+            "x": 807.8230396659919,
+            "y": 371.79839052673003
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "CUSTOMER_UNIQUE_ID"
+        ],
+        "firstTableName": "DIM_CUSTOMER",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CUSTOMER_UNIQUE_ID"
+        ],
+        "secondTableName": "FCT_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "ZIP_CODE_PREFIX"
+        ],
+        "firstTableName": "DIM_GEOGRAPHY",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "CUSTOMER_ZIP_CODE_PREFIX"
+        ],
+        "secondTableName": "FCT_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 811.9422767426335,
+            "y": 607.9619954163512
+          },
+          {
+            "x": 811.9422767426335,
+            "y": 760.4834611914068
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_PURCHASE_DATE_KEY"
+        ],
+        "secondTableName": "FCT_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 2150.56891316274,
+            "y": 384.33924772365344
+          },
+          {
+            "x": 2150.56891316274,
+            "y": 856.4834611914068
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_APPROVED_DATE_KEY"
+        ],
+        "secondTableName": "FCT_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 2150.56891316274,
+            "y": 377.0639567644437
+          },
+          {
+            "x": 2150.56891316274,
+            "y": 888.4834611914068
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_DELIVERED_CARRIER_DATE_KEY"
+        ],
+        "secondTableName": "FCT_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 2152.3877359025428,
+            "y": 377.0639567644437
+          },
+          {
+            "x": 2152.3877359025428,
+            "y": 920.4834611914068
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_DELIVERED_CUSTOMER_DATE_KEY"
+        ],
+        "secondTableName": "FCT_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 2152.3877359025428,
+            "y": 377.0639567644437
+          },
+          {
+            "x": 2152.3877359025428,
+            "y": 952.4834611914068
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_ESTIMATED_DELIVERY_DATE_KEY"
+        ],
+        "secondTableName": "FCT_ORDERS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 2150.5689131627396,
+            "y": 377.0639567644437
+          },
+          {
+            "x": 2150.5689131627396,
+            "y": 984.4834611914068
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "ORDER_ID"
+        ],
+        "firstTableName": "FCT_ORDERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_ID"
+        ],
+        "secondTableName": "FCT_ORDER_ITEMS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "PRODUCT_ID"
+        ],
+        "firstTableName": "DIM_PRODUCT",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PRODUCT_ID"
+        ],
+        "secondTableName": "FCT_ORDER_ITEMS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "SELLER_ID"
+        ],
+        "firstTableName": "DIM_SELLER",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SELLER_ID"
+        ],
+        "secondTableName": "FCT_ORDER_ITEMS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "SHIPPING_LIMIT_DATE_KEY"
+        ],
+        "secondTableName": "FCT_ORDER_ITEMS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": [
+          {
+            "x": 2150.67599656539,
+            "y": 384.33924772365344
+          },
+          {
+            "x": 2150.67599656539,
+            "y": 128.65106549244427
+          }
+        ]
+      },
+      {
+        "firstFieldNames": [
+          "ORDER_ID"
+        ],
+        "firstTableName": "FCT_ORDERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_ID"
+        ],
+        "secondTableName": "FCT_ORDER_PAYMENTS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "ORDER_ID"
+        ],
+        "firstTableName": "FCT_ORDERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_ID"
+        ],
+        "secondTableName": "FCT_ORDER_REVIEWS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "REVIEW_CREATION_DATE_KEY"
+        ],
+        "secondTableName": "FCT_ORDER_REVIEWS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "DATE_DAY"
+        ],
+        "firstTableName": "DIM_DATE",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "REVIEW_ANSWER_DATE_KEY"
+        ],
+        "secondTableName": "FCT_ORDER_REVIEWS",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "ORDER_ID"
+        ],
+        "firstTableName": "FCT_ORDERS",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "ORDER_ID"
+        ],
+        "secondTableName": "BRIDGE_ORDER_CATEGORY",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      },
+      {
+        "firstFieldNames": [
+          "PRODUCT_CATEGORY_NAME"
+        ],
+        "firstTableName": "DIM_CATEGORY",
+        "firstSchemaName": "public",
+        "firstRelation": "1",
+        "secondFieldNames": [
+          "PRODUCT_CATEGORY_NAME"
+        ],
+        "secondTableName": "BRIDGE_ORDER_CATEGORY",
+        "secondSchemaName": "public",
+        "secondRelation": "*",
+        "checkPoints": []
+      }
+    ]
+  },
+  "views": {}
+}

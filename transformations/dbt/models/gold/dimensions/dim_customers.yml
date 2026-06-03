@@ -2,22 +2,15 @@ version: 2
 
 models:
   - name: dim_customers
-    description: "Customer dimension at Olist order-customer grain."
+    description: "Conformed physical customer dimension at customer_unique_id grain."
     config:
       meta:
-        grain: "customer_id"
-        why: "Makes the distinction between order-scoped customer_id and physical customer_unique_id explicit."
+        grain: "customer_unique_id"
+        why: "Regrained from order-scoped customer_id to the physical customer; the conformed anchor for distinct-customer analysis. Order-scoped customer_id is a degenerate dimension on fct_orders."
         model_type: dimension
     columns:
-      - name: customer_id
-        description: "Order-scoped customer key."
+      - name: customer_unique_id
+        description: "Physical customer identifier; natural key."
         data_tests:
           - not_null
           - unique
-      - name: customer_unique_id
-        description: "Physical customer identifier used for repeat-purchase analysis."
-        data_tests:
-          - not_null
-      - name: customer_state
-        description: "Customer state code."
-
