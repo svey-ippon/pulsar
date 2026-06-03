@@ -2,8 +2,9 @@
 
 > Document set (all in this folder):
 > - `SEMANTIC_CONTRACT.md` — *this file*: the contract **format** (what fields exist).
-> - `SEMANTIC_CONTRACT_DETAILS.md` — how to **author** a contract (when/why to populate) + design rationale.
+> - `SEMANTIC_CONTRACT_DETAILS.md` — how to **author** a contract (when/why to populate fields).
 > - `SEMANTIC_AGENT_PROMPTING.md` — how the agent **consumes** the contract (out-of-YAML rules).
+> - `SEMANTIC_DESIGN_DECISIONS.md` — **why** the format and authoring rules are what they are.
 
 This is the structure of a domain contract YAML (e.g. `olist_sales.yaml`) consumed by the agent
 through `describe_domain(domain_id)`. Unlike a Snowflake Semantic View, this contract does **not**

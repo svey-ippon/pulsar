@@ -8,8 +8,9 @@
 >
 > Document set (all in this folder):
 > - `SEMANTIC_CONTRACT.md` — the contract **format** (what fields exist).
-> - `SEMANTIC_CONTRACT_DETAILS.md` — how to **author** a contract (when/why to populate fields) + design rationale.
+> - `SEMANTIC_CONTRACT_DETAILS.md` — how to **author** a contract (when/why to populate fields).
 > - `SEMANTIC_AGENT_PROMPTING.md` — *this file*: how the agent **consumes** the contract.
+> - `SEMANTIC_DESIGN_DECISIONS.md` — **why** the format and authoring rules are what they are.
 
 The contract does not constrain execution — the agent writes raw SQL. So the contract's guarantees
 only hold if the agent applies the rules below. They fall into four areas: metric authority,
