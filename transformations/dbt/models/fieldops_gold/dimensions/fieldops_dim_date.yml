@@ -1,0 +1,17 @@
+version: 2
+
+models:
+  - name: fieldops_dim_date
+    description: "FieldOps conformed date dimension (spine 2017-01-01 -> 2021-01-01). Role-played by all date keys."
+    config:
+      meta:
+        grain: "date_day"
+        model_type: dimension
+    columns:
+      - name: date_day
+        description: "Calendar day (natural key)."
+        data_tests:
+          - not_null
+          - unique
+      - name: is_weekend
+        description: "True on Saturday/Sunday — feeds the business-day delay computation."

@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: fieldops_bridge_work_order_categories
+    description: "Keys-only weighted bridge at (work_order_id x equipment_category) grain, derived from the serviced equipment units (silver-only)."
+    config:
+      meta:
+        grain: "work_order_id x equipment_category"
+        model_type: bridge
+        business_conventions:
+          - "Slicing work-order measures by category REQUIRES allocation_weight (1/N distinct categories); an unweighted join double-counts multi-category work orders."
+    columns:
+      - name: work_order_id
+        description: "Work order; foreign key to fct_work_orders."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fieldops_fct_work_orders')
+                field: work_order_id
+      - name: equipment_category
+        description: "Serviced equipment category; foreign key to dim_equipment_categories."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_equipment_categories')
+                field: equipment_category
+      - name: allocation_weight
+        description: "1 / #distinct categories serviced by the work order (Kimball weighting factor)."
+        data_tests:
+          - not_null
+
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - work_order_id
+              - equipment_category

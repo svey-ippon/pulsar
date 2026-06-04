@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: fieldops_fct_satisfaction_surveys
+    description: "Satisfaction survey fact at survey-RESPONSE grain — several responses per work order possible (re-surveys)."
+    config:
+      meta:
+        grain: "work_order_id x response_sequence"
+        model_type: fact
+        business_conventions:
+          - "Grain convention: the LATEST response (highest response_sequence) counts per work order; averaging all rows double-counts re-surveyed work orders."
+    columns:
+      - name: survey_response_key
+        description: "Synthetic key work_order_id-response_sequence."
+        data_tests:
+          - not_null
+          - unique
+      - name: work_order_id
+        description: "Surveyed work order; foreign key to fct_work_orders."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fieldops_fct_work_orders')
+                field: work_order_id
+      - name: response_sequence
+        description: "Response sequence per work order (re-survey = 2)."
+      - name: responded_date_key
+        description: "Response date; foreign key to dim_date (responded role)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_date')
+                field: date_day
+      - name: satisfaction_score
+        description: "Satisfaction score, 1 (worst) to 10 (best)."

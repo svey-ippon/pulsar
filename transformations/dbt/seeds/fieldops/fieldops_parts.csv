@@ -1,0 +1,201 @@
+part_id,part_name,part_family,list_price
+PT-0001,Filter US-804,filter,53.62
+PT-0002,Bearing VG-351,bearing,80.1
+PT-0003,Valve LH-670,valve,111.05
+PT-0004,Drive belt GL-985,belt,40.33
+PT-0005,Seal kit CH-560,seal,27.2
+PT-0006,Sensor JI-234,sensor,150.01
+PT-0007,Motor QQ-120,motor,342.08
+PT-0008,Gasket OX-792,gasket,20.35
+PT-0009,Hose EN-266,hose,42.89
+PT-0010,Lubricant CD-305,lubricant,22.9
+PT-0011,Filter XW-684,filter,53.42
+PT-0012,Bearing ZZ-959,bearing,91.78
+PT-0013,Valve XE-800,valve,112.23
+PT-0014,Drive belt RS-879,belt,45.27
+PT-0015,Seal kit CP-821,seal,28.41
+PT-0016,Sensor BI-502,sensor,186.23
+PT-0017,Motor ST-626,motor,530.91
+PT-0018,Gasket IU-588,gasket,19.71
+PT-0019,Hose XU-125,hose,38.75
+PT-0020,Lubricant CW-718,lubricant,26.59
+PT-0021,Filter DH-478,filter,51.54
+PT-0022,Bearing TG-103,bearing,86.01
+PT-0023,Valve NR-243,valve,131.03
+PT-0024,Drive belt VK-579,belt,39.22
+PT-0025,Seal kit TO-792,seal,27.6
+PT-0026,Sensor NZ-623,sensor,161.74
+PT-0027,Motor CU-104,motor,408.41
+PT-0028,Gasket QF-351,gasket,15.67
+PT-0029,Hose KU-921,hose,44.17
+PT-0030,Lubricant SB-377,lubricant,26.37
+PT-0031,Filter HC-997,filter,54.84
+PT-0032,Bearing FD-849,bearing,90.96
+PT-0033,Valve GS-966,valve,129.95
+PT-0034,Drive belt OJ-788,belt,38.95
+PT-0035,Seal kit OG-800,seal,30.1
+PT-0036,Sensor FA-807,sensor,138.64
+PT-0037,Motor RN-825,motor,483.69
+PT-0038,Gasket GK-829,gasket,15.22
+PT-0039,Hose EA-611,hose,47.42
+PT-0040,Lubricant FX-508,lubricant,20.3
+PT-0041,Filter JZ-953,filter,37.24
+PT-0042,Bearing GT-899,bearing,102.22
+PT-0043,Valve PO-533,valve,152.82
+PT-0044,Drive belt CH-597,belt,32.49
+PT-0045,Seal kit XJ-815,seal,26.47
+PT-0046,Sensor JG-448,sensor,136.62
+PT-0047,Motor OA-925,motor,439.51
+PT-0048,Gasket VZ-862,gasket,19.95
+PT-0049,Hose WU-292,hose,36.58
+PT-0050,Lubricant PI-664,lubricant,26.08
+PT-0051,Filter RF-859,filter,37.51
+PT-0052,Bearing MY-340,bearing,75.32
+PT-0053,Valve UL-724,valve,110.54
+PT-0054,Drive belt WX-515,belt,32.13
+PT-0055,Seal kit YS-873,seal,25.78
+PT-0056,Sensor OA-916,sensor,180.3
+PT-0057,Motor JI-834,motor,404.99
+PT-0058,Gasket KF-483,gasket,21.13
+PT-0059,Hose UW-440,hose,37.12
+PT-0060,Lubricant XF-289,lubricant,24.21
+PT-0061,Filter MU-532,filter,40.13
+PT-0062,Bearing TF-867,bearing,84.23
+PT-0063,Valve WF-523,valve,130.33
+PT-0064,Drive belt SZ-499,belt,28.79
+PT-0065,Seal kit VT-239,seal,31.73
+PT-0066,Sensor MT-232,sensor,147.38
+PT-0067,Motor TW-439,motor,449.76
+PT-0068,Gasket XL-298,gasket,21.39
+PT-0069,Hose RD-333,hose,38.65
+PT-0070,Lubricant MH-442,lubricant,18.62
+PT-0071,Filter LU-798,filter,51.31
+PT-0072,Bearing YQ-561,bearing,65.48
+PT-0073,Valve MR-622,valve,117.81
+PT-0074,Drive belt SJ-118,belt,30.52
+PT-0075,Seal kit AW-574,seal,31.25
+PT-0076,Sensor EU-330,sensor,152.67
+PT-0077,Motor YK-728,motor,393.45
+PT-0078,Gasket YI-607,gasket,20.72
+PT-0079,Hose HB-238,hose,38.19
+PT-0080,Lubricant LA-799,lubricant,22.77
+PT-0081,Filter SX-420,filter,48.47
+PT-0082,Bearing ST-195,bearing,91.63
+PT-0083,Valve IL-341,valve,112.63
+PT-0084,Drive belt OC-681,belt,43.47
+PT-0085,Seal kit XW-318,seal,30.91
+PT-0086,Sensor KO-480,sensor,130.06
+PT-0087,Motor QE-484,motor,444.66
+PT-0088,Gasket LK-675,gasket,15.54
+PT-0089,Hose QY-502,hose,40.49
+PT-0090,Lubricant GM-962,lubricant,23.83
+PT-0091,Filter TC-321,filter,51.06
+PT-0092,Bearing HB-343,bearing,66.66
+PT-0093,Valve HR-853,valve,119.7
+PT-0094,Drive belt QX-476,belt,36.61
+PT-0095,Seal kit IU-197,seal,31.77
+PT-0096,Sensor XU-571,sensor,177.08
+PT-0097,Motor FI-182,motor,469.44
+PT-0098,Gasket DW-271,gasket,17.94
+PT-0099,Hose ZH-221,hose,41.95
+PT-0100,Lubricant RX-163,lubricant,22.19
+PT-0101,Filter AY-816,filter,43.54
+PT-0102,Bearing CD-768,bearing,101.78
+PT-0103,Valve IY-145,valve,110.07
+PT-0104,Drive belt LG-893,belt,30.54
+PT-0105,Seal kit YI-449,seal,24.94
+PT-0106,Sensor GU-879,sensor,140.75
+PT-0107,Motor WF-158,motor,492.37
+PT-0108,Gasket UW-957,gasket,18.68
+PT-0109,Hose JT-625,hose,50.42
+PT-0110,Lubricant YV-435,lubricant,21.04
+PT-0111,Filter UD-801,filter,55.93
+PT-0112,Bearing KH-264,bearing,90.33
+PT-0113,Valve AU-487,valve,139.78
+PT-0114,Drive belt JL-986,belt,28.26
+PT-0115,Seal kit RW-265,seal,21.4
+PT-0116,Sensor IK-175,sensor,172.18
+PT-0117,Motor FX-383,motor,417.02
+PT-0118,Gasket BA-312,gasket,15.51
+PT-0119,Hose MR-171,hose,33.78
+PT-0120,Lubricant MQ-732,lubricant,19.2
+PT-0121,Filter UK-131,filter,48.47
+PT-0122,Bearing WF-747,bearing,95.8
+PT-0123,Valve HT-282,valve,122.97
+PT-0124,Drive belt JG-514,belt,28.58
+PT-0125,Seal kit OY-479,seal,21.81
+PT-0126,Sensor NY-791,sensor,131.87
+PT-0127,Motor WE-925,motor,412.79
+PT-0128,Gasket SJ-431,gasket,19.48
+PT-0129,Hose CK-925,hose,40.79
+PT-0130,Lubricant IP-191,lubricant,21.84
+PT-0131,Filter XJ-884,filter,58.42
+PT-0132,Bearing DG-120,bearing,76.19
+PT-0133,Valve JM-557,valve,149.48
+PT-0134,Drive belt HJ-536,belt,38.11
+PT-0135,Seal kit FN-169,seal,20.19
+PT-0136,Sensor UM-926,sensor,157.17
+PT-0137,Motor IA-314,motor,495.08
+PT-0138,Gasket GF-228,gasket,16.76
+PT-0139,Hose RG-380,hose,36.58
+PT-0140,Lubricant XF-573,lubricant,24.59
+PT-0141,Filter RZ-813,filter,53.8
+PT-0142,Bearing KO-459,bearing,81.99
+PT-0143,Valve QC-668,valve,117.33
+PT-0144,Drive belt ND-376,belt,34.51
+PT-0145,Seal kit CZ-557,seal,31.28
+PT-0146,Sensor QT-693,sensor,120.2
+PT-0147,Motor LH-929,motor,447.48
+PT-0148,Gasket VJ-596,gasket,17.22
+PT-0149,Hose JA-591,hose,38.06
+PT-0150,Lubricant KN-258,lubricant,23.72
+PT-0151,Filter GM-304,filter,47.03
+PT-0152,Bearing LX-333,bearing,91.04
+PT-0153,Valve SD-799,valve,119.6
+PT-0154,Drive belt AT-232,belt,29.62
+PT-0155,Seal kit CS-281,seal,30.72
+PT-0156,Sensor XV-544,sensor,194.09
+PT-0157,Motor HX-506,motor,403.25
+PT-0158,Gasket XB-206,gasket,17.68
+PT-0159,Hose EJ-188,hose,41.16
+PT-0160,Lubricant PC-997,lubricant,21.84
+PT-0161,Filter XV-391,filter,53.8
+PT-0162,Bearing MF-715,bearing,83.69
+PT-0163,Valve NR-357,valve,97.76
+PT-0164,Drive belt QT-576,belt,35.13
+PT-0165,Seal kit HH-745,seal,32.38
+PT-0166,Sensor NR-894,sensor,137.25
+PT-0167,Motor KX-324,motor,489.78
+PT-0168,Gasket FH-146,gasket,21.17
+PT-0169,Hose BD-874,hose,45.15
+PT-0170,Lubricant CX-371,lubricant,21.91
+PT-0171,Filter SG-528,filter,40.98
+PT-0172,Bearing BY-745,bearing,75.64
+PT-0173,Valve KW-624,valve,148.7
+PT-0174,Drive belt VB-217,belt,35.12
+PT-0175,Seal kit QP-514,seal,32.29
+PT-0176,Sensor OL-301,sensor,124.5
+PT-0177,Motor KT-982,motor,470.53
+PT-0178,Gasket DZ-439,gasket,21.5
+PT-0179,Hose PY-559,hose,46.13
+PT-0180,Lubricant NE-490,lubricant,28.53
+PT-0181,Filter PK-760,filter,53.04
+PT-0182,Bearing HG-607,bearing,88.63
+PT-0183,Valve PL-225,valve,142.01
+PT-0184,Drive belt JU-238,belt,31.21
+PT-0185,Seal kit KG-752,seal,27.83
+PT-0186,Sensor IJ-241,sensor,120.07
+PT-0187,Motor EH-420,motor,461.23
+PT-0188,Gasket XC-677,gasket,16.28
+PT-0189,Hose MV-638,hose,42.81
+PT-0190,Lubricant GT-382,lubricant,25.71
+PT-0191,Filter SO-630,filter,43.45
+PT-0192,Bearing QV-574,bearing,73.79
+PT-0193,Valve ZH-200,valve,101.51
+PT-0194,Drive belt BI-798,belt,32.29
+PT-0195,Seal kit NC-285,seal,20.61
+PT-0196,Sensor DX-375,sensor,139.15
+PT-0197,Motor KA-672,motor,358.61
+PT-0198,Gasket MI-600,gasket,20.39
+PT-0199,Hose HY-406,hose,38.13
+PT-0200,Lubricant EI-352,lubricant,25.01

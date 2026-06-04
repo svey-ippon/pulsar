@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: fieldops_dim_clients
+    description: "Contract-holding client companies — the FieldOps 'customer' of record (CV-2)."
+    config:
+      meta:
+        grain: "client_id"
+        model_type: dimension
+        business_conventions:
+          - "'Customer' always means the contract-holding client company, never the site."
+    columns:
+      - name: client_id
+        description: "Client company identifier."
+        data_tests:
+          - not_null
+          - unique
+      - name: client_name
+        description: "Fictional company name."
+      - name: industry
+        description: "Client industry (manufacturing, food_processing, logistics, ...)."
+      - name: contract_tier
+        description: "Service contract tier: standard, premium or enterprise."

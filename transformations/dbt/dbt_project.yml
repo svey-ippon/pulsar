@@ -34,3 +34,18 @@ models:
       # until reworked. See docs/GOLD_MODEL_TARGET.md.
       marts:
         +enabled: false
+
+    # FieldOps synthetic benchmark star (see benchmark/FIELDOPS_SPEC.md).
+    # Models are named fieldops_* (dbt model names are project-global) and
+    # aliased back to plain star names inside the dedicated schema.
+    fieldops_gold:
+      +schema: FIELDOPS_GOLD
+      +tags: [fieldops]
+
+seeds:
+  transformations:
+    # FieldOps generated silver layer (written by benchmark/generator; committed).
+    fieldops:
+      +database: PULSAR_DB
+      +schema: FIELDOPS_SILVER
+      +tags: [fieldops]

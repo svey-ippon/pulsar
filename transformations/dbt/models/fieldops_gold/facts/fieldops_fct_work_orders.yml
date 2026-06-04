@@ -1,0 +1,93 @@
+version: 2
+
+models:
+  - name: fieldops_fct_work_orders
+    description: "Work-order fact: accumulating snapshot at work_order_id grain (thin Kimball fact: keys + degenerate dims + measures). Lifecycle: opened -> promised -> scheduled -> started -> completed -> validated."
+    config:
+      meta:
+        grain: "work_order_id"
+        why: "Central work-order fact. Client and geography attributes are reached via dim_sites / dim_technicians; lateness derives from sla_delay_bdays."
+        model_type: fact
+        business_conventions:
+          - "Late (CV-3) = sla_delay_bdays > 2 (promised date + 2 business days grace)."
+          - "sla_delay_bdays is NULL when the work order is not completed yet — never 'on time'."
+          - "call_out_fee is a header-grain measure: count it once per work order, never per line."
+          - "duration_hours is elapsed on-site presence (clock time), not man-hours delivered."
+    columns:
+      - name: work_order_id
+        description: "Work-order identifier (degenerate dimension)."
+        data_tests:
+          - not_null
+          - unique
+      - name: site_id
+        description: "Site where the work happens; foreign key to dim_sites (client via snowflake)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_sites')
+                field: site_id
+      - name: technician_id
+        description: "Crew lead; foreign key to dim_technicians (depot-geography role)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_technicians')
+                field: technician_id
+      - name: opened_date_key
+        description: "Opening date; foreign key to dim_date (opened role)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_date')
+                field: date_day
+      - name: promised_date_key
+        description: "SLA-promised date; foreign key to dim_date (promised role) — the lateness anchor (CV-3)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_date')
+                field: date_day
+      - name: scheduled_date_key
+        description: "Scheduled date; foreign key to dim_date (scheduled role)."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_date')
+                field: date_day
+      - name: started_date_key
+        description: "Start date; foreign key to dim_date (started role). NULL = not started."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_date')
+                field: date_day
+      - name: completed_date_key
+        description: "Completion date; foreign key to dim_date (completed role). NULL = open work order."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_date')
+                field: date_day
+      - name: validated_date_key
+        description: "Client validation date; foreign key to dim_date (validated role). NULL = not validated."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fieldops_dim_date')
+                field: date_day
+      - name: work_order_type
+        description: "corrective, preventive or inspection (degenerate dimension)."
+      - name: priority
+        description: "critical, high or standard (degenerate dimension)."
+      - name: crew_size
+        description: "Technicians dispatched (lead + assists) — explains billed_hours >> duration_hours."
+      - name: sla_delay_bdays
+        description: "Signed business days between promised and completed dates (Mon-Fri, no holidays). NULL = not completed. Late = > 2 (grace)."
+      - name: duration_hours
+        description: "Elapsed on-site presence in hours (clock time). NULL = not completed."
+      - name: call_out_fee
+        description: "Flat dispatch fee at work-order (header) grain. Part of service revenue (CV-1)."
