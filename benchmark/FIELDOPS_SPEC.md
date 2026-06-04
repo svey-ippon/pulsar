@@ -128,15 +128,28 @@ Key narrative facts that ground the traps:
 
 Same skeleton as the Olist gold (thin facts, conformed dims, keys-only weighted bridge,
 role-playing dates and geography), projected onto FieldOps, plus two structures added for
-trap coverage (marked ➕).
+trap coverage (marked ➕). **Full model: [`fieldops_star.dbml`](fieldops_star.dbml)**
+(trap-carrying columns annotated with their catalogue ids).
+
+Structural choices made in the DBML:
+- **Client reached via snowflake**: facts carry `site_id`; `dim_sites.client_id` →
+  `dim_clients` (the Olist product→category pattern). No direct client FK on facts —
+  keeps A1 multi-hop and avoids a second join path.
+- **Technician on the work order = crew lead** (depot geography role, C3); a `crew_size`
+  degenerate attribute makes multi-technician WOs explicit (grounds A3's
+  billed ≫ duration divergence).
+- **`paid_date_key` on payments** (Olist payments had no date key): required for A2 —
+  payment lag makes monthly collected ≠ monthly revenue.
+- Depot carried as attributes on `dim_technicians` (the Olist `dim_seller` pattern), not
+  a separate dimension; `satisfaction_score` on a 1–10 scale (differs from Olist's 1–5).
 
 ### Facts
 
 | Table | Grain | Notable content |
 |---|---|---|
-| `fct_work_orders` | one work order | 6 role-playing date keys (opened, promised, scheduled, started, completed, validated); degenerate `work_order_id`, priority; `sla_delay_bdays` **precomputed by dbt** (business days vs promised, NULL = not completed); ➕ `call_out_fee` — header-grain measure (additivity trap D1, feeds CV-1); ➕ `duration_hours` — on-site elapsed presence (false-friend pair with `billed_hours`, traps A3/F4) |
+| `fct_work_orders` | one work order | FK `site_id`, `technician_id` (crew lead); 6 role-playing date keys (opened, promised, scheduled, started, completed, validated); degenerate `work_order_id`, type, priority, `crew_size`; `sla_delay_bdays` **precomputed by dbt** (business days vs promised, NULL = not completed); ➕ `call_out_fee` — header-grain measure (additivity trap D1, feeds CV-1); ➕ `duration_hours` — on-site elapsed presence (false-friend pair with `billed_hours`, traps A3/F4) |
 | `fct_work_order_lines` | one line | `line_kind` (PART \| LABOR); `line_amount`, `quantity`, `billed_hours` (labor only); `part_id` **NULL on labor lines** (meaningful NULL); FK work_order, part |
-| `fct_work_order_payments` | work order × payment sequence | `payment_amount`, method, sequence |
+| `fct_work_order_payments` | work order × payment sequence | `payment_amount`, method, sequence; `paid_date_key` (payment lag → A2 divergence) |
 | `fct_satisfaction_surveys` | one survey response | several responses possible per work order (re-surveys); `satisfaction_score`; grain convention: **latest response counts** (D3) |
 
 ### Dimensions & bridge

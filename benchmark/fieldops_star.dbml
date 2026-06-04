@@ -1,0 +1,180 @@
+// FieldOps — synthetic benchmark gold model (pure Kimball star)
+// Companion to FIELDOPS_SPEC.md. Paste into https://dbdiagram.io to visualize.
+//
+// Design philosophy (settled — same discipline as the Olist gold):
+//   - PURE KIMBALL STAR: facts hold ONLY keys (FK to dims) + degenerate
+//     dimensions + measures. No dimensional attribute denormalized onto a fact.
+//   - Conformed dimensions: DATE (role-playing x6+1), CLIENT (snowflaked from
+//     SITE, like PRODUCT -> CATEGORY on Olist), GEOGRAPHY (role-playing
+//     site/depot), EQUIPMENT_CATEGORY, PART, TECHNICIAN.
+//   - Precomputed-by-dbt rule (spec principle 2): SLA_DELAY_BDAYS is computed
+//     in gold so traps test contract-following, not SQL gymnastics.
+//   - Trap-carrying columns are annotated with their catalogue id (A1..F4) and
+//     anti-prior convention id (CV-1..CV-3) from FIELDOPS_SPEC.md §4-§5.
+//   - Equipment UNITS are silver-only: the gold exposes the work_order <->
+//     category bridge, not the units (same pattern as the Olist bridge).
+//
+// Keys: natural/business keys (consistent with the Olist gold; no surrogates).
+
+Project fieldops_gold {
+  database_type: 'Snowflake'
+  Note: 'FieldOps gold (PULSAR_DB.FIELDOPS_GOLD) — pure Kimball star. 4 facts, 6 conformed dimensions (+1 snowflaked), 1 keys-only weighted bridge. ~10k WOs, 2017-2019.'
+}
+
+//============================ CONFORMED DIMENSIONS ============================
+
+Table DIM_DATE {
+  DATE_DAY         date    [pk, note: 'calendar day; natural key']
+  YEAR             number
+  QUARTER          number
+  MONTH_NUMBER     number
+  MONTH_NAME       varchar
+  MONTH_START_DATE date    [note: 'first day of month — monthly trends']
+  DAY_OF_MONTH     number
+  DAY_OF_WEEK      number
+  DAY_NAME         varchar
+  WEEK_OF_YEAR     number
+  IS_WEEKEND       boolean [note: 'feeds the business-day computation done in dbt (B2/CV-3)']
+
+  Note: 'Conformed date dimension (date spine 2017-01-01 -> 2020-01-01). Role-played by every date FK below (6 WO milestones + payment + survey dates).'
+}
+
+Table DIM_CLIENTS {
+  CLIENT_ID      varchar [pk, note: 'contract-holding company — THE "customer" (CV-2 / A1)']
+  CLIENT_NAME    varchar [note: 'fictional company name (English)']
+  INDUSTRY       varchar [note: 'manufacturing, food_processing, logistics, ...']
+  CONTRACT_TIER  varchar [note: 'standard | premium | enterprise']
+
+  Note: 'Conformed client. CV-2: "customer" = contract-holding client company, never the site. Reached from facts via DIM_SITES (snowflake) — A1 naive path counts sites instead. Generator: avg >= 3 sites/client.'
+}
+
+Table DIM_SITES {
+  SITE_ID               varchar [pk]
+  CLIENT_ID             varchar [ref: > DIM_CLIENTS.CLIENT_ID, note: 'snowflake to client (the Olist PRODUCT->CATEGORY pattern)']
+  SITE_NAME             varchar
+  SITE_TYPE             varchar [note: 'plant | warehouse | office']
+  SITE_ZIP_CODE_PREFIX  varchar [ref: > DIM_GEOGRAPHY.ZIP_CODE_PREFIX, note: 'site location role (C1/C3)']
+
+  Note: 'Client location where interventions happen. Geography reached via DIM_GEOGRAPHY (site role).'
+}
+
+Table DIM_TECHNICIANS {
+  TECHNICIAN_ID          varchar [pk]
+  DEPOT_CODE             varchar [note: 'dispatch depot — degenerate-ish attribute']
+  DEPOT_ZIP_CODE_PREFIX  varchar [ref: > DIM_GEOGRAPHY.ZIP_CODE_PREFIX, note: 'depot location role (C3) — the Olist DIM_SELLER pattern']
+  SENIORITY_LEVEL        varchar [note: 'junior | senior | expert']
+
+  Note: 'Lead technician dimension (the dispatched crew lead — see FCT_WORK_ORDERS.CREW_SIZE). Depot geography reached via DIM_GEOGRAPHY (depot role).'
+}
+
+Table DIM_GEOGRAPHY {
+  ZIP_CODE_PREFIX  varchar [pk, note: 'fictional zip prefix']
+  CITY             varchar [note: 'fictional city (English)']
+  STATE            varchar [note: 'generic/fictional state']
+
+  Note: 'Conformed geography. Role-played as SITE location (via DIM_SITES) and DEPOT location (via DIM_TECHNICIANS). C3: sites and depots deliberately often in different states.'
+}
+
+Table DIM_EQUIPMENT_CATEGORIES {
+  EQUIPMENT_CATEGORY  varchar [pk, note: 'compressor, hvac, conveyor, pump, ... — natural key']
+  CATEGORY_GROUP      varchar [note: 'rotating | static | electrical | climate']
+
+  Note: 'Equipment category referential. Individual equipment UNITS are silver-only; work orders reach categories through the weighted bridge.'
+}
+
+Table DIM_PARTS {
+  PART_ID      varchar [pk]
+  PART_NAME    varchar [note: 'fictional part name (English)']
+  PART_FAMILY  varchar [note: 'filter, bearing, valve, belt, sensor, ...']
+
+  Note: 'Spare-parts catalogue. Referenced by PART lines only — LABOR lines carry PART_ID = NULL (E2).'
+}
+
+//================================== FACTS ====================================
+
+Table FCT_WORK_ORDERS {
+  WORK_ORDER_ID       varchar [pk, note: 'degenerate dim (WO natural key)']
+  SITE_ID             varchar [ref: > DIM_SITES.SITE_ID, note: 'where the work happens; client reached via snowflake (A1)']
+  TECHNICIAN_ID       varchar [ref: > DIM_TECHNICIANS.TECHNICIAN_ID, note: 'crew lead; depot geography role (C3)']
+  WORK_ORDER_TYPE     varchar [note: 'degenerate dim: corrective | preventive | inspection']
+  PRIORITY            varchar [note: 'degenerate dim: critical | high | standard']
+  OPENED_DATE_KEY     date    [ref: > DIM_DATE.DATE_DAY, note: 'role: opened']
+  PROMISED_DATE_KEY   date    [ref: > DIM_DATE.DATE_DAY, note: 'role: SLA promise — the "late" anchor (CV-3)']
+  SCHEDULED_DATE_KEY  date    [ref: > DIM_DATE.DATE_DAY, note: 'role: scheduled — the B2 naive anchor']
+  STARTED_DATE_KEY    date    [ref: > DIM_DATE.DATE_DAY, note: 'role: started; NULL = not started']
+  COMPLETED_DATE_KEY  date    [ref: > DIM_DATE.DATE_DAY, note: 'role: completed; NULL = open WO (E1, ~10%)']
+  VALIDATED_DATE_KEY  date    [ref: > DIM_DATE.DATE_DAY, note: 'role: client validation; NULL = not validated. F4: "resolution time" = completed or validated? Ambiguous — agent must ask.']
+  SLA_DELAY_BDAYS     number  [note: 'measure, PRECOMPUTED by dbt: business days completed vs promised; NULL = not completed (E1). Late = > 2 (grace, CV-3/B2).']
+  DURATION_HOURS      number  [note: 'measure: on-site ELAPSED presence (clock time). False friend with lines.BILLED_HOURS (A3/F4). NULL = not completed.']
+  CALL_OUT_FEE        number  [note: 'measure at HEADER grain — flat dispatch fee. Part of service revenue (CV-1/B1). Joined to lines it must count ONCE per WO (D1).']
+  CREW_SIZE           number  [note: 'degenerate attribute: technicians dispatched (lead + assists). Explains BILLED_HOURS >> DURATION_HOURS (A3).']
+
+  Note: 'FACT — accumulating snapshot, grain: one row per WORK_ORDER_ID. Lifecycle: opened -> promised -> scheduled -> started -> completed -> validated. Thin: client/geo/date attributes reached via joins only.'
+}
+
+Table FCT_WORK_ORDER_LINES {
+  WORK_ORDER_LINE_KEY  varchar [pk, note: 'synthetic work_order_id-line_number']
+  WORK_ORDER_ID        varchar [ref: > FCT_WORK_ORDERS.WORK_ORDER_ID, note: 'order link / degenerate (D2: COUNT DISTINCT)']
+  LINE_NUMBER          number  [note: 'degenerate dim — line sequence']
+  LINE_KIND            varchar [note: 'degenerate dim: PART | LABOR (~40% LABOR)']
+  PART_ID              varchar [ref: > DIM_PARTS.PART_ID, note: 'NULL on LABOR lines — meaningful NULL (E2)']
+  QUANTITY             number  [note: 'measure: parts qty (PART lines)']
+  BILLED_HOURS         number  [note: 'measure: man-hours DELIVERED (LABOR lines; NULL on PART lines). Certified answer of A3 "hours worked"; sums across crew members.']
+  LINE_AMOUNT          number  [note: 'measure: billed amount of the line. Service revenue = SUM(LINE_AMOUNT) + call-out fees (CV-1) — NOT payments (A2).']
+
+  Note: 'FACT — grain: one row per (work_order_id x line_number). avg >= 3 lines/WO (D1 fan-out). Thin: no WO/site/client attributes.'
+}
+
+Table FCT_WORK_ORDER_PAYMENTS {
+  WORK_ORDER_PAYMENT_KEY  varchar [pk, note: 'synthetic work_order_id-payment_sequence']
+  WORK_ORDER_ID           varchar [ref: > FCT_WORK_ORDERS.WORK_ORDER_ID]
+  PAYMENT_SEQUENCE        number  [note: 'degenerate dim — partial payments possible']
+  PAYMENT_METHOD          varchar [note: 'degenerate dim: bank_transfer | corporate_card | purchase_order']
+  PAID_DATE_KEY           date    [ref: > DIM_DATE.DATE_DAY, note: 'role: paid — lags completion, so monthly collected != monthly revenue (A2)']
+  PAYMENT_AMOUNT          number  [note: 'measure: COLLECTED value — the A2 naive "revenue"']
+
+  Note: 'FACT — grain: one row per (work_order_id x payment_sequence). Collected cash, NOT service revenue (A2): timing lag + partial payments make the monthly series visibly differ.'
+}
+
+Table FCT_SATISFACTION_SURVEYS {
+  SURVEY_RESPONSE_KEY  varchar [pk, note: 'synthetic work_order_id-response_sequence']
+  WORK_ORDER_ID        varchar [ref: > FCT_WORK_ORDERS.WORK_ORDER_ID]
+  RESPONSE_SEQUENCE    number  [note: 'degenerate dim — re-survey sequence; LATEST response counts (D3 grain convention)']
+  RESPONDED_DATE_KEY   date    [ref: > DIM_DATE.DATE_DAY, note: 'role: survey answered']
+  SATISFACTION_SCORE   number  [note: 'measure: 1..10']
+
+  Note: 'FACT — grain: one row per survey RESPONSE (several per WO possible). D3: certified = latest-per-WO; naive AVG over all rows diverges (re-surveys skewed toward unhappy clients).'
+}
+
+//=============================== WEIGHTED BRIDGE =============================
+
+Table BRIDGE_WORK_ORDER_CATEGORIES {
+  WORK_ORDER_ID       varchar [ref: > FCT_WORK_ORDERS.WORK_ORDER_ID]
+  EQUIPMENT_CATEGORY  varchar [ref: > DIM_EQUIPMENT_CATEGORIES.EQUIPMENT_CATEGORY]
+  ALLOCATION_WEIGHT   number  [note: '1 / #categories in the WO — Kimball weighting factor (C2)']
+
+  Note: 'BRIDGE (keys-only) — grain: one row per (work_order_id x equipment_category). Built in dbt from silver equipment units serviced by the WO. C2: slicing WO-level measures by category REQUIRES ALLOCATION_WEIGHT; unweighted join double-counts (generator: unweighted total >= 120% of true).'
+}
+
+//============================ TABLE GROUPS (layout) ==========================
+
+TableGroup facts {
+  FCT_WORK_ORDERS
+  FCT_WORK_ORDER_LINES
+  FCT_WORK_ORDER_PAYMENTS
+  FCT_SATISFACTION_SURVEYS
+}
+
+TableGroup conformed_dimensions {
+  DIM_DATE
+  DIM_CLIENTS
+  DIM_SITES
+  DIM_TECHNICIANS
+  DIM_GEOGRAPHY
+  DIM_EQUIPMENT_CATEGORIES
+  DIM_PARTS
+}
+
+TableGroup bridges {
+  BRIDGE_WORK_ORDER_CATEGORIES
+}
