@@ -63,6 +63,9 @@ Three objectives, in order:
 
 ### Why generate silver, not gold directly
 
+> Full argument (including the case for direct gold and the collapsing argument):
+> [`GENERATOR_SILVER_FIRST.md`](GENERATOR_SILVER_FIRST.md).
+
 1. **Modeling logic lives in one place: dbt.** Gold contains computed content
    (`sla_delay_bdays`, `allocation_weight`, date keys, bridge construction). Emitting
    gold from Python would duplicate that logic and let it drift from the dbt discipline.
@@ -247,10 +250,11 @@ default — they are not anti-prior and not counted in this dose.
 
 1. **Deterministic**: single seed, pinned dependencies; re-running yields byte-identical
    outputs. Python (numpy + faker or hand-rolled vocab lists).
-2. **Self-checking divergence**: after generation, the generator *asserts* every
-   certified/naive pair from §4 diverges beyond its threshold (e.g. ≥ 10% relative or a
-   changed ranking). A generation that fails an assertion is rejected — divergence is a
-   property of the dataset, not a hope.
+2. **Self-checking divergence**: every certified/naive pair from §4 is *asserted* to
+   diverge beyond its threshold (e.g. ≥ 10% relative or a changed ranking). The asserts
+   run against the **built gold** (post-dbt — where the pairs are defined); a generation
+   that fails an assertion is rejected and retuned. Divergence is a verified property of
+   the dataset, not a hope.
 3. **Ground truth artifacts**: for each eval item, a reference SQL (the certified path)
    executed against the generated data; expected answers stored alongside the item (§7).
 4. **Volumetry (settled)**: ~10k work orders, ~35k lines, ~12k payments, ~6k survey
