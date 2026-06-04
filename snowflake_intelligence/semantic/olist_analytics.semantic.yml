@@ -1,127 +1,17 @@
+# Iso-content twin of the pulsar_bare semantic contract v2 (see SEMANTIC_PARITY_MAPPING.md).
+# Built on the pure-Kimball gold star: 4 thin facts, conformed dimensions, keys-only bridge.
+# Scope: the 11 star tables only (DIM_DATE intentionally NOT modeled — date keys are exposed as
+# time_dimensions, the idiomatic equivalent of the pulsar date convention; DIM_GEOGRAPHY is
+# role-played as two logical tables).
 name: OLIST_ANALYTICS
-description: "Business semantic view for Olist commerce analytics on top of governed Gold tables."
+description: "Semantic view for Olist e-commerce analytics on the governed Gold star schema (PULSAR_DB.GOLD). Facts are thin (keys + measures); analytical attributes are reached through relationships. Iso-content with the pulsar_bare semantic contract v2."
 
 tables:
 
-  # ─── CORE DIMENSIONS ──────────────────────────────────────────────────────────
-
-  - name: customers
-    synonyms: ["customers", "buyers", "clients"]
-    description: "Customer dimension at customer_id grain. One row per order-scoped customer. Use customer_unique_id for physical-customer analytics."
-    base_table:
-      database: PULSAR_DB
-      schema: GOLD
-      table: DIM_CUSTOMERS
-    primary_key:
-      columns: [CUSTOMER_ID]
-    dimensions:
-      - name: customer_id
-        expr: customer_id
-        data_type: VARCHAR
-        unique: true
-      - name: customer_unique_id
-        description: "Physical customer identity across multiple orders. One person may have many customer_id values."
-        expr: customer_unique_id
-        data_type: VARCHAR
-      - name: customer_city
-        expr: customer_city
-        data_type: VARCHAR
-      - name: customer_state
-        synonyms: ["buyer state", "customer UF"]
-        description: "Brazilian state of the buyer/customer."
-        expr: customer_state
-        data_type: VARCHAR
-      - name: customer_zip_code_prefix
-        expr: customer_zip_code_prefix
-        data_type: VARCHAR
-      - name: customer_latitude
-        expr: customer_latitude
-        data_type: FLOAT
-      - name: customer_longitude
-        expr: customer_longitude
-        data_type: FLOAT
-
-  - name: products
-    synonyms: ["products", "goods", "catalog"]
-    description: "Product dimension at product_id grain."
-    base_table:
-      database: PULSAR_DB
-      schema: GOLD
-      table: DIM_PRODUCTS
-    primary_key:
-      columns: [PRODUCT_ID]
-    dimensions:
-      - name: product_id
-        expr: product_id
-        data_type: VARCHAR
-        unique: true
-      - name: product_category_name
-        description: "Product category name in Portuguese."
-        expr: product_category_name
-        data_type: VARCHAR
-      - name: product_category_name_english
-        synonyms: ["category", "product category"]
-        description: "Product category name in English."
-        expr: product_category_name_english
-        data_type: VARCHAR
-      - name: product_name_length
-        expr: product_name_length
-        data_type: NUMBER
-      - name: product_description_length
-        expr: product_description_length
-        data_type: NUMBER
-      - name: product_photos_qty
-        expr: product_photos_qty
-        data_type: NUMBER
-      - name: product_weight_g
-        expr: product_weight_g
-        data_type: NUMBER
-      - name: product_length_cm
-        expr: product_length_cm
-        data_type: NUMBER
-      - name: product_height_cm
-        expr: product_height_cm
-        data_type: NUMBER
-      - name: product_width_cm
-        expr: product_width_cm
-        data_type: NUMBER
-
-  - name: sellers
-    synonyms: ["sellers", "vendors", "merchants"]
-    description: "Seller dimension at seller_id grain."
-    base_table:
-      database: PULSAR_DB
-      schema: GOLD
-      table: DIM_SELLERS
-    primary_key:
-      columns: [SELLER_ID]
-    dimensions:
-      - name: seller_id
-        expr: seller_id
-        data_type: VARCHAR
-        unique: true
-      - name: seller_city
-        expr: seller_city
-        data_type: VARCHAR
-      - name: seller_state
-        description: "Brazilian state of the seller."
-        expr: seller_state
-        data_type: VARCHAR
-      - name: seller_zip_code_prefix
-        expr: seller_zip_code_prefix
-        data_type: VARCHAR
-      - name: seller_latitude
-        expr: seller_latitude
-        data_type: FLOAT
-      - name: seller_longitude
-        expr: seller_longitude
-        data_type: FLOAT
-
-  # ─── CORE FACTS ───────────────────────────────────────────────────────────────
+  # ─── FACTS ──────────────────────────────────────────────────────────────────
 
   - name: orders
-    synonyms: ["orders", "sales orders", "purchases"]
-    description: "Order lifecycle table at order_id grain. Use for order status, delivery performance, and customer identity."
+    description: "Order fact at order_id grain (accumulating snapshot of the order lifecycle). One order can have many items, payments and (rarely) reviews: when combined with those, count orders with COUNT(DISTINCT order_id). Delivery status is derived from delay_days."
     base_table:
       database: PULSAR_DB
       schema: GOLD
@@ -130,19 +20,21 @@ tables:
       columns: [ORDER_ID]
     dimensions:
       - name: order_id
+        description: "Unique order identifier (shared by all order-grain facts)."
         expr: order_id
         data_type: VARCHAR
         unique: true
       - name: customer_id
+        description: "Order-scoped customer key (one per order). Use customer_unique_id for physical customers."
         expr: customer_id
         data_type: VARCHAR
       - name: customer_unique_id
         description: "Physical customer identity across multiple orders."
         expr: customer_unique_id
         data_type: VARCHAR
-      - name: customer_state
-        description: "Brazilian state of the buyer/customer."
-        expr: customer_state
+      - name: customer_zip_code_prefix
+        description: "Customer zip prefix for this order (customer-location role of geography)."
+        expr: customer_zip_code_prefix
         data_type: VARCHAR
       - name: order_status
         synonyms: ["status"]
@@ -151,86 +43,77 @@ tables:
         data_type: VARCHAR
         is_enum: true
         sample_values: ["delivered", "shipped", "canceled", "invoiced", "processing", "unavailable", "created", "approved"]
-      - name: delivery_late_status
-        description: "Whether the order was delivered late relative to the estimated delivery date."
-        expr: delivery_late_status
-        data_type: VARCHAR
-        is_enum: true
-        sample_values: ["late", "on_time", "not_delivered"]
       - name: delivery_status
-        description: "Granular delivery status including very_late category."
-        expr: delivery_status
+        description: "Delivery status DERIVED from delay_days: not_delivered (null), on_time (<= 0), late (1..7), very_late (> 7). A 'late delivery' is delay_days > 0."
+        expr: "CASE WHEN delay_days IS NULL THEN 'not_delivered' WHEN delay_days <= 0 THEN 'on_time' WHEN delay_days <= 7 THEN 'late' ELSE 'very_late' END"
         data_type: VARCHAR
         is_enum: true
         sample_values: ["on_time", "late", "very_late", "not_delivered"]
-      - name: is_delivered_status
-        expr: is_delivered_status
-        data_type: BOOLEAN
-      - name: has_customer_delivery_date
-        expr: has_customer_delivery_date
-        data_type: BOOLEAN
       - name: delivered_orders_only
-        description: "Filter for delivered orders."
-        expr: "order_status = 'delivered'"
+        description: "Filter for delivered orders (delay_days is not null)."
+        expr: "delay_days IS NOT NULL"
         data_type: BOOLEAN
         labels: [filter]
       - name: late_deliveries_only
-        description: "Filter for orders delivered after the estimated delivery date."
-        expr: "delivery_late_status = 'late'"
+        description: "Filter for orders delivered after the estimated date (delay_days > 0)."
+        expr: "delay_days > 0"
         data_type: BOOLEAN
         labels: [filter]
     time_dimensions:
-      - name: order_purchase_timestamp
-        synonyms: ["purchase timestamp", "order timestamp"]
-        description: "Timestamp when the order was purchased."
-        expr: order_purchase_timestamp
-        data_type: TIMESTAMP_NTZ
-      - name: order_purchase_date
+      - name: order_purchase_date_key
         synonyms: ["purchase date", "order date"]
-        description: "Date when the order was purchased."
-        expr: order_purchase_date
+        description: "Purchase date (default date for time analysis)."
+        expr: order_purchase_date_key
         data_type: DATE
-      - name: order_purchase_month
-        synonyms: ["purchase month", "order month"]
-        description: "Month of the order purchase (truncated to first of month)."
-        expr: order_purchase_month
+      - name: order_approved_date_key
+        description: "Approval date (null until approved)."
+        expr: order_approved_date_key
+        data_type: DATE
+      - name: order_delivered_carrier_date_key
+        description: "Carrier-handoff date (null until handed off)."
+        expr: order_delivered_carrier_date_key
+        data_type: DATE
+      - name: order_delivered_customer_date_key
+        description: "Delivery-to-customer date (null if not delivered)."
+        expr: order_delivered_customer_date_key
+        data_type: DATE
+      - name: order_estimated_delivery_date_key
+        description: "Estimated delivery date."
+        expr: order_estimated_delivery_date_key
+        data_type: DATE
+      - name: order_purchase_timestamp
+        description: "Purchase event time (intra-day precision / recency ordering)."
+        expr: order_purchase_timestamp
         data_type: TIMESTAMP_NTZ
     facts:
       - name: delay_days
-        description: "Days between estimated delivery date and actual delivery. Positive means late."
+        description: "Delivered minus estimated delivery, in days. NULL = not delivered, > 0 = late. Delivery status derives from this column."
         expr: delay_days
         data_type: NUMBER
-      - name: purchase_to_delivery_days
-        description: "Days between purchase timestamp and customer delivery."
-        expr: purchase_to_delivery_days
-        data_type: NUMBER
       - name: approval_delay_days
-        description: "Days between purchase timestamp and order approval."
+        description: "Days between purchase and approval."
         expr: approval_delay_days
+        data_type: NUMBER
+      - name: purchase_to_delivery_days
+        description: "Days between purchase and delivery to customer."
+        expr: purchase_to_delivery_days
         data_type: NUMBER
     metrics:
       - name: order_count
-        synonyms: ["number of orders", "orders"]
-        description: "Distinct number of orders."
+        synonyms: ["orders", "number of orders", "order volume"]
+        description: "Number of distinct orders. Always COUNT(DISTINCT order_id) — never COUNT(*) — when combined with tables that have multiple rows per order (items, payments, bridge). Non-additive. Integer."
         expr: COUNT(DISTINCT order_id)
-      - name: delivered_order_count
-        description: "Distinct number of delivered orders."
-        expr: "COUNT(DISTINCT IFF(order_status = 'delivered', order_id, NULL))"
-      - name: average_purchase_to_delivery_days
-        synonyms: ["average delivery time", "average fulfillment days"]
-        description: "Average days from purchase to customer delivery."
-        expr: AVG(purchase_to_delivery_days)
-      - name: average_delay_days
-        synonyms: ["average lateness", "average delivery delay"]
-        description: "Average delivery delay in days. Positive values mean late delivery."
-        expr: AVG(delay_days)
+      - name: unique_customer_count
+        synonyms: ["customers", "distinct customers", "buyers"]
+        description: "Number of distinct physical customers (customer_unique_id, not order-scoped customer_id). Non-additive. Integer."
+        expr: COUNT(DISTINCT customer_unique_id)
       - name: late_delivery_rate
-        description: "Percentage of orders delivered late among orders with a delivery outcome."
-        expr: "100.0 * COUNT_IF(delivery_late_status = 'late') / NULLIF(COUNT(*), 0)"
+        synonyms: ["late rate", "delivery delay rate"]
+        description: "Share of delivered orders that arrived after the estimated date (delay_days > 0). Denominator is delivered orders only (delay_days is not null). Ratio of aggregates. Percentage."
+        expr: "COUNT_IF(delay_days > 0) / NULLIF(COUNT_IF(delay_days IS NOT NULL), 0)"
 
   - name: order_items
-    synonyms: ["items", "order lines", "merchandise sales"]
-    description: "Order-item fact table at order_item_key grain. Authoritative source for merchandise revenue."
+    description: "Order-item fact at (order_id x order_item_id) grain — the base table for merchandise revenue. Thin fact: it carries NO order date; time-based revenue analysis goes through the relationship to orders. Multiple item rows per order: count orders with COUNT(DISTINCT order_id)."
     base_table:
       database: PULSAR_DB
       schema: GOLD
@@ -239,81 +122,60 @@ tables:
       columns: [ORDER_ITEM_KEY]
     dimensions:
       - name: order_item_key
+        description: "Synthetic key (order_id-order_item_id)."
         expr: order_item_key
         data_type: VARCHAR
         unique: true
       - name: order_id
+        description: "Order identifier."
         expr: order_id
         data_type: VARCHAR
       - name: product_id
+        description: "Product identifier."
         expr: product_id
         data_type: VARCHAR
       - name: seller_id
+        description: "Seller identifier."
         expr: seller_id
         data_type: VARCHAR
-      - name: product_category_name_english
-        synonyms: ["category", "product category"]
-        description: "English product category name."
-        expr: product_category_name_english
-        data_type: VARCHAR
-      - name: product_category_name
-        description: "Product category name in Portuguese."
-        expr: product_category_name
-        data_type: VARCHAR
-      - name: seller_state
-        description: "Brazilian state of the seller."
-        expr: seller_state
-        data_type: VARCHAR
-      - name: customer_state
-        description: "Brazilian state of the buyer/customer."
-        expr: customer_state
-        data_type: VARCHAR
-      - name: order_status
-        expr: order_status
-        data_type: VARCHAR
-      - name: delivery_late_status
-        expr: delivery_late_status
-        data_type: VARCHAR
+      - name: order_item_id
+        description: "Item sequence number within the order (not unique alone)."
+        expr: order_item_id
+        data_type: NUMBER
     time_dimensions:
-      - name: order_purchase_month
-        synonyms: ["purchase month", "order month"]
-        description: "Month of the order purchase."
-        expr: order_purchase_month
-        data_type: TIMESTAMP_NTZ
-      - name: order_purchase_date
-        synonyms: ["purchase date", "order date"]
-        description: "Date of the order purchase."
-        expr: order_purchase_date
+      - name: shipping_limit_date_key
+        description: "Seller shipping-limit date."
+        expr: shipping_limit_date_key
         data_type: DATE
     facts:
       - name: item_revenue
-        synonyms: ["revenue", "merchandise revenue", "sales"]
-        description: "Merchandise revenue from order item price. Excludes freight and payment adjustments."
+        description: "Merchandise revenue (ORDER_ITEMS.PRICE), excludes freight."
         expr: item_revenue
         data_type: NUMBER
       - name: freight_value
-        description: "Freight value associated with the order item."
+        description: "Freight charged for the item."
         expr: freight_value
         data_type: NUMBER
       - name: item_value_with_freight
-        description: "Total item value including freight."
-        expr: item_value_with_freight
+        description: "Item value including freight: item_revenue + freight_value (derived, not stored)."
+        expr: "item_revenue + freight_value"
         data_type: NUMBER
     metrics:
-      - name: merchandise_revenue
-        synonyms: ["revenue", "sales", "turnover"]
-        description: "Total merchandise revenue. Excludes freight and payment adjustments."
+      - name: total_merchandise_revenue
+        synonyms: ["revenue", "sales", "gmv", "turnover", "net sales"]
+        description: "Sum of item-level merchandise revenue (excludes freight). This is merchandise revenue, NOT collected payment value. Additive. Currency."
         expr: SUM(item_revenue)
-      - name: freight_total
-        description: "Total freight value."
+      - name: total_freight
+        synonyms: ["shipping cost", "freight"]
+        description: "Sum of freight charged. Additive. Currency."
         expr: SUM(freight_value)
-      - name: item_count
-        description: "Number of order-item rows."
-        expr: COUNT(*)
+      - name: average_order_value
+        synonyms: ["aov", "average basket"]
+        description: "Merchandise revenue divided by number of distinct orders. Ratio of aggregates; never average a per-order value. Non-additive. Currency."
+        expr: "SUM(item_revenue) / NULLIF(COUNT(DISTINCT order_id), 0)"
 
   - name: payments
-    synonyms: ["payments", "collected payments", "order payments"]
-    description: "Payment fact table at order_payment_key grain. Source for collected payment value — distinct from merchandise revenue."
+    description: "Payment fact at (order_id x payment_sequential) grain. payment_value is the COLLECTED value including freight and adjustments — distinct from merchandise revenue; do not present it as revenue. Multiple payment rows per order: count orders with COUNT(DISTINCT order_id)."
     base_table:
       database: PULSAR_DB
       schema: GOLD
@@ -322,67 +184,48 @@ tables:
       columns: [ORDER_PAYMENT_KEY]
     dimensions:
       - name: order_payment_key
+        description: "Synthetic key for one payment row."
         expr: order_payment_key
         data_type: VARCHAR
         unique: true
       - name: order_id
+        description: "Order identifier."
         expr: order_id
         data_type: VARCHAR
+      - name: payment_sequential
+        description: "Payment sequence within the order."
+        expr: payment_sequential
+        data_type: NUMBER
       - name: payment_type
-        description: "Payment method used for the order."
+        synonyms: ["payment method"]
+        description: "Payment method."
         expr: payment_type
         data_type: VARCHAR
         is_enum: true
-        sample_values: ["credit_card", "boleto", "voucher", "debit_card", "not_defined"]
+        sample_values: ["credit_card", "boleto", "voucher", "debit_card"]
       - name: installment_bucket
-        description: "Grouped installment count bucket."
-        expr: installment_bucket
+        description: "Installment bucket DERIVED from payment_installments: single (1), 2_to_3, 4_to_6, 7_to_12, 13_plus."
+        expr: "CASE WHEN payment_installments <= 1 THEN 'single' WHEN payment_installments BETWEEN 2 AND 3 THEN '2_to_3' WHEN payment_installments BETWEEN 4 AND 6 THEN '4_to_6' WHEN payment_installments BETWEEN 7 AND 12 THEN '7_to_12' ELSE '13_plus' END"
         data_type: VARCHAR
         is_enum: true
         sample_values: ["single", "2_to_3", "4_to_6", "7_to_12", "13_plus"]
-      - name: is_multi_installment
-        description: "True when payment has more than one installment."
-        expr: is_multi_installment
-        data_type: BOOLEAN
+    facts:
       - name: payment_installments
+        description: "Number of installments."
         expr: payment_installments
         data_type: NUMBER
-      - name: order_status
-        expr: order_status
-        data_type: VARCHAR
-      - name: customer_state
-        description: "Brazilian state of the buyer/customer."
-        expr: customer_state
-        data_type: VARCHAR
-    time_dimensions:
-      - name: order_purchase_month
-        synonyms: ["purchase month", "order month"]
-        description: "Month of the order purchase."
-        expr: order_purchase_month
-        data_type: TIMESTAMP_NTZ
-    facts:
       - name: payment_value
-        description: "Collected payment value including freight and adjustments. Do not call this revenue."
+        description: "Collected payment value (incl. freight/adjustments)."
         expr: payment_value
         data_type: NUMBER
     metrics:
-      - name: collected_value
-        synonyms: ["total collected", "payments total"]
-        description: "Total collected payment value. Distinct from merchandise revenue — includes freight and adjustments."
+      - name: total_payment_value
+        synonyms: ["collected value", "payments", "amount paid"]
+        description: "Sum of collected payment value (includes freight and adjustments). Distinct from merchandise revenue: use only when the question is about money collected. Additive. Currency."
         expr: SUM(payment_value)
-      - name: average_payment_value
-        description: "Average payment value per payment row."
-        expr: AVG(payment_value)
-      - name: payment_count
-        description: "Number of payment rows."
-        expr: COUNT(*)
-      - name: multi_installment_payment_share
-        description: "Percentage of payments that use multiple installments."
-        expr: 100.0 * COUNT_IF(is_multi_installment) / NULLIF(COUNT(*), 0)
 
   - name: reviews
-    synonyms: ["reviews", "order reviews", "customer satisfaction"]
-    description: "Order review fact table at order_review_key grain. Provides order-level satisfaction scores and time-to-review metrics."
+    description: "Review fact at (review_id, order_id) grain. Reviews are ORDER-level, not item-level. Attributing reviews to product categories through order_categories counts one review once per category in the order — disclose that attribution. A negative review is review_score <= 2."
     base_table:
       database: PULSAR_DB
       schema: GOLD
@@ -391,814 +234,259 @@ tables:
       columns: [ORDER_REVIEW_KEY]
     dimensions:
       - name: order_review_key
+        description: "Synthetic key for one review/order row."
         expr: order_review_key
         data_type: VARCHAR
         unique: true
       - name: order_id
+        description: "Order identifier."
         expr: order_id
         data_type: VARCHAR
-      - name: review_score
-        description: "Review score from 1 (lowest) to 5 (highest)."
-        expr: review_score
-        data_type: NUMBER
+      - name: review_id
+        description: "Review identifier."
+        expr: review_id
+        data_type: VARCHAR
+      - name: review_comment_title
+        description: "Free-text review title (often null)."
+        expr: review_comment_title
+        data_type: VARCHAR
+      - name: review_comment_message
+        description: "Free-text review message (often null)."
+        expr: review_comment_message
+        data_type: VARCHAR
       - name: is_negative_review
-        description: "True when review_score is 2 or lower."
-        expr: is_negative_review
-        data_type: BOOLEAN
-      - name: delivery_late_status
-        expr: delivery_late_status
-        data_type: VARCHAR
-      - name: order_status
-        expr: order_status
-        data_type: VARCHAR
-      - name: customer_state
-        description: "Brazilian state of the buyer/customer."
-        expr: customer_state
-        data_type: VARCHAR
-      - name: negative_reviews_only
-        description: "Filter for reviews with a score of 2 or lower."
-        expr: "is_negative_review = true"
+        description: "True when review_score <= 2 (derived, not stored)."
+        expr: "review_score <= 2"
         data_type: BOOLEAN
         labels: [filter]
     time_dimensions:
-      - name: order_purchase_month
-        synonyms: ["purchase month", "order month"]
-        description: "Month of the order purchase."
-        expr: order_purchase_month
-        data_type: TIMESTAMP_NTZ
-      - name: review_creation_date
-        synonyms: ["review date"]
-        description: "Date when the review was created."
-        expr: review_creation_date
+      - name: review_creation_date_key
+        description: "Review creation date."
+        expr: review_creation_date_key
+        data_type: DATE
+      - name: review_answer_date_key
+        description: "Review answer date (null if unanswered)."
+        expr: review_answer_date_key
         data_type: DATE
     facts:
-      - name: delivery_to_review_days
-        description: "Days from customer delivery to review creation."
-        expr: delivery_to_review_days
-        data_type: NUMBER
-    metrics:
-      - name: review_count
-        synonyms: ["number of reviews"]
-        description: "Number of reviews with a score."
-        expr: COUNT(review_score)
-      - name: average_review_score
-        synonyms: ["average rating", "avg review score"]
-        description: "Average review score. Higher is better."
-        expr: AVG(review_score)
-      - name: negative_review_rate
-        description: "Percentage of reviews with a score of 2 or lower."
-        expr: 100.0 * COUNT_IF(is_negative_review) / NULLIF(COUNT(review_score), 0)
-      - name: average_delivery_to_review_days
-        description: "Average days from customer delivery to review creation."
-        expr: AVG(delivery_to_review_days)
-
-  # ─── ANALYTICAL MART TABLES ───────────────────────────────────────────────────
-
-  - name: order_baskets
-    synonyms: ["baskets", "order baskets", "order value"]
-    description: "Order-level aggregation of items, products, sellers, revenues, and payments. Use for basket analysis without item-level fan-out."
-    base_table:
-      database: PULSAR_DB
-      schema: GOLD
-      table: MART_ORDER_BASKETS
-    primary_key:
-      columns: [ORDER_ID]
-    dimensions:
-      - name: order_id
-        expr: order_id
-        data_type: VARCHAR
-        unique: true
-      - name: item_count
-        expr: item_count
-        data_type: NUMBER
-      - name: product_count
-        expr: product_count
-        data_type: NUMBER
-      - name: seller_count
-        expr: seller_count
-        data_type: NUMBER
-      - name: is_multi_seller_order
-        description: "True when the order contains items from more than one seller."
-        expr: is_multi_seller_order
-        data_type: BOOLEAN
-      - name: multi_seller_orders_only
-        description: "Filter for orders fulfilled by more than one seller."
-        expr: "is_multi_seller_order = true"
-        data_type: BOOLEAN
-        labels: [filter]
-    time_dimensions:
-      - name: order_purchase_date
-        synonyms: ["purchase date", "order date"]
-        expr: order_purchase_date
-        data_type: DATE
-      - name: order_purchase_month
-        synonyms: ["purchase month", "order month"]
-        expr: order_purchase_month
-        data_type: TIMESTAMP_NTZ
-    facts:
-      - name: merchandise_revenue
-        synonyms: ["revenue", "sales"]
-        description: "Total merchandise revenue for the order."
-        expr: merchandise_revenue
-        data_type: NUMBER
-      - name: freight_total
-        description: "Total freight value for the order."
-        expr: freight_value
-        data_type: NUMBER
-      - name: collected_value
-        description: "Total collected payment value for the order."
-        expr: collected_value
-        data_type: NUMBER
-    metrics:
-      - name: average_basket_value
-        synonyms: ["average order value"]
-        description: "Average merchandise revenue per order."
-        expr: AVG(merchandise_revenue)
-      - name: median_basket_value
-        description: "Median merchandise revenue per order."
-        expr: MEDIAN(merchandise_revenue)
-      - name: p90_basket_value
-        description: "90th percentile merchandise revenue per order."
-        expr: "PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY merchandise_revenue)"
-      - name: average_item_count
-        description: "Average number of items per order."
-        expr: AVG(item_count)
-      - name: multi_seller_order_rate
-        description: "Percentage of orders fulfilled by more than one seller."
-        expr: 100.0 * COUNT_IF(is_multi_seller_order) / NULLIF(COUNT(*), 0)
-
-  - name: category_satisfaction
-    synonyms: ["category reviews", "category satisfaction", "category quality"]
-    description: "Category-level review attribution at order-category-review grain. Fan-out safe for category review and revenue analysis."
-    base_table:
-      database: PULSAR_DB
-      schema: GOLD
-      table: MART_CATEGORY_SATISFACTION
-    primary_key:
-      columns: [CATEGORY_REVIEW_KEY]
-    dimensions:
-      - name: category_review_key
-        expr: category_review_key
-        data_type: VARCHAR
-        unique: true
-      - name: product_category_name_english
-        synonyms: ["category"]
-        description: "English product category name."
-        expr: product_category_name_english
-        data_type: VARCHAR
       - name: review_score
         description: "Review score from 1 to 5."
         expr: review_score
         data_type: NUMBER
-      - name: is_negative_review
-        description: "True when review_score is 2 or lower."
-        expr: is_negative_review
-        data_type: BOOLEAN
-      - name: customer_state
-        description: "Brazilian state of the buyer/customer."
-        expr: customer_state
-        data_type: VARCHAR
-    time_dimensions:
-      - name: order_purchase_month
-        synonyms: ["purchase month", "order month"]
-        description: "Month of the order purchase."
-        expr: order_purchase_month
-        data_type: TIMESTAMP_NTZ
-    facts:
-      - name: category_revenue
-        synonyms: ["category merchandise revenue"]
-        description: "Attributed merchandise revenue for this category and order."
-        expr: category_merchandise_revenue
-        data_type: NUMBER
     metrics:
       - name: average_review_score
-        synonyms: ["average rating"]
-        description: "Average review score by category."
+        synonyms: ["rating", "satisfaction", "csat"]
+        description: "Mean review score (1-5). Non-additive. Decimal."
         expr: AVG(review_score)
       - name: negative_review_rate
-        description: "Percentage of reviews with a score of 2 or lower."
-        expr: 100.0 * COUNT_IF(is_negative_review) / NULLIF(COUNT(review_score), 0)
-      - name: review_count
-        description: "Number of reviews with a score."
-        expr: COUNT(review_score)
-      - name: total_category_revenue
-        description: "Total merchandise revenue attributed to this category."
-        expr: SUM(category_merchandise_revenue)
+        synonyms: ["bad review rate", "dissatisfaction rate"]
+        description: "Share of reviews with score <= 2. Ratio of aggregates, not an average of row-level flags. Non-additive. Percentage."
+        expr: "COUNT_IF(review_score <= 2) / NULLIF(COUNT(*), 0)"
 
-  - name: customer_cohorts
-    synonyms: ["cohorts", "retention cohorts", "customer retention"]
-    description: "Monthly acquisition cohort retention table. Use for cohort retention analysis at 90 and 180 days."
+  # ─── CONFORMED DIMENSIONS ───────────────────────────────────────────────────
+
+  - name: customers
+    description: "Conformed PHYSICAL customer dimension at customer_unique_id grain. Deliberately thin (Olist has no stable customer attribute; per-order geography lives on orders). Anchor for distinct-customer counting and repeat-purchase analysis."
     base_table:
       database: PULSAR_DB
       schema: GOLD
-      table: MART_CUSTOMER_COHORTS
-    time_dimensions:
-      - name: cohort_month
-        synonyms: ["acquisition month", "first purchase month"]
-        description: "First purchase month for this cohort."
-        expr: cohort_month
-        data_type: TIMESTAMP_NTZ
-    dimensions:
-      - name: cohort_year
-        expr: cohort_year
-        data_type: NUMBER
-      - name: cohort_size
-        description: "Number of customers in this acquisition cohort."
-        expr: cohort_size
-        data_type: NUMBER
-      - name: retained_90d
-        description: "Number of cohort customers who placed another order within 90 days."
-        expr: retained_90d
-        data_type: NUMBER
-      - name: retained_180d
-        description: "Number of cohort customers who placed another order within 180 days."
-        expr: retained_180d
-        data_type: NUMBER
-    metrics:
-      - name: retention_90d_pct
-        synonyms: ["90-day retention", "retention at 90 days"]
-        description: "Average 90-day retention rate across cohorts."
-        expr: AVG(retention_90d_pct)
-      - name: retention_180d_pct
-        synonyms: ["180-day retention", "retention at 180 days"]
-        description: "Average 180-day retention rate across cohorts."
-        expr: AVG(retention_180d_pct)
-
-  - name: customer_segments
-    synonyms: ["customer segmentation", "customer types", "repeat vs one-time"]
-    description: "Customer segmentation by purchase frequency. Two segments: repeat (2+ delivered orders) and one_time."
-    base_table:
-      database: PULSAR_DB
-      schema: GOLD
-      table: MART_CUSTOMER_SEGMENTS
-    dimensions:
-      - name: customer_segment
-        description: "Customer segment based on order frequency."
-        expr: customer_segment
-        data_type: VARCHAR
-        is_enum: true
-        sample_values: ["repeat", "one_time"]
-    facts:
-      - name: customer_count
-        description: "Number of physical customers in this segment."
-        expr: customer_count
-        data_type: NUMBER
-      - name: delivered_order_count
-        description: "Total delivered orders from customers in this segment."
-        expr: delivered_order_count
-        data_type: NUMBER
-      - name: total_revenue
-        description: "Total delivered merchandise revenue from customers in this segment."
-        expr: total_revenue
-        data_type: NUMBER
-      - name: customer_share
-        description: "Percentage of total customers in this segment."
-        expr: pct_customers
-        data_type: NUMBER
-      - name: revenue_share
-        description: "Percentage of total revenue from customers in this segment."
-        expr: pct_revenue
-        data_type: NUMBER
-
-  - name: customer_rfm
-    synonyms: ["RFM", "customer health", "customer activity"]
-    description: "Customer-level recency, frequency, and monetary value table. Use for at-risk customer and customer health analysis."
-    base_table:
-      database: PULSAR_DB
-      schema: GOLD
-      table: MART_CUSTOMER_RFM
+      table: DIM_CUSTOMERS
     primary_key:
       columns: [CUSTOMER_UNIQUE_ID]
     dimensions:
       - name: customer_unique_id
-        description: "Physical customer identity."
+        description: "Physical customer identifier."
         expr: customer_unique_id
         data_type: VARCHAR
         unique: true
-      - name: health_segment
-        synonyms: ["customer health", "health status"]
-        description: "Customer health segment based on recency, order frequency, and review score."
-        expr: customer_health_segment
-        data_type: VARCHAR
-        is_enum: true
-        sample_values: ["repeat", "one_time", "at_risk"]
-    facts:
-      - name: recency_days
-        synonyms: ["days since last order", "recency"]
-        description: "Days since the customer's last order."
-        expr: days_since_last_order
-        data_type: NUMBER
-      - name: order_count
-        description: "Total orders placed by this customer."
-        expr: order_count
-        data_type: NUMBER
-      - name: delivered_revenue
-        synonyms: ["customer revenue"]
-        description: "Total delivered merchandise revenue from this customer."
-        expr: delivered_merchandise_revenue
-        data_type: NUMBER
-      - name: average_review_score
-        description: "Average review score from this customer."
-        expr: avg_review_score
-        data_type: FLOAT
 
-  - name: customer_value_distribution
-    synonyms: ["customer value", "customer revenue distribution", "revenue concentration"]
-    description: "Customer-level delivered revenue ranking and quintile distribution. Use for top-20-percent customer concentration analysis."
+  - name: customer_geography
+    description: "Customer-location role of the conformed geography dimension (zip-code-prefix grain), reached from orders. Some zip prefixes have no geolocation source row: city/state/coordinates are null for them."
     base_table:
       database: PULSAR_DB
       schema: GOLD
-      table: MART_CUSTOMER_VALUE_DISTRIBUTION
+      table: DIM_GEOGRAPHY
     primary_key:
-      columns: [CUSTOMER_UNIQUE_ID]
+      columns: [ZIP_CODE_PREFIX]
     dimensions:
-      - name: customer_unique_id
-        description: "Physical customer identity."
-        expr: customer_unique_id
+      - name: customer_zip_code_prefix
+        description: "Brazilian zip-code prefix (customer location)."
+        expr: zip_code_prefix
         data_type: VARCHAR
         unique: true
-      - name: revenue_rank
-        description: "Customer rank by delivered merchandise revenue (1 = highest)."
-        expr: revenue_rank
+      - name: customer_city
+        description: "Customer city."
+        expr: city
+        data_type: VARCHAR
+      - name: customer_state
+        synonyms: ["customer uf"]
+        description: "Customer Brazilian state code."
+        expr: state
+        data_type: VARCHAR
+      - name: customer_latitude
+        description: "Zip-prefix centroid latitude."
+        expr: latitude
         data_type: NUMBER
-      - name: revenue_quintile
-        description: "Customer revenue quintile (1 = top 20%, 5 = bottom 20%)."
-        expr: revenue_quintile
+      - name: customer_longitude
+        description: "Zip-prefix centroid longitude."
+        expr: longitude
         data_type: NUMBER
-      - name: top_customer_quintile_only
-        description: "Filter for customers in the top revenue quintile (top 20%)."
-        expr: revenue_quintile = 1
-        data_type: BOOLEAN
-        labels: [filter]
-    facts:
-      - name: customer_revenue
-        synonyms: ["delivered revenue", "customer delivered revenue"]
-        description: "Total delivered merchandise revenue from this customer."
-        expr: delivered_merchandise_revenue
-        data_type: NUMBER
-      - name: cumulative_revenue_share
-        description: "Cumulative percentage of total revenue from all customers ranked at or above this customer."
-        expr: cumulative_pct_total_revenue
-        data_type: NUMBER
-    metrics:
-      - name: total_quintile_revenue
-        description: "Total delivered revenue from customers in this quintile."
-        expr: SUM(delivered_merchandise_revenue)
 
-  - name: seller_delivery_performance
-    synonyms: ["seller delivery", "delivery performance", "seller fulfillment"]
-    description: "Order-item delivery performance for delivered orders at seller and item grain."
+  - name: seller_geography
+    description: "Seller-location role of the conformed geography dimension (zip-code-prefix grain), reached from sellers. Some zip prefixes have no geolocation source row: city/state/coordinates are null for them."
     base_table:
       database: PULSAR_DB
       schema: GOLD
-      table: MART_SELLER_DELIVERY_PERFORMANCE
+      table: DIM_GEOGRAPHY
     primary_key:
-      columns: [SELLER_DELIVERY_KEY]
+      columns: [ZIP_CODE_PREFIX]
     dimensions:
-      - name: seller_delivery_key
-        expr: seller_delivery_key
+      - name: seller_zip_code_prefix
+        description: "Brazilian zip-code prefix (seller location)."
+        expr: zip_code_prefix
         data_type: VARCHAR
         unique: true
-      - name: seller_id
-        expr: seller_id
+      - name: seller_city
+        description: "Seller city."
+        expr: city
         data_type: VARCHAR
       - name: seller_state
-        description: "Brazilian state of the seller."
-        expr: seller_state
+        synonyms: ["seller uf"]
+        description: "Seller Brazilian state code."
+        expr: state
         data_type: VARCHAR
-      - name: order_id
-        expr: order_id
-        data_type: VARCHAR
-      - name: order_item_id
-        expr: order_item_id
+      - name: seller_latitude
+        description: "Zip-prefix centroid latitude."
+        expr: latitude
         data_type: NUMBER
-      - name: delivery_late_status
-        expr: delivery_late_status
-        data_type: VARCHAR
-      - name: is_late
-        description: "True when the order was delivered late."
-        expr: "delivery_late_status = 'late'"
-        data_type: BOOLEAN
-    time_dimensions:
-      - name: order_purchase_month
-        synonyms: ["purchase month"]
-        expr: order_purchase_month
-        data_type: TIMESTAMP_NTZ
-    facts:
-      - name: delay_days
-        description: "Days late relative to estimated delivery date."
-        expr: delay_days
+      - name: seller_longitude
+        description: "Zip-prefix centroid longitude."
+        expr: longitude
         data_type: NUMBER
-      - name: item_revenue
-        synonyms: ["revenue"]
-        description: "Merchandise revenue for this delivery item."
-        expr: item_revenue
-        data_type: NUMBER
-      - name: freight_value
-        description: "Freight value for this delivery item."
-        expr: freight_value
-        data_type: NUMBER
-    metrics:
-      - name: delivery_count
-        description: "Number of delivered item rows."
-        expr: COUNT(*)
-      - name: average_delay_days
-        description: "Average delivery delay in days."
-        expr: AVG(delay_days)
-      - name: late_delivery_count
-        description: "Number of late deliveries."
-        expr: "COUNT_IF(delivery_late_status = 'late')"
-      - name: late_delivery_rate
-        description: "Percentage of deliveries that were late."
-        expr: "100.0 * COUNT_IF(delivery_late_status = 'late') / NULLIF(COUNT(*), 0)"
-      - name: average_item_revenue
-        description: "Average merchandise revenue per delivered item."
-        expr: AVG(item_revenue)
 
-  - name: order_seller_complexity
-    synonyms: ["multi-seller orders", "order complexity", "seller complexity"]
-    description: "Order-level seller complexity analysis. Use for multi-seller order impact on delivery and performance."
+  - name: categories
+    description: "Conformed product-category dimension keyed on the Portuguese category name (canonical category key), with the English translation. Referenced by products and the order_categories bridge."
     base_table:
       database: PULSAR_DB
       schema: GOLD
-      table: MART_ORDER_SELLER_COMPLEXITY
+      table: DIM_CATEGORIES
     primary_key:
-      columns: [ORDER_ID]
+      columns: [PRODUCT_CATEGORY_NAME]
     dimensions:
-      - name: order_id
-        expr: order_id
+      - name: product_category_name
+        description: "Portuguese category name (canonical category key)."
+        expr: product_category_name
         data_type: VARCHAR
         unique: true
-      - name: seller_count
-        description: "Number of distinct sellers fulfilling this order."
-        expr: seller_count
-        data_type: NUMBER
-      - name: is_multi_seller_order
-        description: "True when the order contains items from more than one seller."
-        expr: is_multi_seller_order
-        data_type: BOOLEAN
-      - name: seller_states
-        description: "Comma-separated list of Brazilian states of all sellers in the order."
-        expr: seller_states
+      - name: product_category_name_english
+        synonyms: ["category"]
+        description: "English category name (null when untranslated) — preferred display name."
+        expr: product_category_name_english
         data_type: VARCHAR
-      - name: delay_days
-        description: "Days late for this order."
-        expr: delay_days
-        data_type: NUMBER
-      - name: order_status
-        expr: order_status
-        data_type: VARCHAR
-      - name: delivery_late_status
-        expr: delivery_late_status
-        data_type: VARCHAR
-      - name: multi_seller_orders_only
-        description: "Filter for orders fulfilled by more than one seller."
-        expr: "is_multi_seller_order = true"
+      - name: has_english_category
+        description: "True when an English translation exists."
+        expr: has_english_category
         data_type: BOOLEAN
         labels: [filter]
-    time_dimensions:
-      - name: order_purchase_month
-        synonyms: ["purchase month"]
-        expr: order_purchase_month
-        data_type: TIMESTAMP_NTZ
-    metrics:
-      - name: average_seller_count
-        description: "Average number of distinct sellers per order."
-        expr: AVG(seller_count)
-      - name: multi_seller_rate
-        description: "Percentage of orders fulfilled by more than one seller."
-        expr: 100.0 * COUNT_IF(is_multi_seller_order) / NULLIF(COUNT(*), 0)
 
-  - name: monthly_revenue
-    synonyms: ["monthly sales", "revenue trend", "monthly merchandise revenue"]
-    description: "Month-over-month delivered merchandise revenue. Use for revenue trend and growth analysis."
+  - name: products
+    description: "Product dimension with physical attributes. Category is snowflaked to the categories table via product_category_name."
     base_table:
       database: PULSAR_DB
       schema: GOLD
-      table: MART_MONTHLY_REVENUE
-    time_dimensions:
-      - name: revenue_month
-        synonyms: ["month", "revenue month"]
-        description: "Month of delivered merchandise revenue."
-        expr: order_purchase_month
-        data_type: TIMESTAMP_NTZ
+      table: DIM_PRODUCTS
+    primary_key:
+      columns: [PRODUCT_ID]
     dimensions:
-      - name: revenue_year
-        expr: revenue_year
-        data_type: NUMBER
-    facts:
-      - name: total_revenue
-        synonyms: ["revenue", "monthly revenue"]
-        description: "Total delivered merchandise revenue for this month."
-        expr: total_revenue
-        data_type: NUMBER
-      - name: order_count
-        description: "Number of delivered orders for this month."
-        expr: order_count
-        data_type: NUMBER
-      - name: previous_month_revenue
-        description: "Delivered merchandise revenue from the previous month."
-        expr: previous_month_revenue
-        data_type: NUMBER
-      - name: revenue_growth
-        description: "Absolute revenue change from previous month."
-        expr: revenue_growth
-        data_type: NUMBER
-      - name: revenue_growth_pct
-        description: "Percentage revenue change from previous month."
-        expr: revenue_growth_pct
-        data_type: NUMBER
-    metrics:
-      - name: total_period_revenue
-        synonyms: ["total revenue", "total sales"]
-        description: "Sum of delivered merchandise revenue across selected months."
-        expr: SUM(total_revenue)
-
-  - name: category_revenue_pareto
-    synonyms: ["category pareto", "revenue pareto", "category revenue share"]
-    description: "Category-level delivered revenue with cumulative Pareto share. Use for identifying top revenue categories."
-    base_table:
-      database: PULSAR_DB
-      schema: GOLD
-      table: MART_CATEGORY_REVENUE_PARETO
-    dimensions:
-      - name: product_category_name_english
-        synonyms: ["category"]
-        description: "English product category name."
-        expr: product_category_name_english
-        data_type: VARCHAR
-      - name: revenue_rank
-        description: "Category rank by total revenue (1 = highest)."
-        expr: revenue_rank
-        data_type: NUMBER
-    facts:
-      - name: total_revenue
-        description: "Total delivered revenue for this category."
-        expr: total_revenue
-        data_type: NUMBER
-      - name: order_count
-        description: "Number of delivered orders for this category."
-        expr: order_count
-        data_type: NUMBER
-      - name: revenue_pct_share
-        description: "Percentage of total delivered revenue from this category."
-        expr: pct_total_revenue
-        data_type: NUMBER
-      - name: cumulative_revenue_pct_share
-        description: "Cumulative percentage of total delivered revenue up to and including this category."
-        expr: cumulative_pct_total_revenue
-        data_type: NUMBER
-
-  - name: product_category_revenue_rank
-    synonyms: ["product revenue rank", "top products by category", "product ranking"]
-    description: "Product-level delivered revenue ranked within each category. Use for top-product-within-category questions."
-    base_table:
-      database: PULSAR_DB
-      schema: GOLD
-      table: MART_PRODUCT_CATEGORY_REVENUE_RANK
-    dimensions:
-      - name: product_category_name_english
-        synonyms: ["category"]
-        description: "English product category."
-        expr: product_category_name_english
-        data_type: VARCHAR
       - name: product_id
+        description: "Product identifier."
         expr: product_id
         data_type: VARCHAR
-      - name: category_revenue_rank
-        description: "Product rank within its category by delivered revenue (1 = highest)."
-        expr: category_revenue_rank
-        data_type: NUMBER
-    facts:
-      - name: total_revenue
-        synonyms: ["product revenue", "revenue"]
-        description: "Total delivered merchandise revenue for this product."
-        expr: total_revenue
-        data_type: NUMBER
-      - name: item_count
-        description: "Total item rows for this product."
-        expr: item_count
-        data_type: NUMBER
-      - name: order_count
-        description: "Number of delivered orders containing this product."
-        expr: order_count
-        data_type: NUMBER
-    metrics:
-      - name: total_category_revenue
-        description: "Total delivered revenue from all products in this category."
-        expr: SUM(total_revenue)
-
-  - name: state_seller_revenue_share
-    synonyms: ["seller local share", "state revenue share", "local seller share"]
-    description: "Seller share of delivered revenue within each customer state. Use for local vs. out-of-state seller analysis."
-    base_table:
-      database: PULSAR_DB
-      schema: GOLD
-      table: MART_STATE_SELLER_REVENUE_SHARE
-    dimensions:
-      - name: customer_state
-        description: "Brazilian state of the buyer/customer."
-        expr: customer_state
-        data_type: VARCHAR
-      - name: seller_id
-        expr: seller_id
-        data_type: VARCHAR
-      - name: seller_state
-        description: "Brazilian state of the seller."
-        expr: seller_state
-        data_type: VARCHAR
-      - name: order_count
-        description: "Number of delivered orders from this seller to this customer state."
-        expr: order_count
-        data_type: NUMBER
-      - name: revenue_rank
-        description: "Seller rank within this customer state by revenue."
-        expr: seller_rank_in_customer_state
-        data_type: NUMBER
-    facts:
-      - name: total_revenue
-        synonyms: ["seller revenue", "local revenue"]
-        description: "Total delivered revenue from this seller to this customer state."
-        expr: seller_revenue
-        data_type: NUMBER
-      - name: local_revenue_share
-        description: "Percentage of this customer state's total delivered revenue from this seller."
-        expr: pct_customer_state_revenue
-        data_type: NUMBER
-    metrics:
-      - name: average_local_share
-        description: "Average local revenue share across sellers."
-        expr: AVG(pct_customer_state_revenue)
-
-  - name: payment_installment_review_impact
-    synonyms: ["installment impact", "installment review", "payment installments"]
-    description: "Order-level payment installment profile and review score aggregated by installment bucket. Pre-aggregated — no relationships needed."
-    base_table:
-      database: PULSAR_DB
-      schema: GOLD
-      table: MART_PAYMENT_INSTALLMENT_REVIEW_IMPACT
-    primary_key:
-      columns: [MAX_INSTALLMENT_BUCKET]
-    dimensions:
-      - name: installment_bucket
-        synonyms: ["installment group"]
-        description: "Grouped installment count bucket."
-        expr: max_installment_bucket
-        data_type: VARCHAR
-        is_enum: true
-        sample_values: ["single", "2_to_3", "4_to_6", "7_to_12", "13_plus"]
-    facts:
-      - name: order_count
-        description: "Number of distinct orders in this installment bucket."
-        expr: order_count
-        data_type: NUMBER
-      - name: average_installments
-        description: "Average number of installments in this bucket."
-        expr: avg_max_installments
-        data_type: NUMBER
-      - name: average_collected_value
-        description: "Average collected payment value per order in this bucket."
-        expr: avg_collected_value
-        data_type: NUMBER
-      - name: total_collected_value
-        description: "Total collected payment value for this bucket."
-        expr: total_collected_value
-        data_type: NUMBER
-      - name: review_count
-        description: "Number of reviews with a score in this bucket."
-        expr: review_count
-        data_type: NUMBER
-      - name: average_review_score
-        description: "Average review score for orders in this bucket."
-        expr: avg_review_score
-        data_type: NUMBER
-      - name: negative_review_rate
-        description: "Percentage of negative reviews (score <= 2) in this bucket."
-        expr: negative_review_rate
-        data_type: NUMBER
-
-  - name: delivery_distance
-    synonyms: ["delivery distance", "shipping distance", "distance analysis"]
-    description: "Order-item delivery distance between seller and customer with freight and delay analysis."
-    base_table:
-      database: PULSAR_DB
-      schema: GOLD
-      table: MART_DELIVERY_DISTANCE
-    primary_key:
-      columns: [ORDER_ITEM_KEY]
-    dimensions:
-      - name: order_item_key
-        expr: order_item_key
-        data_type: VARCHAR
         unique: true
-      - name: customer_state
-        description: "Brazilian state of the buyer/customer."
-        expr: customer_state
+      - name: product_category_name
+        description: "Portuguese category (may be null)."
+        expr: product_category_name
         data_type: VARCHAR
-      - name: seller_state
-        description: "Brazilian state of the seller."
-        expr: seller_state
-        data_type: VARCHAR
-      - name: is_late
-        description: "True when the order was delivered late."
-        expr: "delivery_late_status = 'late'"
-        data_type: BOOLEAN
-    time_dimensions:
-      - name: order_purchase_month
-        synonyms: ["purchase month"]
-        expr: order_purchase_month
-        data_type: TIMESTAMP_NTZ
+      - name: product_name_length
+        description: "Length of the product name."
+        expr: product_name_length
+        data_type: NUMBER
+      - name: product_description_length
+        description: "Length of the product description."
+        expr: product_description_length
+        data_type: NUMBER
     facts:
-      - name: distance_km
-        synonyms: ["distance", "shipping distance"]
-        description: "Straight-line distance in kilometers between seller and customer locations."
-        expr: seller_customer_distance_km
+      - name: product_photos_qty
+        description: "Number of product photos."
+        expr: product_photos_qty
         data_type: NUMBER
-      - name: freight_value
-        description: "Freight value for this item."
-        expr: freight_value
+      - name: product_weight_g
+        description: "Product weight in grams."
+        expr: product_weight_g
         data_type: NUMBER
-      - name: delay_days
-        description: "Days late relative to estimated delivery date."
-        expr: delay_days
+      - name: product_length_cm
+        description: "Product length in cm."
+        expr: product_length_cm
         data_type: NUMBER
-      - name: item_revenue
-        synonyms: ["revenue"]
-        description: "Merchandise revenue for this item."
-        expr: item_revenue
+      - name: product_height_cm
+        description: "Product height in cm."
+        expr: product_height_cm
         data_type: NUMBER
-    metrics:
-      - name: average_distance
-        synonyms: ["average shipping distance"]
-        description: "Average seller-to-customer distance in kilometers."
-        expr: AVG(seller_customer_distance_km)
-      - name: average_freight
-        description: "Average freight value per item."
-        expr: AVG(freight_value)
-      - name: average_delay
-        description: "Average delivery delay in days."
-        expr: AVG(delay_days)
+      - name: product_width_cm
+        description: "Product width in cm."
+        expr: product_width_cm
+        data_type: NUMBER
 
-  - name: seller_scorecard
-    synonyms: ["seller performance", "seller ranking", "seller scorecard"]
-    description: "Seller-level scorecard combining delivered revenue, reviews, and delivery performance. Use for top-seller analysis."
+  - name: sellers
+    description: "Seller dimension. Geography (city/state/coordinates) is reached via seller_geography on seller_zip_code_prefix."
     base_table:
       database: PULSAR_DB
       schema: GOLD
-      table: MART_SELLER_SCORECARD
+      table: DIM_SELLERS
     primary_key:
       columns: [SELLER_ID]
     dimensions:
       - name: seller_id
+        description: "Seller identifier."
         expr: seller_id
         data_type: VARCHAR
         unique: true
-      - name: seller_state
-        description: "Brazilian state of the seller."
-        expr: seller_state
+      - name: seller_zip_code_prefix
+        description: "Seller zip prefix (seller-location role of geography)."
+        expr: seller_zip_code_prefix
         data_type: VARCHAR
-      - name: revenue_rank
-        description: "Seller rank by delivered merchandise revenue (1 = highest)."
-        expr: revenue_rank
-        data_type: NUMBER
+
+  # ─── BRIDGE ─────────────────────────────────────────────────────────────────
+
+  - name: order_categories
+    description: "Keys-only bridge resolving the order/category many-to-many at (order_id x category) grain. Use it to slice ORDER-LEVEL facts (order counts, reviews) by category without item fan-out; an order with N categories yields N rows, so order-level counting still needs COUNT(DISTINCT order_id). It carries NO measures: category revenue comes from order_items via product -> category. allocation_weight (1/N) allocates an order-level measure across categories without double counting — disclose the allocation."
+    base_table:
+      database: PULSAR_DB
+      schema: GOLD
+      table: BRIDGE_ORDER_CATEGORIES
+    primary_key:
+      columns: [ORDER_CATEGORY_KEY]
+    dimensions:
+      - name: order_category_key
+        description: "Synthetic key for one order/category membership row."
+        expr: order_category_key
+        data_type: VARCHAR
+        unique: true
+      - name: order_id
+        description: "Order identifier."
+        expr: order_id
+        data_type: VARCHAR
+      - name: product_category_name
+        description: "Portuguese category present in the order."
+        expr: product_category_name
+        data_type: VARCHAR
     facts:
-      - name: delivered_revenue
-        synonyms: ["seller revenue", "revenue"]
-        description: "Total delivered merchandise revenue from this seller."
-        expr: delivered_revenue
+      - name: allocation_weight
+        description: "1 / number of categories in the order — weighting factor for allocating order-level measures across categories without double counting."
+        expr: allocation_weight
         data_type: NUMBER
-      - name: revenue_share
-        description: "Percentage of total delivered revenue from this seller."
-        expr: pct_total_delivered_revenue
-        data_type: NUMBER
-      - name: delivered_order_count
-        description: "Number of delivered orders for this seller."
-        expr: delivered_order_count
-        data_type: NUMBER
-      - name: avg_review_score
-        synonyms: ["seller review score", "average review score"]
-        description: "Average review score for orders fulfilled by this seller."
-        expr: avg_review_score
-        data_type: FLOAT
-      - name: average_delay_days
-        description: "Average delivery delay in days for this seller."
-        expr: avg_delay_days
-        data_type: FLOAT
-      - name: late_delivery_rate
-        description: "Percentage of this seller's deliveries that were late."
-        expr: late_delivery_rate
-        data_type: FLOAT
-    metrics:
-      - name: seller_delivered_revenue
-        synonyms: ["total seller revenue"]
-        description: "Delivered merchandise revenue generated by sellers."
-        expr: SUM(delivered_revenue)
-      - name: average_seller_review_score
-        description: "Average seller review score."
-        expr: AVG(avg_review_score)
-      - name: top_seller_revenue_share
-        description: "Cumulative revenue share across selected sellers."
-        expr: SUM(pct_total_delivered_revenue)
+
+# ─── RELATIONSHIPS (exhaustive: one per FK edge of the star) ──────────────────
 
 relationships:
 
@@ -1206,8 +494,15 @@ relationships:
     left_table: orders
     right_table: customers
     relationship_columns:
-      - left_column: customer_id
-        right_column: customer_id
+      - left_column: customer_unique_id
+        right_column: customer_unique_id
+
+  - name: orders_to_customer_geography
+    left_table: orders
+    right_table: customer_geography
+    relationship_columns:
+      - left_column: customer_zip_code_prefix
+        right_column: customer_zip_code_prefix
 
   - name: order_items_to_orders
     left_table: order_items
@@ -1230,6 +525,20 @@ relationships:
       - left_column: seller_id
         right_column: seller_id
 
+  - name: products_to_categories
+    left_table: products
+    right_table: categories
+    relationship_columns:
+      - left_column: product_category_name
+        right_column: product_category_name
+
+  - name: sellers_to_seller_geography
+    left_table: sellers
+    right_table: seller_geography
+    relationship_columns:
+      - left_column: seller_zip_code_prefix
+        right_column: seller_zip_code_prefix
+
   - name: payments_to_orders
     left_table: payments
     right_table: orders
@@ -1244,51 +553,29 @@ relationships:
       - left_column: order_id
         right_column: order_id
 
-  - name: order_baskets_to_orders
-    left_table: order_baskets
+  - name: order_categories_to_orders
+    left_table: order_categories
     right_table: orders
     relationship_columns:
       - left_column: order_id
         right_column: order_id
 
-  - name: order_seller_complexity_to_orders
-    left_table: order_seller_complexity
-    right_table: orders
+  - name: order_categories_to_categories
+    left_table: order_categories
+    right_table: categories
     relationship_columns:
-      - left_column: order_id
-        right_column: order_id
+      - left_column: product_category_name
+        right_column: product_category_name
 
-  - name: delivery_distance_to_order_items
-    left_table: delivery_distance
-    right_table: order_items
-    relationship_columns:
-      - left_column: order_item_key
-        right_column: order_item_key
+# ─── VERIFIED QUERIES (strict parity: 1, same as the pulsar_bare example) ─────
 
-  - name: seller_scorecard_to_sellers
-    left_table: seller_scorecard
-    right_table: sellers
-    relationship_columns:
-      - left_column: seller_id
-        right_column: seller_id
+verified_queries:
+  - name: total_merchandise_revenue_by_month
+    question: "What is total merchandise revenue by month?"
+    use_as_onboarding_question: false
+    sql: "SELECT DATE_TRUNC('month', o.order_purchase_date_key) AS month, SUM(oi.item_revenue) AS total_merchandise_revenue FROM __order_items AS oi JOIN __orders AS o ON oi.order_id = o.order_id GROUP BY 1 ORDER BY 1"
 
-  - name: seller_delivery_performance_to_sellers
-    left_table: seller_delivery_performance
-    right_table: sellers
-    relationship_columns:
-      - left_column: seller_id
-        right_column: seller_id
+# ─── CUSTOM INSTRUCTIONS (transposable subset of the pulsar conventions/rules) ─
 
-  - name: state_seller_revenue_share_to_sellers
-    left_table: state_seller_revenue_share
-    right_table: sellers
-    relationship_columns:
-      - left_column: seller_id
-        right_column: seller_id
-
-  - name: product_category_revenue_rank_to_products
-    left_table: product_category_revenue_rank
-    right_table: products
-    relationship_columns:
-      - left_column: product_id
-        right_column: product_id
+module_custom_instructions:
+  sql_generation: "Revenue means MERCHANDISE revenue: the total_merchandise_revenue metric (sum of item_revenue, excludes freight). It is NOT payment_value (collected value, includes freight and adjustments) — choose deliberately and state which one was used. 'Customers' means physical customers (customer_unique_id), not the order-scoped customer_id. The canonical category key is the Portuguese product_category_name; product_category_name_english is the preferred display name. Prefer the defined metrics over ad-hoc aggregations of facts. Reviews and order counts attributed to categories through order_categories count one order once per category present in the order; disclose this attribution."
