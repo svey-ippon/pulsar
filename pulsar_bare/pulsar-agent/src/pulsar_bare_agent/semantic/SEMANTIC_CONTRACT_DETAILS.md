@@ -10,6 +10,7 @@
 > - `SEMANTIC_CONTRACT_DETAILS.md` — *this file*: how to **author** a contract (when/why to populate fields).
 > - `SEMANTIC_AGENT_PROMPTING.md` — how the agent **consumes** the contract (out-of-YAML rules).
 > - `SEMANTIC_DESIGN_DECISIONS.md` — **why** the format and authoring rules are what they are.
+> - `SEMANTIC_CONTRACT_SHOULD_CONSIDER.md` — options considered/deferred for future enrichment.
 
 Guiding principle for everything here: **a field earns its place only when it varies and changes
 the SQL the agent writes.** If a value is constant, always-true, or trivially derivable from
@@ -74,6 +75,27 @@ it relies on grain for join/aggregation decisions. If forced to choose one, keep
 
 ---
 
+## The join layer: exhaustive `references`, nothing else (basic version)
+
+The whole join graph is authored as **`columns[].references`**, and the rule is the simplest
+possible: **one `references` per FK column, no exceptions, nothing more.**
+
+- Declare a `references` on **every** column that joins to another table's key — classic foreign
+  keys AND role-playing date keys (`*_DATE_KEY` → `dim_date.DATE_DAY`). Exhaustiveness is the
+  point: any join the agent may need must be discoverable on the column, because the agent is
+  forbidden to invent joins (see `SEMANTIC_AGENT_PROMPTING.md` §3).
+- Do **not** author per-edge metadata (cardinality, join type, fan-out, SQL templates). The default
+  semantics of an FK→PK edge (MANY_TO_ONE, LEFT, low fan-out) are stated once in the prompting doc.
+  Edges that deviate (e.g. a bridge that multiplies rows) are flagged through the table's
+  `warnings` and `sql_generation_rules`, not through a relationships section.
+- `references` is fully **auto-derivable from gold metadata** (dbt manifest / constraints /
+  naming): populate it systematically at bootstrap time, like the other structural fields.
+
+Richer join layers (relationships on derogation, curated multi-hop `join_paths`, role
+formalization) were analysed and deliberately deferred — see `SEMANTIC_CONTRACT_SHOULD_CONSIDER.md`.
+
+---
+
 ## Field families: what to auto-generate vs what to enrich
 
 A contract will usually be **bootstrapped from gold metadata** (the dbt models / `INFORMATION_SCHEMA`
@@ -85,7 +107,7 @@ gold metadata and require no business judgement:
 
 - `id`, `qualified_name`, `type`
 - `columns[].name`, `columns[].type`
-- `primary_key`, `columns[].references` (foreign keys)
+- `primary_key`, `columns[].references` (foreign keys, including role-playing date keys)
 - `grain` *only when the PK is a surrogate* (see the `grain` section)
 
 **Semantic fields — enrichment, optional, add only when reliable AND non-trivial.** These require a

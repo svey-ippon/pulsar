@@ -1,10 +1,14 @@
-version: 1
+version: 2
 
 domain:
   id: olist_sales
   name: Olist Sales Analytics
   description: >
-    Certified gold-layer domain for the Olist Brazilian e-commerce dataset. Covers orders, order items (merchandise revenue), payments (collected value), reviews, and the customer / product / seller dimensions, plus an order-to-category bridge.
+    Certified gold-layer domain for the Olist Brazilian e-commerce dataset, modeled as a pure
+    Kimball star: thin facts (orders, order items, payments, reviews) carrying only keys and
+    measures, conformed dimensions (date, customer, geography, category, product, seller), and a
+    keys-only order/category bridge. Analytical attributes are reached through joins, not
+    denormalized onto the facts.
   database: PULSAR_DB
   schema: GOLD
   owner: pulsar_poc
@@ -16,11 +20,15 @@ query_surface:
   max_result_rows: 1000
   default_limit_for_detail_queries: 100
   conventions:
-  - 'Revenue means MERCHANDISE revenue: SUM(item_revenue) on FCT_ORDER_ITEMS (excludes freight). It is NOT payment value.'
-  - 'Collected value means SUM(payment_value) on FCT_ORDER_PAYMENTS (includes freight and adjustments).'
-  - '"Customers" means physical customers (customer_unique_id) unless the question is clearly about orders. customer_id is order-scoped.'
-  - 'delivery_status: on_time | late | very_late | not_delivered. delivery_late_status: late | on_time | not_delivered.'
-  - 'A "late delivery" is delivery_status IN (''late'',''very_late''). Delivered orders are those with delivery_status <> ''not_delivered''.'
+  - 'Revenue means MERCHANDISE revenue: SUM(ITEM_REVENUE) on FCT_ORDER_ITEMS (excludes freight). It is NOT payment value.'
+  - 'Collected value means SUM(PAYMENT_VALUE) on FCT_ORDER_PAYMENTS (includes freight and adjustments).'
+  - '"Customers" means physical customers (CUSTOMER_UNIQUE_ID) unless the question is clearly about orders. CUSTOMER_ID is order-scoped.'
+  - 'Delivery status is DERIVED from FCT_ORDERS.DELAY_DAYS (no stored status column): NULL = not delivered; <= 0 = on_time; 1..7 = late; > 7 = very_late. A "late delivery" is DELAY_DAYS > 0. "Delivered orders" are DELAY_DAYS IS NOT NULL.'
+  - 'A "negative review" is REVIEW_SCORE <= 2 (no stored flag).'
+  - 'Item value including freight is ITEM_REVENUE + FREIGHT_VALUE (not stored).'
+  - 'Installment buckets (when asked) derive from PAYMENT_INSTALLMENTS: 1 = single, 2-3, 4-6, 7-12, 13+.'
+  - 'Dates: facts carry *_DATE_KEY columns of type DATE. For simple time grouping (month, year) apply DATE_TRUNC/YEAR directly on the date key. Join DIM_DATE only when a calendar attribute is needed (day name, weekend, week of year). FCT_ORDER_ITEMS carries NO order date: any time-based item/revenue analysis must join FCT_ORDERS on ORDER_ID.'
+  - 'Category: the canonical category key is the Portuguese PRODUCT_CATEGORY_NAME; the English name lives in DIM_CATEGORIES.PRODUCT_CATEGORY_NAME_ENGLISH (may be null when untranslated).'
 
 tables:
 - id: fct_orders
@@ -28,278 +36,217 @@ tables:
   type: FACT
   business_name: Orders
   description: >
-    Order fact at order_id grain with customer identity, lifecycle timestamps, and delivery-delay facts. Customer attributes (city/state/zip/geo) are denormalized onto the order.
-  grain: One row per order_id.
+    Order fact at ORDER_ID grain (accumulating snapshot of the order lifecycle). Thin fact: keys,
+    degenerate dimensions, and delivery-delay measures. Customer, geography and calendar
+    attributes are reached through DIM_CUSTOMERS, DIM_GEOGRAPHY and the date keys.
   primary_key: [ ORDER_ID ]
-  default_date_column: ORDER_PURCHASE_DATE
+  default_date_column: ORDER_PURCHASE_DATE_KEY
   recommended_alias: fo
-
   warnings:
-  - One order can have many items, payments and (rarely) reviews — never join FCT_ORDERS to those facts and then count orders without COUNT(DISTINCT fo.ORDER_ID).
+  - One order can have many items, payments and (rarely) reviews. When FCT_ORDERS is joined to any of those, count orders with COUNT(DISTINCT fo.ORDER_ID), never COUNT(*).
   columns:
-  - { name: ORDER_ID, type: VARCHAR, role: PRIMARY_KEY, description: Unique order identifier., filterable: true, groupable: false }
-  - { name: CUSTOMER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Order-scoped customer key., references: { table: dim_customers, column: CUSTOMER_ID }, filterable: true, groupable: false }
-  - { name: CUSTOMER_UNIQUE_ID, type: VARCHAR, role: DIMENSION, description: Physical customer identifier — use for distinct-customer counts., filterable: true, groupable: true }
-  - { name: CUSTOMER_CITY, type: VARCHAR, role: DIMENSION, description: Customer city (denormalized)., filterable: true, groupable: true }
-  - { name: CUSTOMER_STATE, type: VARCHAR, role: DIMENSION, description: Customer state code (denormalized)., filterable: true, groupable: true, synonyms: [ state, uf ] }
-  - { name: ORDER_STATUS, type: VARCHAR, role: FILTER, description: 'Order status (delivered, shipped, canceled, ...).', filterable: true, groupable: true }
-  - { name: ORDER_PURCHASE_TIMESTAMP, type: TIMESTAMP_NTZ, role: DATE, description: Purchase timestamp., filterable: true, groupable: false }
-  - { name: ORDER_PURCHASE_DATE, type: DATE, role: DATE, description: Purchase date (preferred date for daily trends)., filterable: true, groupable: true }
-  - { name: ORDER_PURCHASE_MONTH, type: DATE, role: DATE, description: Purchase month truncated to first day (preferred for monthly trends)., filterable: true, groupable: true, synonyms: [ month ] }
-  - { name: ORDER_PURCHASE_YEAR, type: NUMBER, role: DIMENSION, description: Purchase year., filterable: true, groupable: true, synonyms: [ year ] }
-  - { name: ORDER_DELIVERED_CUSTOMER_DATE, type: TIMESTAMP_NTZ, role: DATE, description: Actual delivery-to-customer timestamp (null if not delivered)., filterable: true, groupable: false }
-  - { name: ORDER_ESTIMATED_DELIVERY_DATE, type: TIMESTAMP_NTZ, role: DATE, description: Estimated delivery date., filterable: true, groupable: false }
-  - { name: DELAY_DAYS, type: NUMBER, role: MEASURE, description: 'Days between estimated and actual delivery; > 0 means late.', aggregatable: true, default_aggregation: AVG }
-  - { name: DELIVERY_LATE_STATUS, type: VARCHAR, role: FILTER, description: 'Binary delivery status: late | on_time | not_delivered.', filterable: true, groupable: true }
-  - { name: DELIVERY_STATUS, type: VARCHAR, role: FILTER, description: 'Detailed delivery status: on_time | late | very_late | not_delivered.', filterable: true, groupable: true }
+  - { name: ORDER_ID, type: VARCHAR, role: PRIMARY_KEY, description: Unique order identifier (degenerate dimension shared by all order-grain facts). }
+  - { name: CUSTOMER_UNIQUE_ID, type: VARCHAR, role: FOREIGN_KEY, description: Physical customer., references: { table: dim_customers, column: CUSTOMER_UNIQUE_ID } }
+  - { name: CUSTOMER_ZIP_CODE_PREFIX, type: VARCHAR, role: FOREIGN_KEY, description: Customer zip prefix for this order (customer-location role of geography)., references: { table: dim_geography, column: ZIP_CODE_PREFIX } }
+  - { name: ORDER_PURCHASE_DATE_KEY, type: DATE, role: DATE, description: Purchase date (default date for time analysis)., references: { table: dim_date, column: DATE_DAY } }
+  - { name: ORDER_APPROVED_DATE_KEY, type: DATE, role: DATE, description: Approval date (null until approved)., references: { table: dim_date, column: DATE_DAY } }
+  - { name: ORDER_DELIVERED_CARRIER_DATE_KEY, type: DATE, role: DATE, description: Carrier-handoff date (null until handed off)., references: { table: dim_date, column: DATE_DAY } }
+  - { name: ORDER_DELIVERED_CUSTOMER_DATE_KEY, type: DATE, role: DATE, description: Delivery-to-customer date (null if not delivered)., references: { table: dim_date, column: DATE_DAY } }
+  - { name: ORDER_ESTIMATED_DELIVERY_DATE_KEY, type: DATE, role: DATE, description: Estimated delivery date., references: { table: dim_date, column: DATE_DAY } }
+  - { name: CUSTOMER_ID, type: VARCHAR, role: DEGENERATE_DIMENSION, description: Order-scoped customer key (one per order). Use CUSTOMER_UNIQUE_ID for physical customers. }
+  - { name: ORDER_STATUS, type: VARCHAR, role: FILTER, description: 'Order status (delivered, shipped, canceled, ...).' }
+  - { name: ORDER_PURCHASE_TIMESTAMP, type: TIMESTAMP_NTZ, role: DATE, description: Purchase event time (intra-day precision / recency ordering). }
+  - { name: DELAY_DAYS, type: NUMBER, role: MEASURE, description: 'Delivered minus estimated delivery, in days. NULL = not delivered, > 0 = late. Delivery status derives from this column (see conventions).' }
+  - { name: APPROVAL_DELAY_DAYS, type: NUMBER, role: MEASURE, description: Days between purchase and approval. }
+  - { name: PURCHASE_TO_DELIVERY_DAYS, type: NUMBER, role: MEASURE, description: Days between purchase and delivery to customer. }
 
 - id: fct_order_items
   qualified_name: PULSAR_DB.GOLD.FCT_ORDER_ITEMS
   type: FACT
   business_name: Order items
   description: >
-    Order-item fact at (order_id, order_item_id) grain. Holds governed merchandise revenue (item_revenue) and freight. Product category, seller, customer and order/delivery attributes are denormalized onto each item row for convenient slicing.
+    Order-item fact at (order_id x order_item_id) grain — the base table for merchandise revenue.
+    Thin fact: product/seller/order keys and money measures only. Category, seller geography and
+    order dates are reached through joins.
   grain: One row per order item (order_id x order_item_id).
   primary_key: [ ORDER_ITEM_KEY ]
-  default_date_column: ORDER_PURCHASE_MONTH
   recommended_alias: foi
   warnings:
-  - This is the base table for merchandise revenue. item_revenue is ORDER_ITEMS.PRICE and excludes freight.
-  - There are multiple item rows per order. To count orders use COUNT(DISTINCT foi.ORDER_ID), never COUNT(*).
-  - For category analysis OF MERCHANDISE REVENUE, group this table by PRODUCT_CATEGORY_NAME_ENGLISH directly. For category analysis of ORDER-LEVEL facts (order counts, reviews), use BRIDGE_ORDER_CATEGORIES instead to avoid item fan-out.
-  example_questions:
-  - What is merchandise revenue by product category?
-  - Which sellers generated the most revenue?
+  - Multiple item rows per order. To count orders use COUNT(DISTINCT foi.ORDER_ID), never COUNT(*).
+  - This table carries NO date column for the order. Any time-based revenue analysis must join FCT_ORDERS on ORDER_ID and use its date keys.
+  - For merchandise revenue by category, join DIM_PRODUCTS (then DIM_CATEGORIES for the English name) and group by the product category.
   columns:
-  - { name: ORDER_ITEM_KEY, type: VARCHAR, role: PRIMARY_KEY, description: Synthetic key for one order item (order_id-order_item_id)., groupable: false }
-  - { name: ORDER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Order identifier., references: { table: fct_orders, column: ORDER_ID }, filterable: true, groupable: false }
-  - { name: ORDER_ITEM_ID, type: NUMBER, role: DEGENERATE_DIMENSION, description: Sequence number of the item within the order., filterable: true, groupable: true }
-  - { name: PRODUCT_ID, type: VARCHAR, role: FOREIGN_KEY, description: Product identifier., references: { table: dim_products, column: PRODUCT_ID }, filterable: true, groupable: false }
-  - { name: PRODUCT_CATEGORY_NAME, type: VARCHAR, role: DIMENSION, description: Portuguese product category., filterable: true, groupable: true }
-  - { name: PRODUCT_CATEGORY_NAME_ENGLISH, type: VARCHAR, role: DIMENSION, description: English product category (denormalized) — preferred for category slicing of revenue., filterable: true, groupable: true, synonyms: [ category, product category ] }
-  - { name: SELLER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Seller identifier., references: { table: dim_sellers, column: SELLER_ID }, filterable: true, groupable: true }
-  - { name: SELLER_STATE, type: VARCHAR, role: DIMENSION, description: Seller state code (denormalized)., filterable: true, groupable: true }
-  - { name: CUSTOMER_STATE, type: VARCHAR, role: DIMENSION, description: Customer state code (denormalized)., filterable: true, groupable: true }
-  - { name: ORDER_STATUS, type: VARCHAR, role: FILTER, description: Order status (denormalized)., filterable: true, groupable: true }
-  - { name: ORDER_PURCHASE_DATE, type: DATE, role: DATE, description: Purchase date (denormalized)., filterable: true, groupable: true }
-  - { name: ORDER_PURCHASE_MONTH, type: DATE, role: DATE, description: Purchase month (denormalized, preferred for monthly revenue trends)., filterable: true, groupable: true, synonyms: [ month ] }
-  - { name: ORDER_PURCHASE_YEAR, type: NUMBER, role: DIMENSION, description: Purchase year (denormalized)., filterable: true, groupable: true }
-  - { name: DELIVERY_STATUS, type: VARCHAR, role: FILTER, description: Detailed delivery status (denormalized)., filterable: true, groupable: true }
-  - { name: ITEM_REVENUE, type: NUMBER, role: MEASURE, description: Merchandise revenue (ORDER_ITEMS.PRICE), excludes freight., aggregatable: true, default_aggregation: SUM, synonyms: [ revenue, sales, gmv, turnover ] }
-  - { name: FREIGHT_VALUE, type: NUMBER, role: MEASURE, description: Freight charged for the item., aggregatable: true, default_aggregation: SUM, synonyms: [ shipping, freight ] }
-  - { name: ITEM_VALUE_WITH_FREIGHT, type: NUMBER, role: MEASURE, description: item_revenue + freight_value., aggregatable: true, default_aggregation: SUM }
+  - { name: ORDER_ITEM_KEY, type: VARCHAR, role: PRIMARY_KEY, description: Synthetic key (order_id-order_item_id). }
+  - { name: ORDER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Order identifier., references: { table: fct_orders, column: ORDER_ID } }
+  - { name: PRODUCT_ID, type: VARCHAR, role: FOREIGN_KEY, description: Product identifier., references: { table: dim_products, column: PRODUCT_ID } }
+  - { name: SELLER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Seller identifier., references: { table: dim_sellers, column: SELLER_ID } }
+  - { name: SHIPPING_LIMIT_DATE_KEY, type: DATE, role: DATE, description: Seller shipping-limit date., references: { table: dim_date, column: DATE_DAY } }
+  - { name: ORDER_ITEM_ID, type: NUMBER, role: DEGENERATE_DIMENSION, description: Item sequence number within the order (not unique alone). }
+  - { name: ITEM_REVENUE, type: NUMBER, role: MEASURE, description: Merchandise revenue (ORDER_ITEMS.PRICE), excludes freight. }
+  - { name: FREIGHT_VALUE, type: NUMBER, role: MEASURE, description: Freight charged for the item. }
 
 - id: fct_order_payments
   qualified_name: PULSAR_DB.GOLD.FCT_ORDER_PAYMENTS
   type: FACT
   business_name: Order payments
   description: >
-    Payment fact at (order_id, payment_sequential) grain. payment_value is the COLLECTED value including freight and adjustments — distinct from merchandise revenue.
+    Payment fact at (order_id x payment_sequential) grain. PAYMENT_VALUE is the COLLECTED value
+    including freight and adjustments — distinct from merchandise revenue.
   grain: One row per payment (order_id x payment_sequential).
   primary_key: [ ORDER_PAYMENT_KEY ]
   recommended_alias: fop
-
   warnings:
-  - payment_value is collected value (incl. freight/installment adjustments), NOT merchandise revenue. Do not present it as "revenue".
+  - PAYMENT_VALUE is collected value (incl. freight/adjustments), NOT merchandise revenue. Do not present it as "revenue".
   - Multiple payment rows per order. Use COUNT(DISTINCT fop.ORDER_ID) to count orders.
-  example_questions:
-  - What is total collected payment value by payment type?
-  - How does installment count relate to collected value?
   columns:
-  - { name: ORDER_PAYMENT_KEY, type: VARCHAR, role: PRIMARY_KEY, description: Synthetic key for one payment row., groupable: false }
-  - { name: ORDER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Order identifier., references: { table: fct_orders, column: ORDER_ID }, filterable: true, groupable: false }
-  - { name: PAYMENT_SEQUENTIAL, type: NUMBER, role: DEGENERATE_DIMENSION, description: Payment sequence within the order., filterable: true, groupable: true }
-  - { name: PAYMENT_TYPE, type: VARCHAR, role: DIMENSION, description: 'Payment method (credit_card, boleto, voucher, debit_card).', filterable: true, groupable: true, synonyms: [ payment method ] }
-  - { name: PAYMENT_INSTALLMENTS, type: NUMBER, role: MEASURE, description: Number of installments., aggregatable: true, default_aggregation: AVG }
-  - { name: INSTALLMENT_BUCKET, type: VARCHAR, role: DIMENSION, description: 'Bucketed installments: single | 2_to_3 | 4_to_6 | 7_to_12 | 13_plus.', filterable: true, groupable: true }
-  - { name: PAYMENT_VALUE, type: NUMBER, role: MEASURE, description: Collected payment value (incl. freight/adjustments)., aggregatable: true, default_aggregation: SUM, synonyms: [ collected value, payment amount ] }
-  - { name: CUSTOMER_STATE, type: VARCHAR, role: DIMENSION, description: Customer state (denormalized)., filterable: true, groupable: true }
-  - { name: ORDER_PURCHASE_MONTH, type: DATE, role: DATE, description: Purchase month (denormalized)., filterable: true, groupable: true }
+  - { name: ORDER_PAYMENT_KEY, type: VARCHAR, role: PRIMARY_KEY, description: Synthetic key for one payment row. }
+  - { name: ORDER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Order identifier., references: { table: fct_orders, column: ORDER_ID } }
+  - { name: PAYMENT_SEQUENTIAL, type: NUMBER, role: DEGENERATE_DIMENSION, description: Payment sequence within the order. }
+  - { name: PAYMENT_TYPE, type: VARCHAR, role: DIMENSION, description: 'Payment method (credit_card, boleto, voucher, debit_card).' }
+  - { name: PAYMENT_INSTALLMENTS, type: NUMBER, role: MEASURE, description: Number of installments (bucket derivation in conventions). }
+  - { name: PAYMENT_VALUE, type: NUMBER, role: MEASURE, description: Collected payment value (incl. freight/adjustments). }
 
 - id: fct_order_reviews
   qualified_name: PULSAR_DB.GOLD.FCT_ORDER_REVIEWS
   type: FACT
   business_name: Order reviews
   description: >
-    Review fact at review/order grain, enriched with order delivery status. Reviews are order-level, not item-level.
-  grain: One row per review (review_id, order_id).
+    Review fact at (review_id, order_id) grain. Reviews are ORDER-level, not item-level. Delivery
+    facts for the reviewed order are reached by joining FCT_ORDERS.
+  grain: One row per review (review_id x order_id).
   primary_key: [ ORDER_REVIEW_KEY ]
   recommended_alias: fr
-
   warnings:
-  - Reviews are at ORDER grain, not item or category grain. To analyse review score by product category, join to BRIDGE_ORDER_CATEGORIES on ORDER_ID (this attributes each order's review to every category in the order — disclose this attribution).
-  example_questions:
-  - What is the average review score by delivery status?
-  - What share of reviews are negative?
+  - Reviews are at ORDER grain. To analyse review scores by product category, join BRIDGE_ORDER_CATEGORIES on ORDER_ID — this attributes each order's review to every category in the order; disclose that attribution.
   columns:
-  - { name: ORDER_REVIEW_KEY, type: VARCHAR, role: PRIMARY_KEY, description: Synthetic key for one review/order row., groupable: false }
-  - { name: REVIEW_ID, type: VARCHAR, role: DEGENERATE_DIMENSION, description: Review identifier., filterable: true, groupable: false }
-  - { name: ORDER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Order identifier., references: { table: fct_orders, column: ORDER_ID }, filterable: true, groupable: false }
-  - { name: REVIEW_SCORE, type: NUMBER, role: MEASURE, description: Review score from 1 to 5., aggregatable: true, default_aggregation: AVG, synonyms: [ rating, satisfaction ] }
-  - { name: IS_NEGATIVE_REVIEW, type: BOOLEAN, role: FILTER, description: True when review_score <= 2., filterable: true, groupable: true }
-  - { name: REVIEW_CREATION_DATE, type: TIMESTAMP_NTZ, role: DATE, description: When the review was created., filterable: true, groupable: false }
-  - { name: DELIVERY_STATUS, type: VARCHAR, role: FILTER, description: Order delivery status (denormalized)., filterable: true, groupable: true }
-  - { name: CUSTOMER_STATE, type: VARCHAR, role: DIMENSION, description: Customer state (denormalized)., filterable: true, groupable: true }
-  - { name: ORDER_PURCHASE_MONTH, type: DATE, role: DATE, description: Purchase month (denormalized)., filterable: true, groupable: true }
+  - { name: ORDER_REVIEW_KEY, type: VARCHAR, role: PRIMARY_KEY, description: Synthetic key for one review/order row. }
+  - { name: ORDER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Order identifier., references: { table: fct_orders, column: ORDER_ID } }
+  - { name: REVIEW_CREATION_DATE_KEY, type: DATE, role: DATE, description: Review creation date., references: { table: dim_date, column: DATE_DAY } }
+  - { name: REVIEW_ANSWER_DATE_KEY, type: DATE, role: DATE, description: Review answer date (null if unanswered)., references: { table: dim_date, column: DATE_DAY } }
+  - { name: REVIEW_ID, type: VARCHAR, role: DEGENERATE_DIMENSION, description: Review identifier. }
+  - { name: REVIEW_COMMENT_TITLE, type: VARCHAR, role: DIMENSION, description: Free-text review title (often null). }
+  - { name: REVIEW_COMMENT_MESSAGE, type: VARCHAR, role: DIMENSION, description: Free-text review message (often null). }
+  - { name: REVIEW_SCORE, type: NUMBER, role: MEASURE, description: Review score from 1 to 5. Negative review = score <= 2. }
+
+- id: dim_date
+  qualified_name: PULSAR_DB.GOLD.DIM_DATE
+  type: DIMENSION
+  business_name: Calendar
+  description: >
+    Conformed date dimension (one row per calendar day), role-played by every *_DATE_KEY in the
+    facts. Join it ONLY when a calendar attribute is needed; simple month/year grouping should use
+    DATE_TRUNC/YEAR directly on the date key (see conventions). Alias it per role when joined more
+    than once in a query.
+  primary_key: [ DATE_DAY ]
+  recommended_alias: dd
+  columns:
+  - { name: DATE_DAY, type: DATE, role: PRIMARY_KEY, description: Calendar day. }
+  - { name: YEAR, type: NUMBER, role: DIMENSION, description: Calendar year. }
+  - { name: QUARTER, type: NUMBER, role: DIMENSION, description: Quarter (1-4). }
+  - { name: MONTH_NUMBER, type: NUMBER, role: DIMENSION, description: Month number (1-12). }
+  - { name: MONTH_NAME, type: VARCHAR, role: DIMENSION, description: Month name. }
+  - { name: MONTH_START_DATE, type: DATE, role: DIMENSION, description: First day of the month. }
+  - { name: DAY_OF_MONTH, type: NUMBER, role: DIMENSION, description: Day of month (1-31). }
+  - { name: DAY_OF_WEEK, type: NUMBER, role: DIMENSION, description: Day of week (0=Sunday .. 6=Saturday). }
+  - { name: DAY_NAME, type: VARCHAR, role: DIMENSION, description: Day name. }
+  - { name: WEEK_OF_YEAR, type: NUMBER, role: DIMENSION, description: Week of year. }
+  - { name: IS_WEEKEND, type: BOOLEAN, role: FILTER, description: True for Saturday and Sunday. }
 
 - id: dim_customers
   qualified_name: PULSAR_DB.GOLD.DIM_CUSTOMERS
   type: DIMENSION
   business_name: Customers
-  description: Customer dimension. Distinguishes order-scoped customer_id from physical customer_unique_id.
-  grain: One row per customer_id.
-  primary_key: [ CUSTOMER_ID ]
+  description: >
+    Conformed PHYSICAL customer dimension at CUSTOMER_UNIQUE_ID grain. Deliberately thin (Olist has
+    no stable customer attribute; per-order geography lives on FCT_ORDERS). Anchor for
+    distinct-customer counting and repeat-purchase analysis.
+  primary_key: [ CUSTOMER_UNIQUE_ID ]
   recommended_alias: dc
-
-  warnings:
-  - customer_id is order-scoped (one per order's customer). For distinct physical customers use customer_unique_id.
   columns:
-  - { name: CUSTOMER_ID, type: VARCHAR, role: PRIMARY_KEY, description: Order-scoped customer key., groupable: false }
-  - { name: CUSTOMER_UNIQUE_ID, type: VARCHAR, role: BUSINESS_KEY, description: Physical customer identifier (repeat-purchase analysis)., filterable: true, groupable: true }
-  - { name: CUSTOMER_CITY, type: VARCHAR, role: DIMENSION, description: Customer city., filterable: true, groupable: true }
-  - { name: CUSTOMER_STATE, type: VARCHAR, role: DIMENSION, description: Customer state code., filterable: true, groupable: true }
-  - { name: CUSTOMER_ZIP_CODE_PREFIX, type: VARCHAR, role: DIMENSION, description: Customer zip code prefix., filterable: true, groupable: true }
+  - { name: CUSTOMER_UNIQUE_ID, type: VARCHAR, role: PRIMARY_KEY, description: Physical customer identifier. }
+
+- id: dim_geography
+  qualified_name: PULSAR_DB.GOLD.DIM_GEOGRAPHY
+  type: DIMENSION
+  business_name: Geography
+  description: >
+    Conformed geography at zip-code-prefix grain, ROLE-PLAYED as customer location (via
+    FCT_ORDERS.CUSTOMER_ZIP_CODE_PREFIX) and seller location (via DIM_SELLERS.SELLER_ZIP_CODE_PREFIX).
+    Alias it per role when both roles appear in one query (e.g. g_customer / g_seller).
+  primary_key: [ ZIP_CODE_PREFIX ]
+  recommended_alias: dg
+  warnings:
+  - Some zip prefixes have no geolocation source row; their CITY/STATE/coordinates are NULL.
+  columns:
+  - { name: ZIP_CODE_PREFIX, type: VARCHAR, role: PRIMARY_KEY, description: Brazilian zip-code prefix. }
+  - { name: CITY, type: VARCHAR, role: DIMENSION, description: Representative city. }
+  - { name: STATE, type: VARCHAR, role: DIMENSION, description: Brazilian state code., synonyms: [ uf ] }
+  - { name: LATITUDE, type: NUMBER, role: DIMENSION, description: Zip-prefix centroid latitude. }
+  - { name: LONGITUDE, type: NUMBER, role: DIMENSION, description: Zip-prefix centroid longitude. }
+  - { name: GEOLOCATION_ROW_COUNT, type: NUMBER, role: DIMENSION, description: Source rows aggregated for this prefix (data-quality signal; 0 = no geolocation data). }
+
+- id: dim_categories
+  qualified_name: PULSAR_DB.GOLD.DIM_CATEGORIES
+  type: DIMENSION
+  business_name: Product categories
+  description: >
+    Conformed product-category dimension keyed on the Portuguese category name, with the English
+    translation. Referenced by DIM_PRODUCTS and BRIDGE_ORDER_CATEGORIES.
+  primary_key: [ PRODUCT_CATEGORY_NAME ]
+  recommended_alias: dcat
+  columns:
+  - { name: PRODUCT_CATEGORY_NAME, type: VARCHAR, role: PRIMARY_KEY, description: Portuguese category name (canonical category key). }
+  - { name: PRODUCT_CATEGORY_NAME_ENGLISH, type: VARCHAR, role: DIMENSION, description: English category name (null when untranslated) — preferred display name., synonyms: [ category ] }
+  - { name: HAS_ENGLISH_CATEGORY, type: BOOLEAN, role: FILTER, description: True when an English translation exists. }
 
 - id: dim_products
   qualified_name: PULSAR_DB.GOLD.DIM_PRODUCTS
   type: DIMENSION
   business_name: Products
-  description: Product dimension with Portuguese category and English translation, plus physical attributes.
-  grain: One row per product_id.
+  description: Product dimension with physical attributes. Category is snowflaked to DIM_CATEGORIES via PRODUCT_CATEGORY_NAME.
   primary_key: [ PRODUCT_ID ]
   recommended_alias: dp
-
   columns:
-  - { name: PRODUCT_ID, type: VARCHAR, role: PRIMARY_KEY, description: Product identifier., groupable: false }
-  - { name: PRODUCT_CATEGORY_NAME, type: VARCHAR, role: DIMENSION, description: Portuguese product category., filterable: true, groupable: true }
-  - { name: PRODUCT_CATEGORY_NAME_ENGLISH, type: VARCHAR, role: DIMENSION, description: English product category., filterable: true, groupable: true, synonyms: [ category ] }
-  - { name: PRODUCT_WEIGHT_G, type: NUMBER, role: MEASURE, description: Product weight in grams., aggregatable: true, default_aggregation: AVG }
-  - { name: PRODUCT_PHOTOS_QTY, type: NUMBER, role: MEASURE, description: Number of product photos., aggregatable: true, default_aggregation: AVG }
+  - { name: PRODUCT_ID, type: VARCHAR, role: PRIMARY_KEY, description: Product identifier. }
+  - { name: PRODUCT_CATEGORY_NAME, type: VARCHAR, role: FOREIGN_KEY, description: Portuguese category (may be null)., references: { table: dim_categories, column: PRODUCT_CATEGORY_NAME } }
+  - { name: PRODUCT_NAME_LENGTH, type: NUMBER, role: DIMENSION, description: Length of the product name. }
+  - { name: PRODUCT_DESCRIPTION_LENGTH, type: NUMBER, role: DIMENSION, description: Length of the product description. }
+  - { name: PRODUCT_PHOTOS_QTY, type: NUMBER, role: MEASURE, description: Number of product photos. }
+  - { name: PRODUCT_WEIGHT_G, type: NUMBER, role: MEASURE, description: Product weight in grams. }
+  - { name: PRODUCT_LENGTH_CM, type: NUMBER, role: MEASURE, description: Product length in cm. }
+  - { name: PRODUCT_HEIGHT_CM, type: NUMBER, role: MEASURE, description: Product height in cm. }
+  - { name: PRODUCT_WIDTH_CM, type: NUMBER, role: MEASURE, description: Product width in cm. }
 
 - id: dim_sellers
   qualified_name: PULSAR_DB.GOLD.DIM_SELLERS
   type: DIMENSION
   business_name: Sellers
-  description: Seller dimension enriched with representative zip-prefix geography.
-  grain: One row per seller_id.
+  description: Seller dimension. Geography (city/state/coordinates) is reached via DIM_GEOGRAPHY on SELLER_ZIP_CODE_PREFIX (seller-location role).
   primary_key: [ SELLER_ID ]
   recommended_alias: ds
-
   columns:
-  - { name: SELLER_ID, type: VARCHAR, role: PRIMARY_KEY, description: Seller identifier., groupable: false }
-  - { name: SELLER_CITY, type: VARCHAR, role: DIMENSION, description: Seller city., filterable: true, groupable: true }
-  - { name: SELLER_STATE, type: VARCHAR, role: DIMENSION, description: Seller state code., filterable: true, groupable: true }
-  - { name: SELLER_ZIP_CODE_PREFIX, type: VARCHAR, role: DIMENSION, description: Seller zip code prefix., filterable: true, groupable: true }
+  - { name: SELLER_ID, type: VARCHAR, role: PRIMARY_KEY, description: Seller identifier. }
+  - { name: SELLER_ZIP_CODE_PREFIX, type: VARCHAR, role: FOREIGN_KEY, description: Seller zip prefix (seller-location role of geography)., references: { table: dim_geography, column: ZIP_CODE_PREFIX } }
 
 - id: bridge_order_categories
   qualified_name: PULSAR_DB.GOLD.BRIDGE_ORDER_CATEGORIES
   type: BRIDGE
   business_name: Order-Category bridge
   description: >
-    Bridge at (order_id, product_category_name_english) grain. Deduplicates category membership within an order so order-level facts can be sliced by category without item fan-out.
-  grain: One row per order_id x product_category_name_english.
+    Keys-only bridge resolving the order/category many-to-many at (order_id x category) grain.
+    Use it to slice ORDER-LEVEL facts (order counts, reviews) by category without item fan-out.
+    It carries NO measures: category revenue comes from FCT_ORDER_ITEMS via product -> category.
+  grain: One row per order_id x product_category_name.
   primary_key: [ ORDER_CATEGORY_KEY ]
   recommended_alias: boc
-
   warnings:
-  - Use this bridge to attribute ORDER-LEVEL facts (order counts, reviews) to product categories. An order with N categories yields N bridge rows, so order-level measures still need COUNT(DISTINCT ORDER_ID).
-  - For MERCHANDISE REVENUE by category, prefer grouping FCT_ORDER_ITEMS by PRODUCT_CATEGORY_NAME_ENGLISH directly (the bridge also exposes category_merchandise_revenue per order/category if needed).
+  - An order with N categories yields N bridge rows. Order-level counting through the bridge still needs COUNT(DISTINCT ORDER_ID).
+  - To allocate an order-level measure across categories without double counting, multiply it by ALLOCATION_WEIGHT (weights of one order sum to 1) and disclose the allocation.
   columns:
-  - { name: ORDER_CATEGORY_KEY, type: VARCHAR, role: PRIMARY_KEY, description: Synthetic key for one order/category membership row., groupable: false }
-  - { name: ORDER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Order identifier., references: { table: fct_orders, column: ORDER_ID }, filterable: true, groupable: false }
-  - { name: PRODUCT_CATEGORY_NAME_ENGLISH, type: VARCHAR, role: DIMENSION, description: English category present in the order., filterable: true, groupable: true, synonyms: [ category ] }
-  - { name: ITEM_COUNT_IN_CATEGORY, type: NUMBER, role: MEASURE, description: Number of items of this category in the order., aggregatable: true, default_aggregation: SUM }
-  - { name: CATEGORY_MERCHANDISE_REVENUE, type: NUMBER, role: MEASURE, description: Merchandise revenue of this category within the order., aggregatable: true, default_aggregation: SUM }
-
-relationships:
-- id: fct_orders__dim_customers
-  from_table: fct_orders
-  from_columns: [ CUSTOMER_ID ]
-  to_table: dim_customers
-  to_columns: [ CUSTOMER_ID ]
-  type: MANY_TO_ONE
-  recommended_join_type: LEFT
-  fanout_risk: LOW
-  description: Each order belongs to one (order-scoped) customer.
-  join_sql_template: 'LEFT JOIN PULSAR_DB.GOLD.DIM_CUSTOMERS dc ON fo.CUSTOMER_ID = dc.CUSTOMER_ID'
-
-- id: fct_order_items__fct_orders
-  from_table: fct_order_items
-  from_columns: [ ORDER_ID ]
-  to_table: fct_orders
-  to_columns: [ ORDER_ID ]
-  type: MANY_TO_ONE
-  recommended_join_type: LEFT
-  fanout_risk: LOW
-  description: Each item belongs to one order. Most order attributes are already denormalized on FCT_ORDER_ITEMS, so this join is rarely needed.
-  join_sql_template: 'LEFT JOIN PULSAR_DB.GOLD.FCT_ORDERS fo ON foi.ORDER_ID = fo.ORDER_ID'
-
-- id: fct_order_items__dim_products
-  from_table: fct_order_items
-  from_columns: [ PRODUCT_ID ]
-  to_table: dim_products
-  to_columns: [ PRODUCT_ID ]
-  type: MANY_TO_ONE
-  recommended_join_type: LEFT
-  fanout_risk: LOW
-  description: Each item references one product. Use only for product attributes not already denormalized on the item.
-  join_sql_template: 'LEFT JOIN PULSAR_DB.GOLD.DIM_PRODUCTS dp ON foi.PRODUCT_ID = dp.PRODUCT_ID'
-
-- id: fct_order_items__dim_sellers
-  from_table: fct_order_items
-  from_columns: [ SELLER_ID ]
-  to_table: dim_sellers
-  to_columns: [ SELLER_ID ]
-  type: MANY_TO_ONE
-  recommended_join_type: LEFT
-  fanout_risk: LOW
-  description: Each item is fulfilled by one seller.
-  join_sql_template: 'LEFT JOIN PULSAR_DB.GOLD.DIM_SELLERS ds ON foi.SELLER_ID = ds.SELLER_ID'
-
-- id: fct_order_payments__fct_orders
-  from_table: fct_order_payments
-  from_columns: [ ORDER_ID ]
-  to_table: fct_orders
-  to_columns: [ ORDER_ID ]
-  type: MANY_TO_ONE
-  recommended_join_type: LEFT
-  fanout_risk: LOW
-  description: Each payment belongs to one order.
-  join_sql_template: 'LEFT JOIN PULSAR_DB.GOLD.FCT_ORDERS fo ON fop.ORDER_ID = fo.ORDER_ID'
-
-- id: fct_order_reviews__fct_orders
-  from_table: fct_order_reviews
-  from_columns: [ ORDER_ID ]
-  to_table: fct_orders
-  to_columns: [ ORDER_ID ]
-  type: MANY_TO_ONE
-  recommended_join_type: LEFT
-  fanout_risk: LOW
-  description: Each review belongs to one order.
-  join_sql_template: 'LEFT JOIN PULSAR_DB.GOLD.FCT_ORDERS fo ON fr.ORDER_ID = fo.ORDER_ID'
-
-- id: bridge_order_categories__fct_orders
-  from_table: bridge_order_categories
-  from_columns: [ ORDER_ID ]
-  to_table: fct_orders
-  to_columns: [ ORDER_ID ]
-  type: MANY_TO_ONE
-  recommended_join_type: LEFT
-  fanout_risk: MEDIUM
-  description: Each bridge row belongs to one order; an order maps to several bridge rows (one per category).
-  join_sql_template: 'LEFT JOIN PULSAR_DB.GOLD.FCT_ORDERS fo ON boc.ORDER_ID = fo.ORDER_ID'
-
-join_paths:
-- id: reviews_by_category
-  from_table: fct_order_reviews
-  to_table: bridge_order_categories
-  relationships: [ fct_order_reviews__fct_orders, bridge_order_categories__fct_orders ]
-  fanout_risk: MEDIUM
-  description: >
-    Attribute order-level reviews to product categories via the bridge (join on ORDER_ID). Each order's review is counted once per category in the order.
-  warnings:
-  - This attributes one review to every category in the order. Disclose the attribution; do not present it as item- or category-level reviews.
-  join_sql_template: 'FROM PULSAR_DB.GOLD.FCT_ORDER_REVIEWS fr JOIN PULSAR_DB.GOLD.BRIDGE_ORDER_CATEGORIES boc ON fr.ORDER_ID = boc.ORDER_ID'
+  - { name: ORDER_CATEGORY_KEY, type: VARCHAR, role: PRIMARY_KEY, description: Synthetic key for one order/category membership row. }
+  - { name: ORDER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Order identifier., references: { table: fct_orders, column: ORDER_ID } }
+  - { name: PRODUCT_CATEGORY_NAME, type: VARCHAR, role: FOREIGN_KEY, description: Portuguese category present in the order., references: { table: dim_categories, column: PRODUCT_CATEGORY_NAME } }
+  - { name: ALLOCATION_WEIGHT, type: NUMBER, role: MEASURE, description: 1 / number of categories in the order — Kimball weighting factor for allocating order-level measures across categories. }
 
 certified_metrics:
 - id: total_merchandise_revenue
@@ -308,13 +255,11 @@ certified_metrics:
   base_table: fct_order_items
   expression_sql: SUM(foi.ITEM_REVENUE)
   additive_type: ADDITIVE
-  default_date_column: ORDER_PURCHASE_MONTH
-  allowed_dimensions: [ fct_order_items ]
   synonyms: [ revenue, sales, gmv, turnover, net sales ]
   format: currency
-
   warnings:
-  - This is merchandise revenue, not collected payment value. Do not sum freight into it.
+  - Merchandise revenue, not collected payment value. Do not sum freight into it.
+  - FCT_ORDER_ITEMS has no date column — time-based grouping requires joining FCT_ORDERS on ORDER_ID.
 
 - id: total_payment_value
   name: Total collected payment value
@@ -322,10 +267,8 @@ certified_metrics:
   base_table: fct_order_payments
   expression_sql: SUM(fop.PAYMENT_VALUE)
   additive_type: ADDITIVE
-  allowed_dimensions: [ fct_order_payments ]
   synonyms: [ collected value, payments, amount paid ]
   format: currency
-
   warnings:
   - Distinct from merchandise revenue. Use only when the question is about money collected / payments.
 
@@ -344,12 +287,10 @@ certified_metrics:
   base_table: fct_orders
   expression_sql: COUNT(DISTINCT fo.ORDER_ID)
   additive_type: NON_ADDITIVE
-  allowed_dimensions: [ fct_orders ]
   synonyms: [ orders, number of orders, order volume ]
   format: integer
-
   warnings:
-  - Always COUNT(DISTINCT ORDER_ID) — never COUNT(*) — when the from-table has multiple rows per order (items, payments, bridge).
+  - Always COUNT(DISTINCT ORDER_ID) — never COUNT(*) — when querying from a table with multiple rows per order (items, payments, bridge).
 
 - id: unique_customer_count
   name: Distinct customers
@@ -359,19 +300,17 @@ certified_metrics:
   additive_type: NON_ADDITIVE
   synonyms: [ customers, distinct customers, buyers ]
   format: integer
-
   warnings:
-  - Use customer_unique_id (physical customer), not customer_id (order-scoped).
+  - Use CUSTOMER_UNIQUE_ID (physical customer), not CUSTOMER_ID (order-scoped).
 
 - id: average_order_value
   name: Average order value
-  description: Merchandise revenue divided by number of orders.
+  description: Merchandise revenue divided by number of distinct orders.
   base_table: fct_order_items
   expression_sql: SUM(foi.ITEM_REVENUE) / NULLIF(COUNT(DISTINCT foi.ORDER_ID), 0)
   additive_type: NON_ADDITIVE
   synonyms: [ aov, average basket ]
   format: currency
-
   warnings:
   - Ratio of aggregates; never average a per-order value.
 
@@ -388,43 +327,44 @@ certified_metrics:
   name: Negative review rate
   description: Share of reviews with score <= 2.
   base_table: fct_order_reviews
-  expression_sql: COUNT_IF(fr.IS_NEGATIVE_REVIEW) / NULLIF(COUNT(*), 0)
+  expression_sql: COUNT_IF(fr.REVIEW_SCORE <= 2) / NULLIF(COUNT(*), 0)
   additive_type: NON_ADDITIVE
   synonyms: [ bad review rate, dissatisfaction rate ]
   format: percentage
-
   warnings:
   - Ratio of aggregates, not an average of row-level flags.
 
 - id: late_delivery_rate
   name: Late delivery rate
-  description: Share of delivered orders that arrived late or very late.
+  description: Share of delivered orders that arrived after the estimated date (DELAY_DAYS > 0).
   base_table: fct_orders
-  expression_sql: >
-    COUNT(DISTINCT CASE WHEN fo.DELIVERY_STATUS IN ('late','very_late') THEN fo.ORDER_ID END) / NULLIF(COUNT(DISTINCT CASE WHEN fo.DELIVERY_STATUS <> 'not_delivered' THEN fo.ORDER_ID END), 0)
-  default_filter_sql: "fo.DELIVERY_STATUS <> 'not_delivered'"
+  expression_sql: COUNT_IF(fo.DELAY_DAYS > 0) / NULLIF(COUNT_IF(fo.DELAY_DAYS IS NOT NULL), 0)
   additive_type: NON_ADDITIVE
   synonyms: [ late rate, delivery delay rate ]
   format: percentage
-
   warnings:
-  - Denominator is delivered orders only (exclude not_delivered). Ratio of aggregates.
+  - Denominator is delivered orders only (DELAY_DAYS IS NOT NULL). Ratio of aggregates.
+  - Valid at FCT_ORDERS grain (one row per order). If computed through a finer table (items, bridge), switch to COUNT(DISTINCT CASE WHEN ... THEN fo.ORDER_ID END) on both sides.
 
 sql_generation_rules:
 - { id: no_select_star, severity: HIGH, rule: 'Never use SELECT *. Select only the columns needed.' }
 - { id: use_certified_metrics, severity: HIGH, rule: 'Prefer certified metric expressions over ad-hoc aggregation of measure columns.' }
-- { id: revenue_vs_payment, severity: HIGH, rule: 'Merchandise revenue (SUM item_revenue on FCT_ORDER_ITEMS) is not payment value (SUM payment_value on FCT_ORDER_PAYMENTS). Choose deliberately and state which.' }
-- { id: distinct_orders, severity: HIGH, rule: 'When the base table has multiple rows per order (items, payments, bridge), count orders with COUNT(DISTINCT ORDER_ID).' }
-- { id: no_fact_to_fact_direct_join, severity: HIGH, rule: 'Do not join two fact tables directly. Route through the shared ORDER_ID (via FCT_ORDERS or the bridge).' }
-- { id: category_via_bridge_for_order_facts, severity: HIGH, rule: 'Slice order-level facts (order counts, reviews) by category only through BRIDGE_ORDER_CATEGORIES. Slice merchandise revenue by category directly on FCT_ORDER_ITEMS.PRODUCT_CATEGORY_NAME_ENGLISH.' }
-- { id: ratio_of_aggregates, severity: HIGH, rule: 'Compute ratio metrics (rates, AOV, margin) as ratio of aggregate expressions, not as averages of row-level ratios.' }
+- { id: revenue_vs_payment, severity: HIGH, rule: 'Merchandise revenue (SUM ITEM_REVENUE on FCT_ORDER_ITEMS) is not payment value (SUM PAYMENT_VALUE on FCT_ORDER_PAYMENTS). Choose deliberately and state which.' }
+- { id: distinct_orders, severity: HIGH, rule: 'When the queried table has multiple rows per order (items, payments, bridge), count orders with COUNT(DISTINCT ORDER_ID).' }
+- { id: drill_across, severity: HIGH, rule: 'Joining a fine-grain fact to its order header FCT_ORDERS on ORDER_ID (many-to-one) is safe and often required. NEVER join two fine-grain facts (items, payments, reviews, bridge) directly to each other: to combine their measures, aggregate each to a common grain first, then join the aggregates (drill-across).' }
+- { id: category_paths, severity: HIGH, rule: 'Merchandise revenue by category: FCT_ORDER_ITEMS -> DIM_PRODUCTS -> DIM_CATEGORIES, group by the category. Order-level facts (order counts, reviews) by category: through BRIDGE_ORDER_CATEGORIES on ORDER_ID with COUNT(DISTINCT ORDER_ID).' }
+- { id: date_usage, severity: MEDIUM, rule: 'Simple time grouping (month, year): DATE_TRUNC/YEAR directly on the *_DATE_KEY column. Join DIM_DATE only for calendar attributes (day name, weekend, week), aliasing it per role if joined more than once.' }
+- { id: ratio_of_aggregates, severity: HIGH, rule: 'Compute ratio metrics (rates, AOV) as ratios of aggregate expressions, not as averages of row-level ratios.' }
 - { id: limit_detail_queries, severity: MEDIUM, rule: 'Add an explicit LIMIT to detail (non-aggregated) queries.' }
 
 examples:
 - question: What is total merchandise revenue by month?
-  expected_tables: [ fct_order_items ]
+  expected_tables: [ fct_order_items, fct_orders ]
   expected_metrics: [ total_merchandise_revenue ]
+  notes: Items carry no date — the join to FCT_ORDERS is mandatory; month via DATE_TRUNC on the purchase date key (no DIM_DATE needed).
   sql: >
-    SELECT foi.ORDER_PURCHASE_MONTH AS month,
+    SELECT DATE_TRUNC('month', fo.ORDER_PURCHASE_DATE_KEY) AS month,
       SUM(foi.ITEM_REVENUE) AS total_merchandise_revenue
-    FROM PULSAR_DB.GOLD.FCT_ORDER_ITEMS foi GROUP BY foi.ORDER_PURCHASE_MONTH ORDER BY month;
+    FROM PULSAR_DB.GOLD.FCT_ORDER_ITEMS foi
+    JOIN PULSAR_DB.GOLD.FCT_ORDERS fo ON foi.ORDER_ID = fo.ORDER_ID
+    GROUP BY 1 ORDER BY 1;

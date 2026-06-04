@@ -27,17 +27,30 @@ def test_contract_has_core_star_shape():
     table_ids = {t["id"] for t in md["tables"]}
     expected = {
         "fct_orders", "fct_order_items", "fct_order_payments", "fct_order_reviews",
-        "dim_customers", "dim_products", "dim_sellers", "bridge_order_categories",
+        "dim_date", "dim_customers", "dim_geography", "dim_categories",
+        "dim_products", "dim_sellers", "bridge_order_categories",
     }
     assert expected <= table_ids
 
     metric_ids = {m["id"] for m in md["certified_metrics"]}
     assert {"total_merchandise_revenue", "total_payment_value", "order_count", "late_delivery_rate"} <= metric_ids
 
-    # every relationship references known tables
-    for rel in md["relationships"]:
-        assert rel["from_table"] in table_ids
-        assert rel["to_table"] in table_ids
+    # the join graph is carried by columns[].references — every edge must point to a known
+    # table id and to a column that exists on that table
+    columns_by_table = {t["id"]: {c["name"] for c in t["columns"]} for t in md["tables"]}
+    reference_count = 0
+    for table in md["tables"]:
+        for column in table["columns"]:
+            ref = column.get("references")
+            if ref is None:
+                continue
+            reference_count += 1
+            assert ref["table"] in table_ids, f'{table["id"]}.{column["name"]} -> unknown table'
+            assert ref["column"] in columns_by_table[ref["table"]], (
+                f'{table["id"]}.{column["name"]} -> {ref["table"]}.{ref["column"]} (unknown column)'
+            )
+    # exhaustive presence: the star carries FK edges (facts -> dims/orders, role-playing dates)
+    assert reference_count >= 15
 
 
 def test_describe_domain_tool_returns_metadata_json():

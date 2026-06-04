@@ -11,10 +11,11 @@
 > - `SEMANTIC_CONTRACT_DETAILS.md` — how to **author** a contract (when/why to populate fields).
 > - `SEMANTIC_AGENT_PROMPTING.md` — *this file*: how the agent **consumes** the contract.
 > - `SEMANTIC_DESIGN_DECISIONS.md` — **why** the format and authoring rules are what they are.
+> - `SEMANTIC_CONTRACT_SHOULD_CONSIDER.md` — options considered/deferred for future enrichment.
 
 The contract does not constrain execution — the agent writes raw SQL. So the contract's guarantees
 only hold if the agent applies the rules below. They fall into four areas: metric authority,
-grain/fan-out, semantic resolution, and disclosure.
+joins/grain/fan-out, semantic resolution, and disclosure.
 
 ---
 
@@ -52,14 +53,24 @@ Rationale: the whole value of `certified_metrics` is trust. A soft metric may be
 but the user must be able to tell a governed number from an agent-constructed one. Silent soft metrics
 would erode the distinction the contract exists to protect.
 
-## 3. Grain & fan-out
+## 3. Joins, grain & fan-out
 
-- Use each table's `grain` to decide aggregation. When the base table has multiple rows per entity
-  (items/payments/bridge rows per order), count the entity with `COUNT(DISTINCT <key>)`, never
-  `COUNT(*)`.
-- Prefer curated `relationships` / `join_paths`; never invent joins. Do not join two fact tables
-  directly — route through their shared key.
-- Honour every `fanout_risk` and bridge `warning`; disclose the attribution a bridge implies.
+- **The join graph is `columns[].references`** — exhaustive, one entry per FK column (including
+  role-playing date keys). The agent must only join along declared references (or the shared
+  `ORDER_ID` between order-grain facts); it must **never invent a join** that has no reference.
+- **Default join semantics (stated once, here):** an FK→PK edge declared by a `references` is a
+  **MANY_TO_ONE LEFT equi-join** on the referenced columns, with low fan-out from the FK side —
+  unless a table `warning` or rule says otherwise. The contract does not repeat these defaults per
+  edge.
+- Use each table's `grain` (omitted = grain is the primary key) to decide aggregation. When the
+  base table has multiple rows per entity (items/payments/bridge rows per order), count the entity
+  with `COUNT(DISTINCT <key>)`, never `COUNT(*)`.
+- **Drill-across:** joining a fine-grain fact to its header (many-to-one) is safe and often
+  mandatory (thin facts carry no dates). Never join two fine-grain facts directly — aggregate each
+  to a common grain, then join the aggregates.
+- **Role-playing:** a dimension referenced by several keys (dates, geography) must be aliased per
+  role when joined more than once in a query.
+- Honour every table/bridge `warning`; disclose the attribution a bridge implies.
 
 ## 4. Semantic resolution (synonyms, business terms)
 

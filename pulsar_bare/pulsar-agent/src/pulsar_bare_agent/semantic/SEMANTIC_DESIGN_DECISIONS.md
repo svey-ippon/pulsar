@@ -10,6 +10,7 @@
 > - `SEMANTIC_CONTRACT_DETAILS.md` — how to **author** a contract (when/why to populate fields).
 > - `SEMANTIC_AGENT_PROMPTING.md` — how the agent **consumes** the contract (out-of-YAML rules).
 > - `SEMANTIC_DESIGN_DECISIONS.md` — *this file*: the rationale behind the format and authoring rules.
+> - `SEMANTIC_CONTRACT_SHOULD_CONSIDER.md` — options considered/deferred for future enrichment.
 
 Guiding principle behind most entries: **a field earns its place only when it varies and changes the
 SQL the agent writes.** Constant, always-true, or trivially derivable fields are prompt noise.
@@ -38,3 +39,31 @@ SQL the agent writes.** Constant, always-true, or trivially derivable fields are
 - **Optional, value-only semantic enrichment.** Driven by the bootstrap-from-gold reality: structure
   is free, meaning is expensive and must be reliable. The contract is valid with structure alone;
   enrichment is added only when trustworthy and non-inferable.
+
+---
+
+Entries below date from the **contract v2 rewrite**, after the gold layer was redesigned as a pure
+Kimball star (thin facts, conformed dimensions — see `transformations/docs/GOLD_MODEL_TARGET.md`).
+
+- **Contract v2 follows the pure-Kimball gold.** The gold redesign moved every analytical attribute
+  behind a join (the explicit goal: stress-test the agent's joins). The contract therefore shifted
+  its weight from describing denormalized columns to describing **join discipline**: mandatory
+  header joins (items carry no dates), drill-across, role-playing, bridge allocation.
+- **Join layer = exhaustive `references` only (basic version).** `relationships` and `join_paths`
+  were REMOVED from the format. Rationale: `references` is the cheap, exhaustive, auto-derivable
+  structural layer read in-place on the column; per-edge metadata was constant defaults
+  (MANY_TO_ONE/LEFT/LOW) restated 7 times. The default is now stated once in
+  `SEMANTIC_AGENT_PROMPTING.md`; deviations are table `warnings` + `sql_generation_rules`. The
+  richer layers analysed (relationships on derogation, curated join_paths, role formalization) are
+  catalogued in `SEMANTIC_CONTRACT_SHOULD_CONSIDER.md`, to be added only when the eval shows the
+  agent failing without them.
+- **Derivations removed from gold live as conventions + certified metrics.** Derived columns
+  stripped from the star (delivery status from `DELAY_DAYS`, negative review = score ≤ 2,
+  installment buckets, item value with freight) are encoded as prose `conventions` (the derivation
+  rules) plus `certified_metrics` for the trap-prone aggregates (`late_delivery_rate`,
+  `negative_review_rate`). Filters stay prose; ratios get certified expressions.
+- **Date convention: date functions on keys; `dim_date` only for calendar attributes.** Facts carry
+  `*_DATE_KEY` (DATE). Simple month/year grouping = `DATE_TRUNC`/`YEAR` on the key; joining
+  `dim_date` is reserved for calendar attributes (day name, weekend, week), aliased per role. This
+  is a *disclosed default*, not a constraint — the agent may join `dim_date` when the question
+  needs it.
