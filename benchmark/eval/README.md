@@ -1,12 +1,15 @@
 # FieldOps eval items
 
-The benchmark's question set (FIELDOPS_SPEC.md §4/§7): **31 items** — 16 traps +
-15 controls — across the six families of `TRAP_FAMILIES.md`.
+The benchmark's question set (FIELDOPS_SPEC.md §4/§7): **33 items** — 17 traps +
+16 controls — across the six families of `TRAP_FAMILIES.md`, plus a **probe
+layer**: each convention has exactly one item testing it in isolation (see
+`ITEMS.md`, "Prerequisite probes").
 
 ## Layout
 
 | File | Content |
 |---|---|
+| `ITEMS.md` | **Human-readable catalogue**: per family, what each item tests, the verbatim question, the required conventions. |
 | `items/family_*.yml` | **Authored, frozen.** Questions, certified SQL, naive signatures, pass criteria. Never edited after materialization without rebuilding answers. |
 | `conventions.yml` | The conventions the contracts MUST carry — coverage checklist for `fieldops.yaml` (pulsar) and the semantic view (SI). Each convention lists the items that depend on it. |
 | `answers.yml` | **Generated, never hand-edited** (lockfile pattern). Written by `fieldops-eval-build`: expected answers, signature values, divergence verdicts, build metadata. |
@@ -26,6 +29,12 @@ The benchmark's question set (FIELDOPS_SPEC.md §4/§7): **31 items** — 16 tra
 - `requires_conventions` ties an item to `conventions.yml`: if a contract
   omits one of those conventions, the dependent items are unfair by
   construction.
+- `probes: <convention-id>` marks the item as that convention's **prerequisite
+  probe** (one per convention, consistency with `conventions.yml` validated by
+  the builder). Probe fails → the convention is not held: dependent failures
+  attributed to it are expected. Probe passes but a dependent item fails on
+  that signature → **composition failure** (rule held in isolation, lost under
+  complexity).
 - `pass_criterion: numeric` items are compared within `tolerance`
   (exact / relative / absolute); `behavioural` items (family F traps) are
   human-scored against `expected_behaviour`.

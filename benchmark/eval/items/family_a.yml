@@ -9,6 +9,7 @@ items:
     capability: "resolve 'customer' to the contract-holding client, not the site"
     question: "How many customers do we have?"
     control_id: A1-C
+    probes: CV-2
     requires_conventions: [CV-2]
     pass_criterion: numeric
     tolerance: { mode: exact }
@@ -119,3 +120,78 @@ items:
       select round(avg(duration_hours), 2) as answer
       from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
       where completed_date_key is not null
+
+  - id: A4-T
+    family: A
+    kind: trap
+    capability: "time-scope anchor: undated measures (revenue/lines/hours) anchor on the completed date"
+    question: "What was our total service revenue in November 2018?"
+    control_id: A4-C
+    probes: GC-REV-ANCHOR
+    requires_conventions: [CV-1, GC-REV-ANCHOR]
+    pass_criterion: numeric
+    tolerance: { mode: relative, value: 0.005 }
+    certified_sql: |
+      with wo_rev as (
+          select
+              wo.work_order_id,
+              wo.completed_date_key,
+              coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as revenue
+          from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+              on wo.work_order_id = l.work_order_id
+          where wo.completed_date_key is not null
+          group by wo.work_order_id, wo.completed_date_key
+      )
+      select round(sum(revenue), 2) as answer
+      from wo_rev
+      where completed_date_key >= '2018-11-01' and completed_date_key < '2018-12-01'
+    naive_signatures:
+      - indicates: GC-REV-ANCHOR
+        description: "anchored on the opened date instead of the completed date"
+        sql: |
+          with wo_rev as (
+              select
+                  wo.work_order_id,
+                  wo.opened_date_key,
+                  coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as revenue
+              from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+              left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+                  on wo.work_order_id = l.work_order_id
+              group by wo.work_order_id, wo.opened_date_key
+          )
+          select round(sum(revenue), 2) as answer
+          from wo_rev
+          where opened_date_key >= '2018-11-01' and opened_date_key < '2018-12-01'
+      - indicates: B1
+        description: "call-out fees excluded (completed anchor, lines only)"
+        sql: |
+          select round(sum(l.line_amount), 2) as answer
+          from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+          inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+              on l.work_order_id = wo.work_order_id
+          where wo.completed_date_key >= '2018-11-01' and wo.completed_date_key < '2018-12-01'
+
+  - id: A4-C
+    family: A
+    kind: control
+    capability: "explicit anchor in the question: no convention needed"
+    question: "What was our service revenue from work orders completed in November 2018?"
+    requires_conventions: [CV-1]
+    pass_criterion: numeric
+    tolerance: { mode: relative, value: 0.005 }
+    certified_sql: |
+      with wo_rev as (
+          select
+              wo.work_order_id,
+              wo.completed_date_key,
+              coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as revenue
+          from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+              on wo.work_order_id = l.work_order_id
+          where wo.completed_date_key is not null
+          group by wo.work_order_id, wo.completed_date_key
+      )
+      select round(sum(revenue), 2) as answer
+      from wo_rev
+      where completed_date_key >= '2018-11-01' and completed_date_key < '2018-12-01'

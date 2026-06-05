@@ -12,6 +12,24 @@ Ask each question verbatim, paste the agent's figure/behaviour, then score:
   disclosed proxies (F3) as secondary observations.
 - **Family F score is paired**: F*n* counts as PASS only if F*n*-T **and**
   F*n*-C both pass (calibration, not temperament).
+- **Score the probes first** (section below): a failed probe means the
+  convention is NOT HELD — on dependent items, failures attributed to that
+  convention are expected (don't double-count them); a passed probe followed
+  by a dependent failure on the same signature is a **composition failure**
+  (note it as such).
+
+## Prerequisite probes (score these first)
+
+| Probe | Convention | Held? | Notes |
+|---|---|---|---|
+| B1-T | CV-1 (fee in revenue) | | |
+| A1-T | CV-2 (customer = client) | | |
+| B2-T | CV-3 (late, business days + grace) | | |
+| A4-T | GC-REV-ANCHOR (completed-date anchor) | | |
+| D3-T | GC-SURVEY-LATEST (latest response) | | |
+| E1-T | GC-DELAY-COMPLETED (completed-only stats) | | |
+
+## All items
 
 | Item | Question asked | Agent answer | Verdict (per capability) | Notes |
 |---|---|---|---|---|
@@ -21,6 +39,8 @@ Ask each question verbatim, paste the agent's figure/behaviour, then score:
 | A2-C | | | | |
 | A3-T | | | | |
 | A3-C | | | | |
+| A4-T | | | | |
+| A4-C | | | | |
 | B1-T | | | | |
 | B1-C | | | | |
 | B2-T | | | | |

@@ -1,5 +1,5 @@
 generated_by: fieldops-eval-build — DO NOT EDIT (see eval/README.md)
-built_at: '2026-06-05T09:14:17Z'
+built_at: '2026-06-05T09:45:46Z'
 gold: PULSAR_DB.FIELDOPS_GOLD
 answers:
   A1-T:
@@ -35,6 +35,20 @@ answers:
       diverges: true
   A3-C:
     expected_answer: 5.49
+    signatures: []
+  A4-T:
+    expected_answer: 314346.66
+    signatures:
+    - indicates: GC-REV-ANCHOR
+      description: anchored on the opened date instead of the completed date
+      value: 318330.9
+      diverges: true
+    - indicates: B1
+      description: call-out fees excluded (completed anchor, lines only)
+      value: 279341.92
+      diverges: true
+  A4-C:
+    expected_answer: 314346.66
     signatures: []
   B1-T:
     expected_answer: 3756386.15
