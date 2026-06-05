@@ -82,7 +82,7 @@ tables:
   - { name: SELLER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Seller identifier., references: { table: dim_sellers, column: SELLER_ID } }
   - { name: SHIPPING_LIMIT_DATE_KEY, type: DATE, role: DATE, description: Seller shipping-limit date., references: { table: dim_date, column: DATE_DAY } }
   - { name: ORDER_ITEM_ID, type: NUMBER, role: DEGENERATE_DIMENSION, description: Item sequence number within the order (not unique alone). }
-  - { name: ITEM_REVENUE, type: NUMBER, role: MEASURE, description: Merchandise revenue (ORDER_ITEMS.PRICE), excludes freight. }
+  - { name: ITEM_REVENUE, type: NUMBER, role: MEASURE, description: 'Merchandise revenue (ORDER_ITEMS.PRICE), excludes freight.' }
   - { name: FREIGHT_VALUE, type: NUMBER, role: MEASURE, description: Freight charged for the item. }
 
 - id: fct_order_payments
