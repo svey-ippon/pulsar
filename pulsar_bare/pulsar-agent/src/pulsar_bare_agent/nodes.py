@@ -26,12 +26,35 @@ def make_agent_node(llm_with_tools: Any) -> Callable[[AgentState, RunnableConfig
     return agent_node
 
 
+def _resolve_display_table(args: dict, known_result_ids: set[str]) -> str:
+    """Answer a display_table call. Resolution lives here (not in the tool body) because it
+    needs the conversation state; the table rows reach the UI through the streaming layer and
+    are never echoed back to the model."""
+    result_id = args.get("result_id", "")
+    title = args.get("title", "")
+    if result_id not in known_result_ids:
+        return json.dumps({
+            "status": "error",
+            "error_type": "VALIDATION_ERROR",
+            "message": f"Unknown result_id '{result_id}'.",
+            "hint": "Use the result_id returned by a successful execute_sql call in this conversation.",
+        })
+    return json.dumps({"status": "displayed", "result_id": result_id, "title": title})
+
+
 def make_tool_node(tools_by_name: dict[str, BaseTool]) -> Callable[[AgentState], dict]:
     def tool_node(state: AgentState) -> dict:
         last_ai = cast(AIMessage, state["messages"][-1])
         new_messages: list[BaseMessage] = []
         new_results: list[QueryResult] = []
         for tc in last_ai.tool_calls:
+            if tc["name"] == "display_table":
+                known_ids = {r["result_id"] for r in state["sql_results"]} | {r["result_id"] for r in new_results}
+                result_str = _resolve_display_table(tc["args"], known_ids)
+                new_messages.append(
+                    ToolMessage(content=result_str, tool_call_id=tc["id"], name=tc["name"])
+                )
+                continue
             result_str = tools_by_name[tc["name"]].invoke(tc["args"])
             new_messages.append(
                 ToolMessage(content=result_str, tool_call_id=tc["id"], name=tc["name"])
@@ -41,6 +64,7 @@ def make_tool_node(tools_by_name: dict[str, BaseTool]) -> Callable[[AgentState],
                     parsed = json.loads(result_str)
                     if isinstance(parsed, dict) and parsed.get("status") == "success":
                         new_results.append({
+                            "result_id": parsed.get("result_id", ""),
                             "sql": tc["args"].get("sql", ""),
                             "columns": parsed.get("columns", []),
                             "rows": parsed.get("rows", []),

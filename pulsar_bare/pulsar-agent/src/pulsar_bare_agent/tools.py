@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import uuid
 from typing import Any
 
 from langchain_core.tools import BaseTool, tool
@@ -83,6 +84,13 @@ class ExecuteSqlArgs(BaseModel):
     sql: str = Field(description="A single read-only SQL statement (SELECT or WITH) to run on the gold layer.")
 
 
+class DisplayTableArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result_id: str = Field(description="The result_id of a successful execute_sql call from this conversation.")
+    title: str = Field(description="Short business-language title for the table (e.g. 'Revenue by state — 2019').")
+
+
 def _default_snowflake_client(settings: AgentSettings | None = None) -> SnowflakeClient:
     return SnowflakeClient.from_settings(settings)
 
@@ -91,7 +99,7 @@ def make_tools(
     snowflake_client: SupportsSqlExecution | None = None,
     settings: AgentSettings | None = None,
 ) -> list[BaseTool]:
-    """Return the two iteration-1 tools: describe_domain and execute_sql."""
+    """Return the agent's tools: describe_domain, execute_sql and display_table."""
     resolved_settings = settings or AgentSettings()
     client: SupportsSqlExecution = snowflake_client or _default_snowflake_client(resolved_settings)
     max_rows = resolved_settings.max_result_rows
@@ -161,6 +169,28 @@ def make_tools(
         except SnowflakeServiceError:
             logger.error("Snowflake unavailable during execute_sql", exc_info=True)
             return _UNAVAILABLE
-        return json.dumps({"status": "success", **result}, default=str)
+        result_id = f"r-{uuid.uuid4().hex[:8]}"
+        return json.dumps({"status": "success", "result_id": result_id, **result}, default=str)
 
-    return [describe_domain, execute_sql]
+    @tool(args_schema=DisplayTableArgs)
+    def display_table(result_id: str, title: str) -> str:
+        """Render a previous execute_sql result as a proper table in the user interface.
+
+        Use this to present tabular results (rankings, breakdowns, time series, detail rows)
+        instead of pasting a markdown table in your answer. The UI fetches the rows itself from
+        the referenced result — they are never echoed back to you.
+
+        Returns {"status":"displayed","result_id":...,"title":...} on success, or a
+        VALIDATION_ERROR when the result_id does not match any execute_sql result of this
+        conversation.
+
+        Args:
+            result_id: The result_id of a successful execute_sql call from this conversation.
+            title: Short business-language title for the table.
+        """
+        # Resolution needs the conversation state (the list of stored query results), which
+        # tools cannot see: the agent's tool node intercepts display_table calls and answers
+        # them itself. This body only exists for direct invocation outside the graph.
+        raise NotImplementedError("display_table is resolved by the agent tool node, not invoked directly.")
+
+    return [describe_domain, execute_sql, display_table]

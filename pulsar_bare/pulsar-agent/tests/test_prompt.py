@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+from pulsar_bare_agent.catalog import list_domain_ids
 from pulsar_bare_agent.prompt import build_system_prompt
 
 
 def test_prompt_lists_every_domain():
     prompt = build_system_prompt()
-    assert "olist_sales" in prompt
-    assert "fieldops" in prompt
+    domain_ids = list_domain_ids()
+    assert "fieldops" in domain_ids
+    for domain_id in domain_ids:
+        assert domain_id in prompt
+
+
+def test_prompt_declares_the_three_tools():
+    prompt = build_system_prompt()
+    for tool_name in ("describe_domain", "execute_sql", "display_table"):
+        assert tool_name in prompt
 
 
 def test_prompt_carries_no_domain_semantics():

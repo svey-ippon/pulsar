@@ -84,3 +84,14 @@ def test_execute_sql_runs_valid_query():
     assert out["row_count"] == 1
     assert out["rows"] == [{"N": 1}]
     assert client.calls == ["SELECT 1 AS n"]
+
+
+def test_execute_sql_success_carries_a_result_id():
+    """display_table references results by id, so every successful run must mint one."""
+    client = _FakeClient()
+    execute_sql = _get_tool(make_tools(snowflake_client=client), "execute_sql")
+    first = json.loads(execute_sql.invoke({"sql": "SELECT 1 AS n"}))
+    second = json.loads(execute_sql.invoke({"sql": "SELECT 2 AS n"}))
+    assert first["result_id"].startswith("r-")
+    assert second["result_id"].startswith("r-")
+    assert first["result_id"] != second["result_id"]

@@ -76,14 +76,15 @@ def stream_question(
     checkpointer: Any = None,
     settings: AgentSettings | None = None,
 ) -> Generator[dict[str, Any], None, None]:
-    """Yield tool-call, text-token, tool-result, and answer events.
+    """Yield tool-call, text-token, tool-result, display and answer events.
 
     Yields dicts with shape:
       {"type": "tool_call",   "tool": str, "args": dict, "id": str}
-      {"type": "tool_result", "id": str,   "content": str}
-      {"type": "reasoning_token", "content": str}
-      {"type": "answer_token",    "content": str}
-      {"type": "answer",      "answer": dict}
+      {"type": "tool_result", "id": str, "tool": str, "content": str}
+      {"type": "display_table", "id": str, "result_id": str, "title": str,
+       "sql": str, "columns": list, "rows": list, "row_count": int}
+      {"type": "text_token",  "content": str}   # per-token assistant text
+      {"type": "answer",      "answer": dict}   # final consolidated answer
     """
     graph = build_graph(
         snowflake_client=snowflake_client,

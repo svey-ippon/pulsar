@@ -8,6 +8,7 @@ from langgraph.graph.message import add_messages
 
 
 class QueryResult(TypedDict):
+    result_id: str
     sql: str
     columns: list[dict]
     rows: list[dict]
