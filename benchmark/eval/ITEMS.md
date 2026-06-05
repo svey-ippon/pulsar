@@ -88,7 +88,7 @@ its own intuition.*
 
 | Item | Kind | What it tests | Question | Required conventions |
 |---|---|---|---|---|
-| B1-T | trap | revenue **includes** the call-out fee, against the exclude-transport prior (and against our own Olist convention) | "What was our total service revenue in 2019?" | CV-1, GC-REV-ANCHOR |
+| B1-T | trap | revenue **includes** the call-out fee, against the exclude-transport prior | "What was our total service revenue in 2019?" | CV-1, GC-REV-ANCHOR |
 | B1-C | control | computing the fees directly when asked | "What was the total amount of call-out fees charged on interventions completed in 2019?" | GC-REV-ANCHOR |
 | B2-T | trap | "late" = `sla_delay_bdays > 2` (business days, promised anchor, grace), against the calendar/zero-grace prior | "What percentage of work orders completed in 2018 were late?" | CV-3, GC-DELAY-COMPLETED |
 | B2-C | control | using `sla_delay_bdays` directly (note: the true answer is *negative* — most WOs finish early) | "What is the average SLA delay in business days for work orders completed in 2018?" | GC-DELAY-COMPLETED |
