@@ -170,6 +170,9 @@ Structural choices made in the DBML:
 
 ## 4. Trap catalogue
 
+> What each family actually tests (which layer of the system it loads, and how
+> to read per-family scores): [`TRAP_FAMILIES.md`](TRAP_FAMILIES.md).
+
 **Sizing policy (settled): trap + control.** Every trapped item gets an easy "control"
 twin exercising the same capability without the trap (e.g. C2 trapped "revenue by
 category" + control "work-order count by category", weight-free). The control
@@ -254,7 +257,8 @@ default — they are not anti-prior and not counted in this dose.
    diverge beyond its threshold (e.g. ≥ 10% relative or a changed ranking). The asserts
    run against the **built gold** (post-dbt — where the pairs are defined); a generation
    that fails an assertion is rejected and retuned. Divergence is a verified property of
-   the dataset, not a hope.
+   the dataset, not a hope. Implemented as pre-flight acceptance gates in the generator —
+   coverage table and definitions in [`DIVERGENCE_CHECKS.md`](DIVERGENCE_CHECKS.md).
 3. **Ground truth artifacts**: for each eval item, a reference SQL (the certified path)
    executed against the generated data; expected answers stored alongside the item (§7).
 4. **Volumetry (settled)**: ~10k work orders, ~35k lines, ~12k payments, ~6k survey

@@ -16,8 +16,10 @@ uv run pytest                       # determinism + invariants + divergence chec
 ```
 
 The CLI generates in memory, runs the **divergence pre-flight checks**
-(spec §6.2) and only writes the seeds when every check passes. A failing
-generation is rejected: retune `config.py`, regenerate.
+(spec §6.2 — acceptance gates on the *data*, not code tests; coverage table in
+[`../DIVERGENCE_CHECKS.md`](../DIVERGENCE_CHECKS.md)) and only writes the seeds
+when every check passes. A failing generation is rejected: retune `config.py`,
+regenerate.
 
 ## Design
 
