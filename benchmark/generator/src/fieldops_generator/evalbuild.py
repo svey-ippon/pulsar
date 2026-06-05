@@ -54,6 +54,7 @@ class Item:
     naive_signatures: list[dict[str, Any]] = field(default_factory=list)
     control_id: str | None = None
     requires_conventions: list[str] = field(default_factory=list)
+    requires_instructions: list[str] = field(default_factory=list)
 
 
 def load_items(eval_dir: Path) -> list[Item]:
@@ -73,6 +74,7 @@ def load_items(eval_dir: Path) -> list[Item]:
                     naive_signatures=raw.get("naive_signatures", []),
                     control_id=raw.get("control_id"),
                     requires_conventions=raw.get("requires_conventions", []),
+                    requires_instructions=raw.get("requires_instructions", []),
                     raw=raw,
                 )
             )
@@ -84,10 +86,19 @@ def load_conventions(eval_dir: Path) -> dict[str, dict[str, Any]]:
     return {c["id"]: c for c in doc["conventions"]}
 
 
+def load_instructions(eval_dir: Path) -> dict[str, dict[str, Any]]:
+    doc = yaml.safe_load((eval_dir / "instructions.yml").read_text())
+    return {i["id"]: i for i in doc["instructions"]}
+
+
 # ── validation ───────────────────────────────────────────────────────────────
 
 
-def validate(items: list[Item], conventions: dict[str, dict[str, Any]]) -> list[str]:
+def validate(
+    items: list[Item],
+    conventions: dict[str, dict[str, Any]],
+    instructions: dict[str, dict[str, Any]],
+) -> list[str]:
     errors: list[str] = []
     ids = [i.id for i in items]
     if len(ids) != len(set(ids)):
@@ -99,6 +110,9 @@ def validate(items: list[Item], conventions: dict[str, dict[str, Any]]) -> list[
         for conv in item.requires_conventions:
             if conv not in conventions:
                 errors.append(f"{item.id}: unknown convention {conv}")
+        for instr in item.requires_instructions:
+            if instr not in instructions:
+                errors.append(f"{item.id}: unknown instruction {instr}")
         if item.pass_criterion == "numeric" and not item.certified_sql:
             errors.append(f"{item.id}: numeric item without certified_sql")
         if item.pass_criterion == "behavioural" and not item.raw.get("expected_behaviour"):
@@ -179,7 +193,7 @@ def diverges(certified: Answer, signature: Answer, tolerance: dict[str, Any]) ->
 
 def build(eval_dir: Path, verify_only: bool) -> int:
     items = load_items(eval_dir)
-    errors = validate(items, load_conventions(eval_dir))
+    errors = validate(items, load_conventions(eval_dir), load_instructions(eval_dir))
     if errors:
         print("Item validation FAILED:")
         for error in errors:

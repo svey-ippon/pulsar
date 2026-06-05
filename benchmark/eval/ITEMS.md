@@ -1,10 +1,11 @@
 # Eval items — human-readable catalogue
 
-The 33 questions of the FieldOps benchmark (17 traps + 16 controls), as
+The 31 questions of the FieldOps benchmark (16 traps + 15 controls), as
 authored in `items/family_*.yml`. What each family loads is analyzed in
 [`../TRAP_FAMILIES.md`](../TRAP_FAMILIES.md); expected answers live in
 `answers.yml` (generated). This document is the readable view: per family, what
-each item tests, the verbatim question, and the conventions it requires.
+each item tests, the verbatim question, and the conventions/instructions it
+requires.
 
 ## What "required conventions" means
 
@@ -39,6 +40,26 @@ A reading note on conjunctive items: every "revenue" question necessarily
 embeds CV-1 and GC-REV-ANCHOR on top of its own trap. The stored naive
 signatures keep the diagnosis clean: the wrong figure identifies *which* rule
 was broken (see `README.md`).
+
+## What "required instructions" means
+
+The agent-instruction counterpart of required conventions, used by family F. A
+required instruction is **a behaviour the agent's instructions must
+prescribe** for the item to be fair: on the pulsar side it lives in the system
+prompt, on the Snowflake side in the agent's `instructions.response` /
+`instructions.orchestration`. As with conventions, it is not what the item
+tests — but **without the prescription, there is no correct behaviour to
+give**, and a failure measures the prompt author's omission. Registry:
+`instructions.yml`.
+
+| Id | Prescription |
+|---|---|
+| IN-MISSING | when the model does not provide a needed concept/data/linkage, say precisely what is missing instead of inventing |
+| IN-AMBIGUITY | when two readings differ materially and no convention decides, ask the user (or present both figures labeled) |
+| IN-ADHOC-DISCLOSURE | any ad-hoc aggregation or proxy must be disclosed as such |
+
+The split keeps family F honest: the *detection* of absence or ambiguity is a
+semantic capability under test; only the *response form* is prescribed.
 
 ---
 
@@ -110,20 +131,23 @@ latest-per-key.*
 | E2-T | trap | NULL `part_id` = labor line: a parts ranking must exclude labor lines, otherwise an unclassified NULL bucket tops the list | "Which part family generates the most billed revenue?" | — |
 | E2-C | control | explicit split by line kind | "How many part lines and how many labor lines did we bill on work orders completed in 2019?" | GC-REV-ANCHOR |
 
-## Family F — Behaviour: refusal, missing data, ambiguity
+## Family F — Behaviour: missing data & ambiguity
 
-*Know when NOT to answer. Traps reward refusing / stating the gap / asking;
-controls test the INVERSE calibration — they look like their trap twin but must
-be answered, so systematic prudence scores zero. Scored in pairs (T and C must
-both pass). Detection of a missing concept (F1, F3) is contract comprehension;
-only the response form is prompt-driven.*
+*The hard work here is SEMANTIC: detect from the contract that a concept is
+absent (F1, F3) or that two readings are materially different with no
+convention to decide (F4). Only the response form (state the gap, ask,
+disclose) is prescribed by the required instructions. Controls test the
+INVERSE calibration — they look like their trap twin but must be answered, so
+systematic prudence scores zero. Scored in pairs (T and C must both pass).*
 
-| Item | Kind | What it tests | Question | Expected behaviour |
-|---|---|---|---|---|
-| F1-T | trap | semantic-perimeter awareness: "warranty" does not exist in the model | "What was our warranty-intervention revenue in 2018?" | state the data does not exist; any figure = fail |
-| F1-C | control | no over-refusal: the look-alike concept DOES exist (`work_order_type`) | "What was our revenue from corrective work orders in 2018?" | answer (requires CV-1, GC-REV-ANCHOR) |
-| F2-T | trap | refuse forecasts | "Forecast the number of work orders we will open next quarter." | refuse; historical context OK, a forecast figure = fail |
-| F2-C | control | no over-refusal: historical counting is in scope | "How many work orders did we open in Q4 2019?" | answer |
-| F3-T | trap | underivable metric: first-time fix rate needs the WO↔equipment linkage, which is not in the model | "What is our first-time fix rate?" | state underivable AND name the missing linkage; a disclosed proxy on top is tolerated |
-| F4-T | trap | raise material ambiguity: "resolution time" = opened→completed or opened→validated, no convention decides | "What is our average resolution time?" | ask the user to choose, or present both figures labeled; silently picking one = fail |
-| F4-C | control | no over-asking: the anchors are explicit in the question | "What is the average time from opening to completion of a work order, in days?" | answer without asking |
+| Item | Kind | What it tests | Question | Expected behaviour | Required instructions |
+|---|---|---|---|---|---|
+| F1-T | trap | semantic-perimeter awareness: "warranty" does not exist in the model | "What was our warranty-intervention revenue in 2018?" | state the data does not exist; any figure = fail | IN-MISSING |
+| F1-C | control | no over-refusal: the look-alike concept DOES exist (`work_order_type`) | "What was our revenue from corrective work orders in 2018?" | answer (requires CV-1, GC-REV-ANCHOR) | — |
+| F3-T | trap | underivable metric: first-time fix rate needs the WO↔equipment linkage, which is not in the model | "What is our first-time fix rate?" | state underivable AND name the missing linkage; a disclosed proxy on top is tolerated | IN-MISSING, IN-ADHOC-DISCLOSURE |
+| F4-T | trap | raise material ambiguity: "resolution time" = opened→completed or opened→validated, no convention decides | "What is our average resolution time?" | ask the user to choose, or present both figures labeled; silently picking one = fail | IN-AMBIGUITY |
+| F4-C | control | no over-asking: the anchors are explicit in the question | "What is the average time from opening to completion of a work order, in days?" | answer without asking | — |
+
+*(A former F2 pair — "refuse forecasts" — was removed: task-type refusal is
+pure agent policy with zero semantic content; it belongs to an agent-behaviour
+eval, not a semantic-layer benchmark.)*

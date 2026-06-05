@@ -44,8 +44,6 @@ Ask each question verbatim, paste the agent's figure/behaviour, then score:
 | E2-C | | | | |
 | F1-T | | | | |
 | F1-C | | | | |
-| F2-T | | | | |
-| F2-C | | | | |
 | F3-T | | | | |
 | F4-T | | | | |
 | F4-C | | | | |

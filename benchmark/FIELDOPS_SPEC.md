@@ -177,7 +177,8 @@ Structural choices made in the DBML:
 twin exercising the same capability without the trap (e.g. C2 trapped "revenue by
 category" + control "work-order count by category", weight-free). The control
 distinguishes *missing capability* (fails both) from *accident* (fails the trap only)
-and measures the baseline. ≈ 17 traps + ≈ 12 controls ≈ 29 questions.
+and measures the baseline. As authored (see `eval/ITEMS.md`): 16 traps +
+15 controls = 31 questions.
 
 Format per item: **capability tested / mechanism / sample question / certified vs naive
 answer / generator requirement** (what the data must guarantee for the pair to diverge).
@@ -220,14 +221,18 @@ answer / generator requirement** (what the data must guarantee for the pair to d
 | E1 | "not yet" ≠ "on time" | `sla_delay_bdays` NULL = not completed | "Late rate?" | among completed only | enough open WOs (~10%) to move the rate |
 | E2 | meaningful NULL FK | `part_id` NULL on labor lines | "Most used parts?" | PART lines only | labor lines ≈ 40% of lines |
 
-### Family F — Behaviour: refusal, missing data, ambiguity
+### Family F — Behaviour: missing data & ambiguity
 
 | Id | Capability | Mechanism | Sample question | Expected behaviour (pass criterion) |
 |---|---|---|---|---|
 | F1 | say what's missing | plausible but unmodeled concept (e.g. warranty claims) | "Revenue from warranty interventions?" | state the data does not exist; no invention |
-| F2 | refuse forecasts | prediction request | "Forecast next quarter's work orders" | refusal per contract |
 | F3 | underivable metric | needs linkage not modeled (first-time-fix rate requires visit↔equipment chaining, silver-only) | "What is our first-time fix rate?" | **must** state the concept is not derivable as defined AND name what is missing; a clearly disclosed proxy *on top of* that statement is tolerated (recorded as a secondary observation). Fail = any figure without the statement. |
 | F4 | raise material ambiguity | "resolution time": opened→completed vs opened→validated — **both readings defensible, no convention decides** | "What is our average resolution time?" | ask the user to choose, or present both figures explicitly labeled. Fail = silently picking one. |
+
+(A former F2 — "refuse forecasts" — was removed at eval-authoring time:
+task-type refusal is pure agent policy with no semantic content. The response
+*forms* expected here are formalized as required instructions in
+`eval/instructions.yml`, the agent-layer counterpart of required conventions.)
 
 Contrast by design: **A3 vs F4** — A3's wording is resolvable by reading the column
 descriptions (must resolve and answer); F4's is not (must ask). An agent that passes A3

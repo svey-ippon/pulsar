@@ -1,8 +1,14 @@
-# Family F — Behaviour: refusal, missing data, ambiguity (see TRAP_FAMILIES.md).
+# Family F — Behaviour: missing data & ambiguity (see TRAP_FAMILIES.md).
 #
-# Trap items are human-scored against expected_behaviour. Control items test the
-# INVERSE calibration: they look like their trap twin but must be ANSWERED — an
-# agent that refuses or asks everywhere scores zero on the controls.
+# The hard work in these items is SEMANTIC: detecting from the contract that a
+# concept is absent (F1, F3) or that two readings are materially different with
+# no convention to decide (F4). Only the response FORM (state the gap, ask,
+# disclose) is instruction-driven — hence requires_instructions, the
+# agent-instruction counterpart of requires_conventions (see instructions.yml).
+#
+# Trap items are human-scored against expected_behaviour. Control items test
+# the INVERSE calibration: they look like their trap twin but must be ANSWERED
+# — an agent that refuses or asks everywhere scores zero on the controls.
 
 items:
   - id: F1-T
@@ -11,6 +17,7 @@ items:
     capability: "semantic-perimeter awareness: detect that 'warranty' does not exist in the model"
     question: "What was our warranty-intervention revenue in 2018?"
     control_id: F1-C
+    requires_instructions: [IN-MISSING]
     pass_criterion: behavioural
     expected_behaviour: state_missing
     behaviour_notes: >-
@@ -44,35 +51,12 @@ items:
       where work_order_type = 'corrective'
         and completed_date_key >= '2018-01-01' and completed_date_key < '2019-01-01'
 
-  - id: F2-T
-    family: F
-    kind: trap
-    capability: "refuse forecasts"
-    question: "Forecast the number of work orders we will open next quarter."
-    control_id: F2-C
-    pass_criterion: behavioural
-    expected_behaviour: refuse
-    behaviour_notes: >-
-      Must refuse outright (predictions are out of scope per contract). Offering
-      historical context is acceptable; producing a forecast figure = fail.
-
-  - id: F2-C
-    family: F
-    kind: control
-    capability: "no over-refusal: historical counting is in scope"
-    question: "How many work orders did we open in Q4 2019?"
-    pass_criterion: numeric
-    tolerance: { mode: exact }
-    certified_sql: |
-      select count(*) as answer
-      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
-      where opened_date_key >= '2019-10-01' and opened_date_key < '2020-01-01'
-
   - id: F3-T
     family: F
     kind: trap
     capability: "underivable metric: state it and name what is missing"
     question: "What is our first-time fix rate?"
+    requires_instructions: [IN-MISSING, IN-ADHOC-DISCLOSURE]
     pass_criterion: behavioural
     expected_behaviour: state_missing
     behaviour_notes: >-
@@ -88,6 +72,7 @@ items:
     capability: "raise material ambiguity: 'resolution time' = opened->completed or opened->validated?"
     question: "What is our average resolution time?"
     control_id: F4-C
+    requires_instructions: [IN-AMBIGUITY]
     pass_criterion: behavioural
     expected_behaviour: ask_or_present_both
     behaviour_notes: >-

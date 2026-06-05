@@ -1,5 +1,5 @@
 generated_by: fieldops-eval-build — DO NOT EDIT (see eval/README.md)
-built_at: '2026-06-05T09:45:46Z'
+built_at: '2026-06-05T12:55:32Z'
 gold: PULSAR_DB.FIELDOPS_GOLD
 answers:
   A1-T:
@@ -202,9 +202,6 @@ answers:
     signatures: []
   F1-C:
     expected_answer: 2678818.83
-    signatures: []
-  F2-C:
-    expected_answer: 797
     signatures: []
   F4-C:
     expected_answer: 9.53

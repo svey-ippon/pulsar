@@ -1,7 +1,7 @@
 # FieldOps eval items
 
-The benchmark's question set (FIELDOPS_SPEC.md §4/§7): **33 items** — 17 traps +
-16 controls — across the six families of `TRAP_FAMILIES.md`.
+The benchmark's question set (FIELDOPS_SPEC.md §4/§7): **31 items** — 16 traps +
+15 controls — across the six families of `TRAP_FAMILIES.md`.
 
 ## Layout
 
@@ -9,7 +9,8 @@ The benchmark's question set (FIELDOPS_SPEC.md §4/§7): **33 items** — 17 tra
 |---|---|
 | `ITEMS.md` | **Human-readable catalogue**: per family, what each item tests, the verbatim question, the required conventions. |
 | `items/family_*.yml` | **Authored, frozen.** Questions, certified SQL, naive signatures, pass criteria. Never edited after materialization without rebuilding answers. |
-| `conventions.yml` | The conventions the contracts MUST carry — coverage checklist for `fieldops.yaml` (pulsar) and the semantic view (SI). Each convention lists the items that depend on it. |
+| `conventions.yml` | The conventions the SEMANTIC MODEL must define — coverage checklist for `fieldops.yaml` (pulsar) and the semantic view (SI). Each convention lists the items that depend on it. |
+| `instructions.yml` | The behaviours the AGENT INSTRUCTIONS must prescribe (family F) — coverage checklist for the pulsar system prompt and the SI agent `instructions`. |
 | `answers.yml` | **Generated, never hand-edited** (lockfile pattern). Written by `fieldops-eval-build`: expected answers, signature values, divergence verdicts, build metadata. |
 | `SCORING.md` | The manual scoring sheet template used during an eval run. |
 
@@ -28,6 +29,11 @@ The benchmark's question set (FIELDOPS_SPEC.md §4/§7): **33 items** — 17 tra
   semantic model must DEFINE for the question to be answerable. Not a tested
   capability — but without the convention defined in the contract, there is no
   correct answer, and the failure is the contract author's, not the agent's.
+- `requires_instructions` (family F) ties an item to `instructions.yml`: the
+  same idea one layer up — behaviours the agent instructions must PRESCRIBE
+  (state what's missing, raise ambiguity, disclose ad-hoc figures). The
+  *detection* of absence/ambiguity stays a tested semantic capability; only
+  the response form is prescribed.
 - `pass_criterion: numeric` items are compared within `tolerance`
   (exact / relative / absolute); `behavioural` items (family F traps) are
   human-scored against `expected_behaviour`.
