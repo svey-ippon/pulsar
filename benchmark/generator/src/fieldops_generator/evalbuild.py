@@ -53,7 +53,6 @@ class Item:
     tolerance: dict[str, Any] = field(default_factory=lambda: {"mode": "exact"})
     naive_signatures: list[dict[str, Any]] = field(default_factory=list)
     control_id: str | None = None
-    probes: str | None = None
     requires_conventions: list[str] = field(default_factory=list)
 
 
@@ -73,7 +72,6 @@ def load_items(eval_dir: Path) -> list[Item]:
                     tolerance=raw.get("tolerance", {"mode": "exact"}),
                     naive_signatures=raw.get("naive_signatures", []),
                     control_id=raw.get("control_id"),
-                    probes=raw.get("probes"),
                     requires_conventions=raw.get("requires_conventions", []),
                     raw=raw,
                 )
@@ -101,26 +99,12 @@ def validate(items: list[Item], conventions: dict[str, dict[str, Any]]) -> list[
         for conv in item.requires_conventions:
             if conv not in conventions:
                 errors.append(f"{item.id}: unknown convention {conv}")
-        if item.probes and item.probes not in conventions:
-            errors.append(f"{item.id}: probes unknown convention {item.probes}")
         if item.pass_criterion == "numeric" and not item.certified_sql:
             errors.append(f"{item.id}: numeric item without certified_sql")
         if item.pass_criterion == "behavioural" and not item.raw.get("expected_behaviour"):
             errors.append(f"{item.id}: behavioural item without expected_behaviour")
         if item.kind == "trap" and item.pass_criterion == "numeric" and not item.naive_signatures:
             errors.append(f"{item.id}: numeric trap without naive_signatures")
-    # probe layer: every convention has exactly one probe item, and the
-    # conventions.yml `probe:` pointer matches the item's `probes:` field
-    probes_by_convention = {i.probes: i.id for i in items if i.probes}
-    for conv_id, conv in conventions.items():
-        declared = conv.get("probe")
-        actual = probes_by_convention.get(conv_id)
-        if declared is None:
-            errors.append(f"{conv_id}: no probe declared in conventions.yml")
-        elif actual != declared:
-            errors.append(f"{conv_id}: probe mismatch (conventions.yml: {declared}, items: {actual})")
-    if len([i for i in items if i.probes]) != len(probes_by_convention):
-        errors.append("a convention has more than one probe item")
     return errors
 
 

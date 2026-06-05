@@ -1,9 +1,7 @@
 # FieldOps eval items
 
 The benchmark's question set (FIELDOPS_SPEC.md §4/§7): **33 items** — 17 traps +
-16 controls — across the six families of `TRAP_FAMILIES.md`, plus a **probe
-layer**: each convention has exactly one item testing it in isolation (see
-`ITEMS.md`, "Prerequisite probes").
+16 controls — across the six families of `TRAP_FAMILIES.md`.
 
 ## Layout
 
@@ -26,15 +24,10 @@ layer**: each convention has exactly one item testing it in isolation (see
   separate *missing capability* (fails both) from *accident* (fails the trap
   only). Family F controls test the **inverse** calibration: they must be
   ANSWERED — refusal or asking is the failure.
-- `requires_conventions` ties an item to `conventions.yml`: if a contract
-  omits one of those conventions, the dependent items are unfair by
-  construction.
-- `probes: <convention-id>` marks the item as that convention's **prerequisite
-  probe** (one per convention, consistency with `conventions.yml` validated by
-  the builder). Probe fails → the convention is not held: dependent failures
-  attributed to it are expected. Probe passes but a dependent item fails on
-  that signature → **composition failure** (rule held in isolation, lost under
-  complexity).
+- `requires_conventions` ties an item to `conventions.yml`: conventions the
+  semantic model must DEFINE for the question to be answerable. Not a tested
+  capability — but without the convention defined in the contract, there is no
+  correct answer, and the failure is the contract author's, not the agent's.
 - `pass_criterion: numeric` items are compared within `tolerance`
   (exact / relative / absolute); `behavioural` items (family F traps) are
   human-scored against `expected_behaviour`.

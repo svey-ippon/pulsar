@@ -9,7 +9,6 @@ items:
     capability: "resolve 'customer' to the contract-holding client, not the site"
     question: "How many customers do we have?"
     control_id: A1-C
-    probes: CV-2
     requires_conventions: [CV-2]
     pass_criterion: numeric
     tolerance: { mode: exact }
@@ -127,7 +126,6 @@ items:
     capability: "time-scope anchor: undated measures (revenue/lines/hours) anchor on the completed date"
     question: "What was our total service revenue in November 2018?"
     control_id: A4-C
-    probes: GC-REV-ANCHOR
     requires_conventions: [CV-1, GC-REV-ANCHOR]
     pass_criterion: numeric
     tolerance: { mode: relative, value: 0.005 }

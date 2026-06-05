@@ -7,7 +7,6 @@ items:
     capability: "NULL sla_delay_bdays = not completed: excluded from punctuality stats, not 'on time'"
     question: "What proportion of our work orders were completed within the SLA?"
     control_id: E1-C
-    probes: GC-DELAY-COMPLETED
     requires_conventions: [CV-3, GC-DELAY-COMPLETED]
     pass_criterion: numeric
     tolerance: { mode: absolute, value: 0.005 }

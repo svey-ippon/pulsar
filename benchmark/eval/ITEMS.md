@@ -3,22 +3,21 @@
 The 33 questions of the FieldOps benchmark (17 traps + 16 controls), as
 authored in `items/family_*.yml`. What each family loads is analyzed in
 [`../TRAP_FAMILIES.md`](../TRAP_FAMILIES.md); expected answers live in
-`answers.yml` (generated). This document is the readable view: the prerequisite
-probes first, then per family: what each item tests, the verbatim question, and
-the conventions it presupposes.
+`answers.yml` (generated). This document is the readable view: per family, what
+each item tests, the verbatim question, and the conventions it requires.
 
 ## What "required conventions" means
 
-A convention listed on an item is **not what the item tests**. It is a
-prerequisite: a documented rule the question silently relies on (which date
-anchors a time scope, what "revenue" includes, which survey response counts).
+A required convention is **something the semantic model defines**, that the
+question needs in order to be answerable: which date anchors a time scope, what
+"revenue" includes, which survey response counts. It is **not what the item
+tests** — but **without the convention defined, there is no correct answer**.
 
 The contract — pulsar `fieldops.yaml` on one side, the Snowflake semantic view
-on the other — **must declare every convention referenced here**. If a contract
-omits one, the dependent items become unfair by construction: the agent would
-be scored against a rule it was never given, and a failure would measure the
-*contract author's* omission, not the agent's capability. The registry
-(`conventions.yml`) is therefore the coverage checklist used when writing the
+on the other — must therefore define every convention referenced here. If a
+contract omits one, the dependent items fail by construction, and the failure
+measures the *contract author's* omission, not the agent's capability. The
+registry (`conventions.yml`) is the coverage checklist used when writing the
 contracts.
 
 The six conventions:
@@ -41,35 +40,6 @@ embeds CV-1 and GC-REV-ANCHOR on top of its own trap. The stored naive
 signatures keep the diagnosis clean: the wrong figure identifies *which* rule
 was broken (see `README.md`).
 
-## Prerequisite probes — testing that the agent HOLDS each convention
-
-Each convention has exactly one **probe**: the item that tests it in maximum
-isolation (`probes:` field, validated by `fieldops-eval-build`). The probes are
-the "prerequisite family" of the benchmark — read them first:
-
-| Convention | Probe | Probe question |
-|---|---|---|
-| CV-1 | B1-T | "What was our total service revenue in 2019?" |
-| CV-2 | A1-T | "How many customers do we have?" |
-| CV-3 | B2-T | "What percentage of work orders completed in 2018 were late?" |
-| GC-REV-ANCHOR | A4-T | "What was our total service revenue in November 2018?" |
-| GC-SURVEY-LATEST | D3-T | "What is our average client satisfaction score?" |
-| GC-DELAY-COMPLETED | E1-T | "What proportion of our work orders were completed within the SLA?" |
-
-How the probe layer changes the reading:
-
-- **Probe fails** → the convention is *not held*: on every dependent item,
-  failures attributed to that convention are **expected** and are not
-  double-counted against the item's own capability.
-- **Probe passes but a dependent item fails on that convention's signature**
-  → a **composition failure**: the agent holds the rule in isolation but loses
-  it when the question gets more complex. This is a distinct, valuable
-  measurement.
-
-Honest limit: isolation is never perfect (B2-T probes CV-3 but consumes
-GC-DELAY-COMPLETED; every revenue probe consumes GC-REV-ANCHOR). Each probe is
-the *least conjunctive item available*; the signatures cover the rest.
-
 ---
 
 ## Family A — Semantic resolution
@@ -80,13 +50,13 @@ read.*
 
 | Item | Kind | What it tests | Question | Required conventions |
 |---|---|---|---|---|
-| A1-T | trap (probe CV-2) | "customer" resolves to the client company, not the site | "How many customers do we have?" | CV-2 |
+| A1-T | trap | "customer" resolves to the client company, not the site | "How many customers do we have?" | CV-2 |
 | A1-C | control | counting sites when sites are asked for | "How many client sites do we serve?" | — |
 | A2-T | trap | "revenue" = service revenue, not collected payments | "What was our total revenue in Q3 2018?" | CV-1, GC-REV-ANCHOR |
 | A2-C | control | computing collected payments when asked explicitly | "How much cash did we collect from clients in Q3 2018?" | — |
 | A3-T | trap | false friend: "hours worked" = `billed_hours` (man-hours), not `duration_hours` (elapsed) — no lexical match, only the column descriptions decide | "How many hours did our technicians work on interventions completed in March 2019?" | GC-REV-ANCHOR |
 | A3-C | control | lexically matched column ("duration" → `duration_hours`) | "What is the average on-site duration of a completed intervention, in hours?" | — |
-| A4-T | trap (probe GC-REV-ANCHOR) | undated measures anchor on the **completed** date (the naive path anchors on the opened date) | "What was our total service revenue in November 2018?" | CV-1, GC-REV-ANCHOR |
+| A4-T | trap | undated measures anchor on the **completed** date (the naive path anchors on the opened date) | "What was our total service revenue in November 2018?" | CV-1, GC-REV-ANCHOR |
 | A4-C | control | explicit anchor in the question: no convention needed, same figure as A4-T | "What was our service revenue from work orders completed in November 2018?" | CV-1 |
 
 ## Family B — Anti-prior conventions
@@ -97,9 +67,9 @@ its own intuition.*
 
 | Item | Kind | What it tests | Question | Required conventions |
 |---|---|---|---|---|
-| B1-T | trap (probe CV-1) | revenue **includes** the call-out fee, against the exclude-transport prior (and against our own Olist convention) | "What was our total service revenue in 2019?" | CV-1, GC-REV-ANCHOR |
+| B1-T | trap | revenue **includes** the call-out fee, against the exclude-transport prior (and against our own Olist convention) | "What was our total service revenue in 2019?" | CV-1, GC-REV-ANCHOR |
 | B1-C | control | computing the fees directly when asked | "What was the total amount of call-out fees charged on interventions completed in 2019?" | GC-REV-ANCHOR |
-| B2-T | trap (probe CV-3) | "late" = `sla_delay_bdays > 2` (business days, promised anchor, grace), against the calendar/zero-grace prior | "What percentage of work orders completed in 2018 were late?" | CV-3, GC-DELAY-COMPLETED |
+| B2-T | trap | "late" = `sla_delay_bdays > 2` (business days, promised anchor, grace), against the calendar/zero-grace prior | "What percentage of work orders completed in 2018 were late?" | CV-3, GC-DELAY-COMPLETED |
 | B2-C | control | using `sla_delay_bdays` directly (note: the true answer is *negative* — most WOs finish early) | "What is the average SLA delay in business days for work orders completed in 2018?" | GC-DELAY-COMPLETED |
 
 ## Family C — Mandatory joins / thin facts
@@ -125,7 +95,7 @@ latest-per-key.*
 | D1-C | control | plain line counting on the same scope | "How many billing lines were recorded on interventions completed in June 2018?" | GC-REV-ANCHOR |
 | D2-T | trap | counting work orders through their lines = COUNT DISTINCT, not row count | "How many work orders completed in 2018 used spare parts?" | GC-REV-ANCHOR |
 | D2-C | control | the exact twin: row counting when LINES are asked for (its answer equals D2-T's naive figure) | "How many spare-part lines were billed on work orders completed in 2018?" | GC-REV-ANCHOR |
-| D3-T | trap (probe GC-SURVEY-LATEST) | survey grain: average over the **latest** response per work order, not over all rows (skewed re-surveys) | "What is our average client satisfaction score?" | GC-SURVEY-LATEST |
+| D3-T | trap | survey grain: average over the **latest** response per work order, not over all rows (skewed re-surveys) | "What is our average client satisfaction score?" | GC-SURVEY-LATEST |
 | D3-C | control | COUNT DISTINCT over the survey fact | "How many work orders received at least one satisfaction survey response?" | — |
 
 ## Family E — NULL semantics
@@ -135,7 +105,7 @@ latest-per-key.*
 
 | Item | Kind | What it tests | Question | Required conventions |
 |---|---|---|---|---|
-| E1-T | trap (probe GC-DELAY-COMPLETED) | NULL `sla_delay_bdays` = not completed: excluded from the denominator, not counted "on time" | "What proportion of our work orders were completed within the SLA?" | CV-3, GC-DELAY-COMPLETED |
+| E1-T | trap | NULL `sla_delay_bdays` = not completed: excluded from the denominator, not counted "on time" | "What proportion of our work orders were completed within the SLA?" | CV-3, GC-DELAY-COMPLETED |
 | E1-C | control | counting the NULLs themselves when asked | "How many work orders are currently open (not yet completed)?" | — |
 | E2-T | trap | NULL `part_id` = labor line: a parts ranking must exclude labor lines, otherwise an unclassified NULL bucket tops the list | "Which part family generates the most billed revenue?" | — |
 | E2-C | control | explicit split by line kind | "How many part lines and how many labor lines did we bill on work orders completed in 2019?" | GC-REV-ANCHOR |

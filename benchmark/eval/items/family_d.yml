@@ -107,7 +107,6 @@ items:
     capability: "survey grain: the LATEST response per work order counts"
     question: "What is our average client satisfaction score?"
     control_id: D3-C
-    probes: GC-SURVEY-LATEST
     requires_conventions: [GC-SURVEY-LATEST]
     pass_criterion: numeric
     tolerance: { mode: absolute, value: 0.05 }

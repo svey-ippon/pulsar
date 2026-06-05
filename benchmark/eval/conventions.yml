@@ -5,13 +5,9 @@
 # and the Snowflake semantic view, walk this list: a missing convention makes
 # the dependent items unfair (the agent would be scored on an undeclared rule).
 #
-# probe: the item that tests this convention in maximum isolation (the
-#   "prerequisite probe"). If the probe fails, the convention is NOT HELD by
-#   the agent: failures attributed to it on dependent items are expected and
-#   are not double-counted against those items' own capability. If the probe
-#   passes but a dependent item fails on this convention's signature, that is
-#   a COMPOSITION failure (rule held in isolation, lost under complexity).
-#   Items <-> probes consistency is validated by fieldops-eval-build.
+# A required convention is something the semantic model DEFINES and that a
+# question needs to be answerable. It is not a capability under test: without
+# the convention defined in the contract, there is no correct answer to give.
 #
 # kind: anti_prior — contradicts an industry default (FIELDOPS_SPEC.md §5, dosed: 3)
 #       ordinary   — resolves an ambiguity without contradicting any default
@@ -19,7 +15,6 @@
 conventions:
   - id: CV-1
     kind: anti_prior
-    probe: B1-T
     statement: >-
       Service revenue INCLUDES the call-out fee: revenue = SUM(line_amount) +
       call-out fees. FieldOps prices interventions all-in.
@@ -27,7 +22,6 @@ conventions:
 
   - id: CV-2
     kind: anti_prior
-    probe: A1-T
     statement: >-
       "Customer" means the contract-holding client company (dim_clients),
       never the site. Counting customers = COUNT(DISTINCT client_id).
@@ -35,7 +29,6 @@ conventions:
 
   - id: CV-3
     kind: anti_prior
-    probe: B2-T
     statement: >-
       "Late" = completed more than 2 business days after the promised date
       (sla_delay_bdays > 2). Business days, promised anchor, 2-day grace.
@@ -43,7 +36,6 @@ conventions:
 
   - id: GC-REV-ANCHOR
     kind: ordinary
-    probe: A4-T
     statement: >-
       Revenue is recognized at completion. Time-scoped questions on revenue,
       billing lines or hours anchor on the work order's completed date
@@ -52,7 +44,6 @@ conventions:
 
   - id: GC-SURVEY-LATEST
     kind: ordinary
-    probe: D3-T
     statement: >-
       Several survey responses per work order are possible (re-surveys); the
       LATEST response (highest response_sequence) is the one that counts.
@@ -60,7 +51,6 @@ conventions:
 
   - id: GC-DELAY-COMPLETED
     kind: ordinary
-    probe: E1-T
     statement: >-
       sla_delay_bdays is NULL when the work order is not completed: delay and
       punctuality statistics are computed among COMPLETED work orders only —

@@ -7,7 +7,6 @@ items:
     capability: "follow CV-1 (revenue INCLUDES the call-out fee) against the exclude-transport prior"
     question: "What was our total service revenue in 2019?"
     control_id: B1-C
-    probes: CV-1
     requires_conventions: [CV-1, GC-REV-ANCHOR]
     pass_criterion: numeric
     tolerance: { mode: relative, value: 0.005 }
@@ -61,7 +60,6 @@ items:
     capability: "follow CV-3 (late = sla_delay_bdays > 2) against the calendar/zero-grace prior"
     question: "What percentage of work orders completed in 2018 were late?"
     control_id: B2-C
-    probes: CV-3
     requires_conventions: [CV-3, GC-DELAY-COMPLETED]
     pass_criterion: numeric
     tolerance: { mode: absolute, value: 0.005 }
