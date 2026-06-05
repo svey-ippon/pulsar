@@ -49,21 +49,80 @@ tables:
   - CALL_OUT_FEE is a HEADER-grain measure (one per work order). Summed through a row-level join to FCT_WORK_ORDER_LINES it is replicated once per line — pre-aggregate the lines to work-order grain first.
   - COMPLETED_DATE_KEY IS NULL identifies open (not yet completed) work orders.
   columns:
-  - { name: WORK_ORDER_ID, type: VARCHAR, role: PRIMARY_KEY, description: Unique work-order identifier (degenerate dimension shared by all work-order-grain facts). }
-  - { name: SITE_ID, type: VARCHAR, role: FOREIGN_KEY, description: Client site where the intervention happens. Client company reached via DIM_SITES.CLIENT_ID., references: { table: dim_sites, column: SITE_ID } }
-  - { name: TECHNICIAN_ID, type: VARCHAR, role: FOREIGN_KEY, description: Lead technician of the dispatched crew (see CREW_SIZE). Depot geography reached via DIM_TECHNICIANS., references: { table: dim_technicians, column: TECHNICIAN_ID } }
-  - { name: OPENED_DATE_KEY, type: DATE, role: DATE, description: Date the work order was opened (request received)., references: { table: dim_date, column: DATE_DAY } }
-  - { name: PROMISED_DATE_KEY, type: DATE, role: DATE, description: Contractual SLA promise date — the anchor for lateness., references: { table: dim_date, column: DATE_DAY } }
-  - { name: SCHEDULED_DATE_KEY, type: DATE, role: DATE, description: Internally scheduled intervention date (planning, NOT the SLA anchor)., references: { table: dim_date, column: DATE_DAY } }
-  - { name: STARTED_DATE_KEY, type: DATE, role: DATE, description: Date work started on site (null until started)., references: { table: dim_date, column: DATE_DAY } }
-  - { name: COMPLETED_DATE_KEY, type: DATE, role: DATE, description: Date the work was completed (null = open work order). Default date for time analysis — revenue is recognized at completion., references: { table: dim_date, column: DATE_DAY } }
-  - { name: VALIDATED_DATE_KEY, type: DATE, role: DATE, description: Date the client signed off the completed work (null until validated; lags completion)., references: { table: dim_date, column: DATE_DAY } }
-  - { name: WORK_ORDER_TYPE, type: VARCHAR, role: DIMENSION, description: 'Intervention type: corrective | preventive | inspection.' }
-  - { name: PRIORITY, type: VARCHAR, role: DIMENSION, description: 'Priority: critical | high | standard.' }
-  - { name: CREW_SIZE, type: NUMBER, role: DIMENSION, description: Number of technicians dispatched (lead + assists). Explains why delivered man-hours exceed on-site elapsed time. }
-  - { name: SLA_DELAY_BDAYS, type: NUMBER, role: MEASURE, description: 'Signed BUSINESS days between promised and completed dates (negative = early). NULL = not completed. "Late" = SLA_DELAY_BDAYS > 2 (contractual 2-business-day grace, see conventions).' }
-  - { name: DURATION_HOURS, type: NUMBER, role: MEASURE, description: On-site ELAPSED time of the intervention in hours (clock time from start to finish, independent of crew size). NULL = not completed. NOT the labor delivered — man-hours are BILLED_HOURS on the billing lines. }
-  - { name: CALL_OUT_FEE, type: NUMBER, role: MEASURE, description: Flat dispatch fee billed once per work order (HEADER grain). Part of service revenue (all-in pricing). Never replicate it through a join to the lines. }
+  - name: WORK_ORDER_ID
+    type: VARCHAR
+    role: PRIMARY_KEY
+    description: Unique work-order identifier (degenerate dimension shared by all work-order-grain facts).
+  - name: SITE_ID
+    type: VARCHAR
+    role: FOREIGN_KEY
+    description: Client site where the intervention happens. Client company reached via DIM_SITES.CLIENT_ID.
+    references: {table: dim_sites, column: SITE_ID}
+  - name: TECHNICIAN_ID
+    type: VARCHAR
+    role: FOREIGN_KEY
+    description: Lead technician of the dispatched crew (see CREW_SIZE). Depot geography reached via DIM_TECHNICIANS.
+    references: {table: dim_technicians, column: TECHNICIAN_ID}
+  - name: OPENED_DATE_KEY
+    type: DATE
+    role: DATE
+    description: Date the work order was opened (request received).
+    references: {table: dim_date, column: DATE_DAY}
+  - name: PROMISED_DATE_KEY
+    type: DATE
+    role: DATE
+    description: Contractual SLA promise date — the anchor for lateness.
+    references: {table: dim_date, column: DATE_DAY}
+  - name: SCHEDULED_DATE_KEY
+    type: DATE
+    role: DATE
+    description: Internally scheduled intervention date (planning, NOT the SLA anchor).
+    references: {table: dim_date, column: DATE_DAY}
+  - name: STARTED_DATE_KEY
+    type: DATE
+    role: DATE
+    description: Date work started on site (null until started).
+    references: {table: dim_date, column: DATE_DAY}
+  - name: COMPLETED_DATE_KEY
+    type: DATE
+    role: DATE
+    description: Date the work was completed (null = open work order). Default date for time analysis —
+      revenue is recognized at completion.
+    references: {table: dim_date, column: DATE_DAY}
+  - name: VALIDATED_DATE_KEY
+    type: DATE
+    role: DATE
+    description: Date the client signed off the completed work (null until validated; lags completion).
+    references: {table: dim_date, column: DATE_DAY}
+  - name: WORK_ORDER_TYPE
+    type: VARCHAR
+    role: DIMENSION
+    description: 'Intervention type: corrective | preventive | inspection.'
+  - name: PRIORITY
+    type: VARCHAR
+    role: DIMENSION
+    description: 'Priority: critical | high | standard.'
+  - name: CREW_SIZE
+    type: NUMBER
+    role: DIMENSION
+    description: Number of technicians dispatched (lead + assists). Explains why delivered man-hours exceed
+      on-site elapsed time.
+  - name: SLA_DELAY_BDAYS
+    type: NUMBER
+    role: MEASURE
+    description: Signed BUSINESS days between promised and completed dates (negative = early). NULL = not
+      completed. "Late" = SLA_DELAY_BDAYS > 2 (contractual 2-business-day grace, see conventions).
+  - name: DURATION_HOURS
+    type: NUMBER
+    role: MEASURE
+    description: On-site ELAPSED time of the intervention in hours (clock time from start to finish,
+      independent of crew size). NULL = not completed. NOT the labor delivered — man-hours are
+      BILLED_HOURS on the billing lines.
+  - name: CALL_OUT_FEE
+    type: NUMBER
+    role: MEASURE
+    description: Flat dispatch fee billed once per work order (HEADER grain). Part of service revenue (all-in
+      pricing). Never replicate it through a join to the lines.
 
 - id: fct_work_order_lines
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES
@@ -82,14 +141,42 @@ tables:
   - SUM(LINE_AMOUNT) alone is NOT service revenue — the work-order CALL_OUT_FEE must be added (all-in pricing, see conventions).
   - PART_ID IS NULL on LABOR lines (meaningful NULL). Part-level analyses must restrict to PART lines (LINE_KIND = 'PART').
   columns:
-  - { name: WORK_ORDER_LINE_KEY, type: VARCHAR, role: PRIMARY_KEY, description: Synthetic key (work_order_id-line_number). }
-  - { name: WORK_ORDER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Work-order identifier., references: { table: fct_work_orders, column: WORK_ORDER_ID } }
-  - { name: LINE_NUMBER, type: NUMBER, role: DEGENERATE_DIMENSION, description: Line sequence within the work order (not unique alone). }
-  - { name: LINE_KIND, type: VARCHAR, role: FILTER, description: 'PART (a part used) or LABOR (man-hours delivered).' }
-  - { name: PART_ID, type: VARCHAR, role: FOREIGN_KEY, description: Part used (PART lines only; NULL on LABOR lines — means "no part", not "unknown")., references: { table: dim_parts, column: PART_ID } }
-  - { name: QUANTITY, type: NUMBER, role: MEASURE, description: Quantity of the part used (PART lines only; NULL on LABOR lines). }
-  - { name: BILLED_HOURS, type: NUMBER, role: MEASURE, description: Man-hours DELIVERED and billed (LABOR lines only; NULL on PART lines). Sums across crew members — the measure of hours worked by technicians. Distinct from the header's elapsed DURATION_HOURS. }
-  - { name: LINE_AMOUNT, type: NUMBER, role: MEASURE, description: Billed amount of the line (parts or labor). Service revenue = SUM(LINE_AMOUNT) + call-out fees. }
+  - name: WORK_ORDER_LINE_KEY
+    type: VARCHAR
+    role: PRIMARY_KEY
+    description: Synthetic key (work_order_id-line_number).
+  - name: WORK_ORDER_ID
+    type: VARCHAR
+    role: FOREIGN_KEY
+    description: Work-order identifier.
+    references: {table: fct_work_orders, column: WORK_ORDER_ID}
+  - name: LINE_NUMBER
+    type: NUMBER
+    role: DEGENERATE_DIMENSION
+    description: Line sequence within the work order (not unique alone).
+  - name: LINE_KIND
+    type: VARCHAR
+    role: FILTER
+    description: PART (a part used) or LABOR (man-hours delivered).
+  - name: PART_ID
+    type: VARCHAR
+    role: FOREIGN_KEY
+    description: Part used (PART lines only; NULL on LABOR lines — means "no part", not "unknown").
+    references: {table: dim_parts, column: PART_ID}
+  - name: QUANTITY
+    type: NUMBER
+    role: MEASURE
+    description: Quantity of the part used (PART lines only; NULL on LABOR lines).
+  - name: BILLED_HOURS
+    type: NUMBER
+    role: MEASURE
+    description: Man-hours DELIVERED and billed (LABOR lines only; NULL on PART lines). Sums across crew
+      members — the measure of hours worked by technicians. Distinct from the header's elapsed DURATION_HOURS.
+  - name: LINE_AMOUNT
+    type: NUMBER
+    role: MEASURE
+    description: Billed amount of the line (parts or labor). Service revenue = SUM(LINE_AMOUNT) + call-out
+      fees.
 
 - id: fct_work_order_payments
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_PAYMENTS
@@ -107,12 +194,32 @@ tables:
   - Payments lag completion (PAID_DATE_KEY) — monthly collected cash differs from monthly revenue.
   - Multiple payment rows per work order. Use COUNT(DISTINCT fwp.WORK_ORDER_ID) to count work orders.
   columns:
-  - { name: WORK_ORDER_PAYMENT_KEY, type: VARCHAR, role: PRIMARY_KEY, description: Synthetic key for one payment row. }
-  - { name: WORK_ORDER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Work-order identifier., references: { table: fct_work_orders, column: WORK_ORDER_ID } }
-  - { name: PAYMENT_SEQUENCE, type: NUMBER, role: DEGENERATE_DIMENSION, description: Payment sequence within the work order (partial payments possible). }
-  - { name: PAYMENT_METHOD, type: VARCHAR, role: DIMENSION, description: 'Payment method: bank_transfer | corporate_card | purchase_order.' }
-  - { name: PAID_DATE_KEY, type: DATE, role: DATE, description: Date the payment was received (lags completion)., references: { table: dim_date, column: DATE_DAY } }
-  - { name: PAYMENT_AMOUNT, type: NUMBER, role: MEASURE, description: Collected payment amount (cash in, not revenue). }
+  - name: WORK_ORDER_PAYMENT_KEY
+    type: VARCHAR
+    role: PRIMARY_KEY
+    description: Synthetic key for one payment row.
+  - name: WORK_ORDER_ID
+    type: VARCHAR
+    role: FOREIGN_KEY
+    description: Work-order identifier.
+    references: {table: fct_work_orders, column: WORK_ORDER_ID}
+  - name: PAYMENT_SEQUENCE
+    type: NUMBER
+    role: DEGENERATE_DIMENSION
+    description: Payment sequence within the work order (partial payments possible).
+  - name: PAYMENT_METHOD
+    type: VARCHAR
+    role: DIMENSION
+    description: 'Payment method: bank_transfer | corporate_card | purchase_order.'
+  - name: PAID_DATE_KEY
+    type: DATE
+    role: DATE
+    description: Date the payment was received (lags completion).
+    references: {table: dim_date, column: DATE_DAY}
+  - name: PAYMENT_AMOUNT
+    type: NUMBER
+    role: MEASURE
+    description: Collected payment amount (cash in, not revenue).
 
 - id: fct_satisfaction_surveys
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.FCT_SATISFACTION_SURVEYS
@@ -130,11 +237,29 @@ tables:
   - Several response rows per work order possible. Average satisfaction = average of the LATEST response per work order (QUALIFY ROW_NUMBER() OVER (PARTITION BY WORK_ORDER_ID ORDER BY RESPONSE_SEQUENCE DESC) = 1), never a plain AVG over all rows.
   - To count surveyed work orders use COUNT(DISTINCT fss.WORK_ORDER_ID).
   columns:
-  - { name: SURVEY_RESPONSE_KEY, type: VARCHAR, role: PRIMARY_KEY, description: Synthetic key for one survey response. }
-  - { name: WORK_ORDER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Work-order identifier., references: { table: fct_work_orders, column: WORK_ORDER_ID } }
-  - { name: RESPONSE_SEQUENCE, type: NUMBER, role: DEGENERATE_DIMENSION, description: Response sequence within the work order; the highest sequence is the latest (the one that counts). }
-  - { name: RESPONDED_DATE_KEY, type: DATE, role: DATE, description: Date the survey response was received., references: { table: dim_date, column: DATE_DAY } }
-  - { name: SATISFACTION_SCORE, type: NUMBER, role: MEASURE, description: Satisfaction score from 1 to 10. }
+  - name: SURVEY_RESPONSE_KEY
+    type: VARCHAR
+    role: PRIMARY_KEY
+    description: Synthetic key for one survey response.
+  - name: WORK_ORDER_ID
+    type: VARCHAR
+    role: FOREIGN_KEY
+    description: Work-order identifier.
+    references: {table: fct_work_orders, column: WORK_ORDER_ID}
+  - name: RESPONSE_SEQUENCE
+    type: NUMBER
+    role: DEGENERATE_DIMENSION
+    description: Response sequence within the work order; the highest sequence is the latest (the one that
+      counts).
+  - name: RESPONDED_DATE_KEY
+    type: DATE
+    role: DATE
+    description: Date the survey response was received.
+    references: {table: dim_date, column: DATE_DAY}
+  - name: SATISFACTION_SCORE
+    type: NUMBER
+    role: MEASURE
+    description: Satisfaction score from 1 to 10.
 
 - id: dim_date
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.DIM_DATE
@@ -148,17 +273,50 @@ tables:
   primary_key: [ DATE_DAY ]
   recommended_alias: dd
   columns:
-  - { name: DATE_DAY, type: DATE, role: PRIMARY_KEY, description: Calendar day. }
-  - { name: YEAR, type: NUMBER, role: DIMENSION, description: Calendar year. }
-  - { name: QUARTER, type: NUMBER, role: DIMENSION, description: Quarter (1-4). }
-  - { name: MONTH_NUMBER, type: NUMBER, role: DIMENSION, description: Month number (1-12). }
-  - { name: MONTH_NAME, type: VARCHAR, role: DIMENSION, description: Month name. }
-  - { name: MONTH_START_DATE, type: DATE, role: DIMENSION, description: First day of the month. }
-  - { name: DAY_OF_MONTH, type: NUMBER, role: DIMENSION, description: Day of month (1-31). }
-  - { name: DAY_OF_WEEK, type: NUMBER, role: DIMENSION, description: Day of week (0=Sunday .. 6=Saturday). }
-  - { name: DAY_NAME, type: VARCHAR, role: DIMENSION, description: Day name. }
-  - { name: WEEK_OF_YEAR, type: NUMBER, role: DIMENSION, description: Week of year. }
-  - { name: IS_WEEKEND, type: BOOLEAN, role: FILTER, description: True for Saturday and Sunday (business days are Mon-Fri). }
+  - name: DATE_DAY
+    type: DATE
+    role: PRIMARY_KEY
+    description: Calendar day.
+  - name: YEAR
+    type: NUMBER
+    role: DIMENSION
+    description: Calendar year.
+  - name: QUARTER
+    type: NUMBER
+    role: DIMENSION
+    description: Quarter (1-4).
+  - name: MONTH_NUMBER
+    type: NUMBER
+    role: DIMENSION
+    description: Month number (1-12).
+  - name: MONTH_NAME
+    type: VARCHAR
+    role: DIMENSION
+    description: Month name.
+  - name: MONTH_START_DATE
+    type: DATE
+    role: DIMENSION
+    description: First day of the month.
+  - name: DAY_OF_MONTH
+    type: NUMBER
+    role: DIMENSION
+    description: Day of month (1-31).
+  - name: DAY_OF_WEEK
+    type: NUMBER
+    role: DIMENSION
+    description: Day of week (0=Sunday .. 6=Saturday).
+  - name: DAY_NAME
+    type: VARCHAR
+    role: DIMENSION
+    description: Day name.
+  - name: WEEK_OF_YEAR
+    type: NUMBER
+    role: DIMENSION
+    description: Week of year.
+  - name: IS_WEEKEND
+    type: BOOLEAN
+    role: FILTER
+    description: True for Saturday and Sunday (business days are Mon-Fri).
 
 - id: dim_clients
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.DIM_CLIENTS
@@ -171,10 +329,22 @@ tables:
   primary_key: [ CLIENT_ID ]
   recommended_alias: dcl
   columns:
-  - { name: CLIENT_ID, type: VARCHAR, role: PRIMARY_KEY, description: Client company identifier — the unit for counting customers. }
-  - { name: CLIENT_NAME, type: VARCHAR, role: DIMENSION, description: Client company name. }
-  - { name: INDUSTRY, type: VARCHAR, role: DIMENSION, description: 'Client industry (manufacturing, food_processing, logistics, ...).' }
-  - { name: CONTRACT_TIER, type: VARCHAR, role: DIMENSION, description: 'Service contract tier: standard | premium | enterprise.' }
+  - name: CLIENT_ID
+    type: VARCHAR
+    role: PRIMARY_KEY
+    description: Client company identifier — the unit for counting customers.
+  - name: CLIENT_NAME
+    type: VARCHAR
+    role: DIMENSION
+    description: Client company name.
+  - name: INDUSTRY
+    type: VARCHAR
+    role: DIMENSION
+    description: Client industry (manufacturing, food_processing, logistics, ...).
+  - name: CONTRACT_TIER
+    type: VARCHAR
+    role: DIMENSION
+    description: 'Service contract tier: standard | premium | enterprise.'
 
 - id: dim_sites
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.DIM_SITES
@@ -187,11 +357,28 @@ tables:
   primary_key: [ SITE_ID ]
   recommended_alias: dst
   columns:
-  - { name: SITE_ID, type: VARCHAR, role: PRIMARY_KEY, description: Site identifier (a location, not a customer). }
-  - { name: CLIENT_ID, type: VARCHAR, role: FOREIGN_KEY, description: Owning client company., references: { table: dim_clients, column: CLIENT_ID } }
-  - { name: SITE_NAME, type: VARCHAR, role: DIMENSION, description: Site name. }
-  - { name: SITE_TYPE, type: VARCHAR, role: DIMENSION, description: 'Site type: plant | warehouse | office.' }
-  - { name: SITE_ZIP_CODE_PREFIX, type: VARCHAR, role: FOREIGN_KEY, description: Site zip prefix (site-location role of geography)., references: { table: dim_geography, column: ZIP_CODE_PREFIX } }
+  - name: SITE_ID
+    type: VARCHAR
+    role: PRIMARY_KEY
+    description: Site identifier (a location, not a customer).
+  - name: CLIENT_ID
+    type: VARCHAR
+    role: FOREIGN_KEY
+    description: Owning client company.
+    references: {table: dim_clients, column: CLIENT_ID}
+  - name: SITE_NAME
+    type: VARCHAR
+    role: DIMENSION
+    description: Site name.
+  - name: SITE_TYPE
+    type: VARCHAR
+    role: DIMENSION
+    description: 'Site type: plant | warehouse | office.'
+  - name: SITE_ZIP_CODE_PREFIX
+    type: VARCHAR
+    role: FOREIGN_KEY
+    description: Site zip prefix (site-location role of geography).
+    references: {table: dim_geography, column: ZIP_CODE_PREFIX}
 
 - id: dim_technicians
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.DIM_TECHNICIANS
@@ -204,10 +391,23 @@ tables:
   primary_key: [ TECHNICIAN_ID ]
   recommended_alias: dtech
   columns:
-  - { name: TECHNICIAN_ID, type: VARCHAR, role: PRIMARY_KEY, description: Technician identifier. }
-  - { name: DEPOT_CODE, type: VARCHAR, role: DIMENSION, description: Dispatch depot code. }
-  - { name: DEPOT_ZIP_CODE_PREFIX, type: VARCHAR, role: FOREIGN_KEY, description: Depot zip prefix (depot-location role of geography)., references: { table: dim_geography, column: ZIP_CODE_PREFIX } }
-  - { name: SENIORITY_LEVEL, type: VARCHAR, role: DIMENSION, description: 'junior | senior | expert.' }
+  - name: TECHNICIAN_ID
+    type: VARCHAR
+    role: PRIMARY_KEY
+    description: Technician identifier.
+  - name: DEPOT_CODE
+    type: VARCHAR
+    role: DIMENSION
+    description: Dispatch depot code.
+  - name: DEPOT_ZIP_CODE_PREFIX
+    type: VARCHAR
+    role: FOREIGN_KEY
+    description: Depot zip prefix (depot-location role of geography).
+    references: {table: dim_geography, column: ZIP_CODE_PREFIX}
+  - name: SENIORITY_LEVEL
+    type: VARCHAR
+    role: DIMENSION
+    description: junior | senior | expert.
 
 - id: dim_geography
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.DIM_GEOGRAPHY
@@ -221,9 +421,18 @@ tables:
   primary_key: [ ZIP_CODE_PREFIX ]
   recommended_alias: dg
   columns:
-  - { name: ZIP_CODE_PREFIX, type: VARCHAR, role: PRIMARY_KEY, description: Zip-code prefix. }
-  - { name: CITY, type: VARCHAR, role: DIMENSION, description: City. }
-  - { name: STATE, type: VARCHAR, role: DIMENSION, description: State. }
+  - name: ZIP_CODE_PREFIX
+    type: VARCHAR
+    role: PRIMARY_KEY
+    description: Zip-code prefix.
+  - name: CITY
+    type: VARCHAR
+    role: DIMENSION
+    description: City.
+  - name: STATE
+    type: VARCHAR
+    role: DIMENSION
+    description: State.
 
 - id: dim_equipment_categories
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.DIM_EQUIPMENT_CATEGORIES
@@ -236,8 +445,14 @@ tables:
   primary_key: [ EQUIPMENT_CATEGORY ]
   recommended_alias: deqc
   columns:
-  - { name: EQUIPMENT_CATEGORY, type: VARCHAR, role: PRIMARY_KEY, description: Equipment category (natural key). }
-  - { name: CATEGORY_GROUP, type: VARCHAR, role: DIMENSION, description: 'rotating | static | electrical | climate.' }
+  - name: EQUIPMENT_CATEGORY
+    type: VARCHAR
+    role: PRIMARY_KEY
+    description: Equipment category (natural key).
+  - name: CATEGORY_GROUP
+    type: VARCHAR
+    role: DIMENSION
+    description: rotating | static | electrical | climate.
 
 - id: dim_parts
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.DIM_PARTS
@@ -247,9 +462,18 @@ tables:
   primary_key: [ PART_ID ]
   recommended_alias: dpt
   columns:
-  - { name: PART_ID, type: VARCHAR, role: PRIMARY_KEY, description: Part identifier. }
-  - { name: PART_NAME, type: VARCHAR, role: DIMENSION, description: Part name. }
-  - { name: PART_FAMILY, type: VARCHAR, role: DIMENSION, description: 'Part family (filter, bearing, valve, belt, sensor, ...).' }
+  - name: PART_ID
+    type: VARCHAR
+    role: PRIMARY_KEY
+    description: Part identifier.
+  - name: PART_NAME
+    type: VARCHAR
+    role: DIMENSION
+    description: Part name.
+  - name: PART_FAMILY
+    type: VARCHAR
+    role: DIMENSION
+    description: Part family (filter, bearing, valve, belt, sensor, ...).
 
 - id: bridge_work_order_categories
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.BRIDGE_WORK_ORDER_CATEGORIES
@@ -267,9 +491,21 @@ tables:
   - A work order touching N categories yields N bridge rows. Allocating a work-order-level measure (revenue, fees, hours) across categories REQUIRES multiplying by ALLOCATION_WEIGHT (weights of one work order sum to 1) — an unweighted join double-counts multi-category work orders. Disclose the allocation.
   - Pure work-order COUNTS by category need no weight — a work order legitimately counts once in each of its categories — but still COUNT(DISTINCT WORK_ORDER_ID), never COUNT(*).
   columns:
-  - { name: WORK_ORDER_ID, type: VARCHAR, role: FOREIGN_KEY, description: Work-order identifier., references: { table: fct_work_orders, column: WORK_ORDER_ID } }
-  - { name: EQUIPMENT_CATEGORY, type: VARCHAR, role: FOREIGN_KEY, description: Equipment category serviced by the work order., references: { table: dim_equipment_categories, column: EQUIPMENT_CATEGORY } }
-  - { name: ALLOCATION_WEIGHT, type: NUMBER, role: MEASURE, description: 1 / number of categories in the work order — multiply work-order-level measures by it when slicing by category. }
+  - name: WORK_ORDER_ID
+    type: VARCHAR
+    role: FOREIGN_KEY
+    description: Work-order identifier.
+    references: {table: fct_work_orders, column: WORK_ORDER_ID}
+  - name: EQUIPMENT_CATEGORY
+    type: VARCHAR
+    role: FOREIGN_KEY
+    description: Equipment category serviced by the work order.
+    references: {table: dim_equipment_categories, column: EQUIPMENT_CATEGORY}
+  - name: ALLOCATION_WEIGHT
+    type: NUMBER
+    role: MEASURE
+    description: 1 / number of categories in the work order — multiply work-order-level measures by it when
+      slicing by category.
 
 certified_metrics:
 - id: total_service_revenue
