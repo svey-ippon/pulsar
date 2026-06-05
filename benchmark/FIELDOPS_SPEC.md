@@ -177,8 +177,8 @@ Structural choices made in the DBML:
 twin exercising the same capability without the trap (e.g. C2 trapped "revenue by
 category" + control "work-order count by category", weight-free). The control
 distinguishes *missing capability* (fails both) from *accident* (fails the trap only)
-and measures the baseline. As authored (see `eval/ITEMS.md`): 16 traps +
-15 controls = 31 questions.
+and measures the baseline. As authored (see `eval/ITEMS.md`): 17 traps +
+16 controls = 33 questions.
 
 Format per item: **capability tested / mechanism / sample question / certified vs naive
 answer / generator requirement** (what the data must guarantee for the pair to diverge).
@@ -190,6 +190,7 @@ answer / generator requirement** (what the data must guarantee for the pair to d
 | A1 | resolve "customer" to the right entity | clients vs sites (mirrors customer_id/unique_id with new vocabulary; convention CV-2) | "How many customers do we have?" | COUNT DISTINCT clients vs count of sites | avg ≥ 3 sites/client |
 | A2 | choose the right "amount" | service revenue (lines + call-out fees) vs collected payments | "What is our revenue by month?" | certified metric vs SUM(payments) | payment timing lag + partial payments → monthly series visibly differ |
 | A3 | false friend — resolvable by reading column docs | `billed_hours` (man-hours delivered, labor lines) vs `duration_hours` (on-site elapsed presence, WO grain); the question's wording lexically matches **neither** column | "Total hours worked on interventions in March?" | SUM(billed_hours) vs SUM(duration_hours) | multi-technician WOs frequent → billed ≫ duration |
+| A5 | internal jargon — resolvable ONLY by the contract's synonyms | "site hours" = billed man-hours (the contract's sole synonym, registered SY-1); the lexical surface pulls toward `duration_hours` (on-site elapsed) | "How many site hours did we deliver in 2019?" | SUM(billed_hours) vs SUM(duration_hours) | same divergence axis as A3 (no extra generator requirement) |
 
 ### Family B — Anti-prior conventions (the dosed 3 — see §5)
 

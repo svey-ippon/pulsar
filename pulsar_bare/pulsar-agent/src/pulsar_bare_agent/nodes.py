@@ -8,13 +8,13 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.graph import END
 
-from pulsar_bare_agent.prompt import SYSTEM_PROMPT
+from pulsar_bare_agent.prompt import build_system_prompt
 from pulsar_bare_agent.state import AgentState, QueryResult
 
 
 def make_agent_node(llm_with_tools: Any) -> Callable[[AgentState, RunnableConfig], dict]:
     def agent_node(state: AgentState, config: RunnableConfig) -> dict:
-        messages = [SystemMessage(content=SYSTEM_PROMPT)] + list(state["messages"])
+        messages = [SystemMessage(content=build_system_prompt())] + list(state["messages"])
         # stream() fires on_chat_model_stream callbacks, which LangGraph captures
         # as individual ("messages", chunk) events when stream_mode includes "messages".
         # invoke() is blocking and never fires those callbacks.

@@ -1,7 +1,7 @@
 # FieldOps eval items
 
-The benchmark's question set (FIELDOPS_SPEC.md §4/§7): **31 items** — 16 traps +
-15 controls — across the six families of `TRAP_FAMILIES.md`.
+The benchmark's question set (FIELDOPS_SPEC.md §4/§7): **33 items** — 17 traps +
+16 controls — across the six families of `TRAP_FAMILIES.md`.
 
 ## Layout
 
@@ -11,7 +11,7 @@ The benchmark's question set (FIELDOPS_SPEC.md §4/§7): **31 items** — 16 tra
 | `items/family_*.yml` | **Authored, frozen.** Questions, certified SQL, naive signatures, pass criteria. Never edited after materialization without rebuilding answers. |
 | `conventions.yml` | The conventions the SEMANTIC MODEL must define — coverage checklist for `fieldops.yaml` (pulsar) and the semantic view (SI). Each convention lists the items that depend on it. |
 | `instructions.yml` | The behaviours the AGENT INSTRUCTIONS must prescribe (family F) — coverage checklist for the pulsar system prompt and the SI agent `instructions`. |
-| `answers.yml` | **Generated, never hand-edited** (lockfile pattern). Written by `fieldops-eval-build`: expected answers, signature values, divergence verdicts, build metadata. |
+| `resolved/family_*.yml` | **Generated, never hand-edited** (lockfile pattern). Written by `fieldops-eval-build`: one COMPLETE file per family — the authored items enriched with `expected_answer` and signature values/divergence verdicts. The single file to open per family during a scoring session. |
 | `SCORING.md` | The manual scoring sheet template used during an eval run. |
 
 ## Item anatomy
@@ -47,8 +47,8 @@ uv run fieldops-eval-build --verify-only
 ```
 
 The builder executes every certified SQL and every signature SQL against
-`PULSAR_DB.FIELDOPS_GOLD` (via `snow` CLI), writes `answers.yml`, and **asserts
-each certified/signature pair diverges** beyond the item's tolerance — the
-authoritative version of the generator's pre-flight checks
+`PULSAR_DB.FIELDOPS_GOLD` (via `snow` CLI), writes the `resolved/` files, and
+**asserts each certified/signature pair diverges** beyond the item's tolerance
+— the authoritative version of the generator's pre-flight checks
 (`DIVERGENCE_CHECKS.md`). Re-run it after any dataset regeneration: stale
 answers fail loudly instead of silently corrupting the eval.

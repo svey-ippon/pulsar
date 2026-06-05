@@ -3,6 +3,9 @@ version: 2
 domain:
   id: fieldops
   name: FieldOps Service Analytics
+  database: PULSAR_DB
+  schema: FIELDOPS_GOLD
+  owner: pulsar_poc
   description: >
     Certified gold-layer domain for FieldOps, an industrial field-maintenance company: technicians
     dispatched from depots service equipment at client sites under SLA. Modeled as a pure Kimball
@@ -10,25 +13,8 @@ domain:
     keys and measures, conformed dimensions (date, client, site, technician, geography, equipment
     category, part), and a keys-only weighted work-order/category bridge. Analytical attributes
     are reached through joins, not denormalized onto the facts.
-  database: PULSAR_DB
-  schema: FIELDOPS_GOLD
-  owner: pulsar_poc
-
-query_surface:
-  allowed_database: PULSAR_DB
-  allowed_schema: FIELDOPS_GOLD
-  allowed_object_types: [ TABLE, VIEW ]
-  max_result_rows: 1000
-  default_limit_for_detail_queries: 100
   conventions:
-  - 'Service revenue is ALL-IN: SUM(LINE_AMOUNT) on FCT_WORK_ORDER_LINES PLUS the work-order CALL_OUT_FEE. FieldOps prices interventions all-in — the call-out fee is part of revenue, never excluded. Revenue is NOT collected payment value.'
-  - 'Collected cash means SUM(PAYMENT_AMOUNT) on FCT_WORK_ORDER_PAYMENTS. Payments settle invoices with a collection lag and may be partial — monthly cash differs from monthly revenue.'
-  - '"Customer" / "client" means the contract-holding client COMPANY (DIM_CLIENTS.CLIENT_ID), reached from facts via DIM_SITES. A site is a service location, never a customer: counting customers = COUNT(DISTINCT CLIENT_ID).'
-  - '"Late" means completed more than 2 BUSINESS days after the PROMISED date: SLA_DELAY_BDAYS > 2. The 2-business-day grace is contractual. Never calendar days, never the scheduled date.'
   - 'Revenue is recognized at completion: time-scoped questions on revenue, billing lines or hours anchor on the work order''s COMPLETED_DATE_KEY. Billing lines carry NO date of their own — any time-scoped line analysis must join FCT_WORK_ORDERS.'
-  - 'Several survey responses per work order are possible (re-surveys): satisfaction statistics use the LATEST response per work order (highest RESPONSE_SEQUENCE), never all rows.'
-  - 'SLA_DELAY_BDAYS is NULL while a work order is not completed: delay and punctuality statistics are computed among COMPLETED work orders only — an open work order is neither late nor on time.'
-  - 'On billing lines, LINE_KIND splits the rows: PART lines carry PART_ID/QUANTITY; LABOR lines carry BILLED_HOURS and PART_ID IS NULL. A NULL PART_ID means "labor line", not "unknown part".'
   - 'Dates: facts carry *_DATE_KEY columns of type DATE. For simple time grouping (month, year) apply DATE_TRUNC/YEAR directly on the date key. Join DIM_DATE only when a calendar attribute is needed (day name, weekend, week of year), aliasing it per role.'
 
 tables:
@@ -44,10 +30,6 @@ tables:
   primary_key: [ WORK_ORDER_ID ]
   default_date_column: COMPLETED_DATE_KEY
   recommended_alias: fwo
-  warnings:
-  - One work order has many billing lines, payments and (sometimes) survey responses. When FCT_WORK_ORDERS is joined to any of those, count work orders with COUNT(DISTINCT fwo.WORK_ORDER_ID), never COUNT(*).
-  - CALL_OUT_FEE is a HEADER-grain measure (one per work order). Summed through a row-level join to FCT_WORK_ORDER_LINES it is replicated once per line — pre-aggregate the lines to work-order grain first.
-  - COMPLETED_DATE_KEY IS NULL identifies open (not yet completed) work orders.
   columns:
   - name: WORK_ORDER_ID
     type: VARCHAR
@@ -86,8 +68,7 @@ tables:
   - name: COMPLETED_DATE_KEY
     type: DATE
     role: DATE
-    description: Date the work was completed (null = open work order). Default date for time analysis —
-      revenue is recognized at completion.
+    description: Date the work was completed (null = open work order). Default date for time analysis.
     references: {table: dim_date, column: DATE_DAY}
   - name: VALIDATED_DATE_KEY
     type: DATE
@@ -110,8 +91,10 @@ tables:
   - name: SLA_DELAY_BDAYS
     type: NUMBER
     role: MEASURE
-    description: Signed BUSINESS days between promised and completed dates (negative = early). NULL = not
-      completed. "Late" = SLA_DELAY_BDAYS > 2 (contractual 2-business-day grace, see conventions).
+    description: Signed BUSINESS days between the promised and completed dates (negative = early). "Late" =
+      SLA_DELAY_BDAYS > 2 — business days, promised anchor, contractual 2-business-day grace; never
+      calendar days, never the scheduled date. NULL = not completed, so delay and punctuality statistics
+      cover COMPLETED work orders only (an open work order is neither late nor on time).
   - name: DURATION_HOURS
     type: NUMBER
     role: MEASURE
@@ -121,8 +104,9 @@ tables:
   - name: CALL_OUT_FEE
     type: NUMBER
     role: MEASURE
-    description: Flat dispatch fee billed once per work order (HEADER grain). Part of service revenue (all-in
-      pricing). Never replicate it through a join to the lines.
+    description: Flat dispatch fee billed once per work order (HEADER grain). Never sum it through a
+      row-level join to the billing lines (it would be replicated per line) — pre-aggregate the lines to
+      work-order grain first.
 
 - id: fct_work_order_lines
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES
@@ -135,11 +119,6 @@ tables:
   grain: One row per billing line (work_order_id x line_number).
   primary_key: [ WORK_ORDER_LINE_KEY ]
   recommended_alias: fwol
-  warnings:
-  - Multiple line rows per work order. To count work orders use COUNT(DISTINCT fwol.WORK_ORDER_ID), never COUNT(*).
-  - This table carries NO date column. Any time-scoped line analysis must join FCT_WORK_ORDERS on WORK_ORDER_ID and anchor on its COMPLETED_DATE_KEY.
-  - SUM(LINE_AMOUNT) alone is NOT service revenue — the work-order CALL_OUT_FEE must be added (all-in pricing, see conventions).
-  - PART_ID IS NULL on LABOR lines (meaningful NULL). Part-level analyses must restrict to PART lines (LINE_KIND = 'PART').
   columns:
   - name: WORK_ORDER_LINE_KEY
     type: VARCHAR
@@ -162,6 +141,7 @@ tables:
     type: VARCHAR
     role: FOREIGN_KEY
     description: Part used (PART lines only; NULL on LABOR lines — means "no part", not "unknown").
+      Part-level analyses must restrict to PART lines (LINE_KIND = 'PART').
     references: {table: dim_parts, column: PART_ID}
   - name: QUANTITY
     type: NUMBER
@@ -175,8 +155,7 @@ tables:
   - name: LINE_AMOUNT
     type: NUMBER
     role: MEASURE
-    description: Billed amount of the line (parts or labor). Service revenue = SUM(LINE_AMOUNT) + call-out
-      fees.
+    description: Billed amount of the line (parts or labor).
 
 - id: fct_work_order_payments
   qualified_name: PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_PAYMENTS
@@ -189,10 +168,6 @@ tables:
   grain: One row per payment (work_order_id x payment_sequence).
   primary_key: [ WORK_ORDER_PAYMENT_KEY ]
   recommended_alias: fwp
-  warnings:
-  - PAYMENT_AMOUNT is collected cash, NOT service revenue. Do not present it as "revenue".
-  - Payments lag completion (PAID_DATE_KEY) — monthly collected cash differs from monthly revenue.
-  - Multiple payment rows per work order. Use COUNT(DISTINCT fwp.WORK_ORDER_ID) to count work orders.
   columns:
   - name: WORK_ORDER_PAYMENT_KEY
     type: VARCHAR
@@ -233,9 +208,6 @@ tables:
   grain: One row per survey response (work_order_id x response_sequence).
   primary_key: [ SURVEY_RESPONSE_KEY ]
   recommended_alias: fss
-  warnings:
-  - Several response rows per work order possible. Average satisfaction = average of the LATEST response per work order (QUALIFY ROW_NUMBER() OVER (PARTITION BY WORK_ORDER_ID ORDER BY RESPONSE_SEQUENCE DESC) = 1), never a plain AVG over all rows.
-  - To count surveyed work orders use COUNT(DISTINCT fss.WORK_ORDER_ID).
   columns:
   - name: SURVEY_RESPONSE_KEY
     type: VARCHAR
@@ -324,15 +296,16 @@ tables:
   business_name: Clients
   description: >
     Conformed client dimension: the contract-holding client COMPANY — the "customer" of FieldOps.
-    A client operates several sites; the facts reference the SITE, so client-level analysis goes
-    FCT_* -> DIM_SITES -> DIM_CLIENTS (snowflake).
+    Counting customers = COUNT(DISTINCT CLIENT_ID); a site is a service location, never a
+    customer. A client operates several sites; the facts reference the SITE, so client-level
+    analysis goes FCT_* -> DIM_SITES -> DIM_CLIENTS (snowflake).
   primary_key: [ CLIENT_ID ]
   recommended_alias: dcl
   columns:
   - name: CLIENT_ID
     type: VARCHAR
     role: PRIMARY_KEY
-    description: Client company identifier — the unit for counting customers.
+    description: Client company identifier.
   - name: CLIENT_NAME
     type: VARCHAR
     role: DIMENSION
@@ -351,16 +324,16 @@ tables:
   type: DIMENSION
   business_name: Client sites
   description: >
-    Client LOCATIONS where interventions happen (a client company operates several sites). A site
-    is not a customer — the customer is the client company (DIM_CLIENTS, snowflaked via
-    CLIENT_ID). Geography reached via DIM_GEOGRAPHY on SITE_ZIP_CODE_PREFIX (site-location role).
+    Client LOCATIONS where interventions happen (a client company operates several sites; the
+    owning company is reached via CLIENT_ID). Geography reached via DIM_GEOGRAPHY on
+    SITE_ZIP_CODE_PREFIX (site-location role).
   primary_key: [ SITE_ID ]
   recommended_alias: dst
   columns:
   - name: SITE_ID
     type: VARCHAR
     role: PRIMARY_KEY
-    description: Site identifier (a location, not a customer).
+    description: Site identifier.
   - name: CLIENT_ID
     type: VARCHAR
     role: FOREIGN_KEY
@@ -488,8 +461,7 @@ tables:
   primary_key: [ WORK_ORDER_ID, EQUIPMENT_CATEGORY ]
   recommended_alias: bwc
   warnings:
-  - A work order touching N categories yields N bridge rows. Allocating a work-order-level measure (revenue, fees, hours) across categories REQUIRES multiplying by ALLOCATION_WEIGHT (weights of one work order sum to 1) — an unweighted join double-counts multi-category work orders. Disclose the allocation.
-  - Pure work-order COUNTS by category need no weight — a work order legitimately counts once in each of its categories — but still COUNT(DISTINCT WORK_ORDER_ID), never COUNT(*).
+  - Allocating a work-order-level MEASURE (revenue, fees, hours) across categories REQUIRES multiplying by ALLOCATION_WEIGHT — an unweighted join double-counts multi-category work orders; disclose the allocation. Pure work-order COUNTS need no weight — a work order legitimately counts once in each of its categories.
   columns:
   - name: WORK_ORDER_ID
     type: VARCHAR
@@ -504,25 +476,21 @@ tables:
   - name: ALLOCATION_WEIGHT
     type: NUMBER
     role: MEASURE
-    description: 1 / number of categories in the work order — multiply work-order-level measures by it when
-      slicing by category.
+    description: 1 / number of categories in the work order (the weights of one work order sum to 1).
 
 certified_metrics:
 - id: total_service_revenue
   name: Total service revenue
   description: >
-    All-in service revenue: billed line amounts PLUS call-out fees. Recognized at completion
-    (time scope on COMPLETED_DATE_KEY).
+    All-in service revenue: billed line amounts PLUS the work-order call-out fees. FieldOps
+    prices interventions all-in — the call-out fee is part of revenue, never excluded.
   base_table: fct_work_orders
   expression_sql: SUM(fwo.CALL_OUT_FEE + COALESCE(lr.WO_LINE_AMOUNT, 0))
   additive_type: ADDITIVE
-  synonyms: [ revenue, service revenue, sales, turnover, billed revenue ]
   format: currency
   warnings:
-  - lr is FCT_WORK_ORDER_LINES PRE-AGGREGATED to work-order grain — 'lr AS (SELECT WORK_ORDER_ID, SUM(LINE_AMOUNT) AS WO_LINE_AMOUNT FROM ... GROUP BY WORK_ORDER_ID)' joined to FCT_WORK_ORDERS on WORK_ORDER_ID. Never join the lines row-level and SUM(CALL_OUT_FEE) — the header fee would be replicated once per line.
-  - Includes the call-out fee by definition (all-in pricing). Excluding it understates revenue.
+  - lr is FCT_WORK_ORDER_LINES PRE-AGGREGATED to work-order grain — 'lr AS (SELECT WORK_ORDER_ID, SUM(LINE_AMOUNT) AS WO_LINE_AMOUNT FROM ... GROUP BY WORK_ORDER_ID)' joined to FCT_WORK_ORDERS on WORK_ORDER_ID.
   - Service revenue is NOT collected payment value (FCT_WORK_ORDER_PAYMENTS) — different timing, possibly different amount.
-  - When slicing by equipment category, allocate the work-order revenue with BRIDGE_WORK_ORDER_CATEGORIES.ALLOCATION_WEIGHT.
 
 - id: total_collected_amount
   name: Total collected cash
@@ -530,7 +498,6 @@ certified_metrics:
   base_table: fct_work_order_payments
   expression_sql: SUM(fwp.PAYMENT_AMOUNT)
   additive_type: ADDITIVE
-  synonyms: [ cash collected, payments received, collections ]
   format: currency
   warnings:
   - Distinct from service revenue. Use only when the question is about money collected / payments.
@@ -541,10 +508,7 @@ certified_metrics:
   base_table: fct_work_orders
   expression_sql: COUNT(DISTINCT fwo.WORK_ORDER_ID)
   additive_type: NON_ADDITIVE
-  synonyms: [ work orders, interventions, number of work orders, jobs ]
   format: integer
-  warnings:
-  - Always COUNT(DISTINCT WORK_ORDER_ID) — never COUNT(*) — when querying from a table with multiple rows per work order (lines, payments, surveys, bridge).
 
 - id: client_count
   name: Distinct clients
@@ -552,10 +516,7 @@ certified_metrics:
   base_table: dim_clients
   expression_sql: COUNT(DISTINCT dcl.CLIENT_ID)
   additive_type: NON_ADDITIVE
-  synonyms: [ customers, clients, number of customers, accounts ]
   format: integer
-  warnings:
-  - The customer is the client COMPANY, never the site. From the facts, reach CLIENT_ID via DIM_SITES; counting SITE_ID measures locations, not customers.
 
 - id: total_billed_hours
   name: Total billed hours
@@ -563,11 +524,8 @@ certified_metrics:
   base_table: fct_work_order_lines
   expression_sql: SUM(fwol.BILLED_HOURS)
   additive_type: ADDITIVE
-  synonyms: [ hours worked, man-hours, labor hours, billed hours ]
+  synonyms: [ site hours ]
   format: decimal
-  warnings:
-  - Hours WORKED are the billed man-hours, not the work order's elapsed DURATION_HOURS (a crew of 3 for 4 hours works 12 man-hours over a 4-hour duration).
-  - Lines carry no date — time scoping requires joining FCT_WORK_ORDERS on WORK_ORDER_ID (anchor COMPLETED_DATE_KEY).
 
 - id: average_intervention_duration
   name: Average on-site duration
@@ -575,11 +533,7 @@ certified_metrics:
   base_table: fct_work_orders
   expression_sql: AVG(fwo.DURATION_HOURS)
   additive_type: NON_ADDITIVE
-  synonyms: [ average duration, on-site time, intervention duration ]
   format: decimal
-  warnings:
-  - Duration is elapsed presence, not man-hours delivered (those are BILLED_HOURS on the lines).
-  - NULL for open work orders — the average is naturally over completed ones.
 
 - id: late_completion_rate
   name: Late completion rate
@@ -587,11 +541,7 @@ certified_metrics:
   base_table: fct_work_orders
   expression_sql: COUNT_IF(fwo.SLA_DELAY_BDAYS > 2) / NULLIF(COUNT_IF(fwo.SLA_DELAY_BDAYS IS NOT NULL), 0)
   additive_type: NON_ADDITIVE
-  synonyms: [ late rate, SLA breach rate, lateness ]
   format: percentage
-  warnings:
-  - '"Late" = SLA_DELAY_BDAYS > 2: business days, promised-date anchor, contractual 2-day grace. Not calendar days, not the scheduled date, not > 0.'
-  - Denominator is COMPLETED work orders only (SLA_DELAY_BDAYS IS NOT NULL) — an open work order is neither late nor on time. Ratio of aggregates.
 
 - id: on_time_completion_rate
   name: On-time completion rate
@@ -599,10 +549,7 @@ certified_metrics:
   base_table: fct_work_orders
   expression_sql: COUNT_IF(fwo.SLA_DELAY_BDAYS <= 2) / NULLIF(COUNT_IF(fwo.SLA_DELAY_BDAYS IS NOT NULL), 0)
   additive_type: NON_ADDITIVE
-  synonyms: [ on-time rate, SLA compliance, punctuality ]
   format: percentage
-  warnings:
-  - Complement of the late rate over the SAME denominator — completed work orders only. Counting open work orders (NULL delay) as "on time" inflates the rate.
 
 - id: average_sla_delay
   name: Average SLA delay (business days)
@@ -610,10 +557,7 @@ certified_metrics:
   base_table: fct_work_orders
   expression_sql: AVG(fwo.SLA_DELAY_BDAYS)
   additive_type: NON_ADDITIVE
-  synonyms: [ average delay, mean SLA delay ]
   format: decimal
-  warnings:
-  - NULL delays (open work orders) are excluded by AVG — the statistic only covers completed work orders, state it.
 
 - id: average_satisfaction_score
   name: Average satisfaction score
@@ -621,38 +565,6 @@ certified_metrics:
   base_table: fct_satisfaction_surveys
   expression_sql: AVG(fss.SATISFACTION_SCORE) -- over the latest response per work order only (see warnings)
   additive_type: NON_ADDITIVE
-  synonyms: [ satisfaction, csat, client satisfaction ]
   format: decimal
   warnings:
   - Restrict to the latest response per work order first — 'QUALIFY ROW_NUMBER() OVER (PARTITION BY WORK_ORDER_ID ORDER BY RESPONSE_SEQUENCE DESC) = 1' — then average. A plain AVG over all rows over-weights re-surveyed work orders.
-
-sql_generation_rules:
-- { id: no_select_star, severity: HIGH, rule: 'Never use SELECT *. Select only the columns needed.' }
-- { id: use_certified_metrics, severity: HIGH, rule: 'Prefer certified metric expressions over ad-hoc aggregation of measure columns.' }
-- { id: revenue_vs_payment, severity: HIGH, rule: 'Service revenue (lines + call-out fees) is not collected cash (PAYMENT_AMOUNT on FCT_WORK_ORDER_PAYMENTS). Choose deliberately and state which.' }
-- { id: header_grain_fee, severity: HIGH, rule: 'CALL_OUT_FEE lives at work-order HEADER grain. To combine it with line amounts, pre-aggregate FCT_WORK_ORDER_LINES to work-order grain and join the aggregate — never SUM the fee through a row-level join to the lines.' }
-- { id: distinct_work_orders, severity: HIGH, rule: 'When the queried table has multiple rows per work order (lines, payments, surveys, bridge), count work orders with COUNT(DISTINCT WORK_ORDER_ID).' }
-- { id: drill_across, severity: HIGH, rule: 'Joining a fine-grain fact to its header FCT_WORK_ORDERS on WORK_ORDER_ID (many-to-one) is safe and often required. NEVER join two fine-grain facts (lines, payments, surveys, bridge) directly to each other: aggregate each to a common grain first, then join the aggregates (drill-across).' }
-- { id: category_allocation, severity: HIGH, rule: 'Slicing work-order-level measures (revenue, fees, hours) by equipment category goes through BRIDGE_WORK_ORDER_CATEGORIES and REQUIRES multiplying by ALLOCATION_WEIGHT. Pure work-order counts by category use the bridge unweighted with COUNT(DISTINCT WORK_ORDER_ID).' }
-- { id: completed_anchor, severity: HIGH, rule: 'Time-scoped revenue/lines/hours questions anchor on COMPLETED_DATE_KEY (revenue recognized at completion). Lines have no date of their own — join FCT_WORK_ORDERS.' }
-- { id: null_semantics, severity: HIGH, rule: 'Meaningful NULLs: COMPLETED_DATE_KEY NULL = open work order; SLA_DELAY_BDAYS NULL = not completed (exclude from punctuality denominators); PART_ID NULL = labor line (exclude from part analyses).' }
-- { id: ratio_of_aggregates, severity: HIGH, rule: 'Compute ratio metrics (rates, averages of ratios) as ratios of aggregate expressions, not as averages of row-level ratios.' }
-- { id: date_usage, severity: MEDIUM, rule: 'Simple time grouping (month, year): DATE_TRUNC/YEAR directly on the *_DATE_KEY column. Join DIM_DATE only for calendar attributes (day name, weekend, week), aliasing it per role if joined more than once.' }
-- { id: limit_detail_queries, severity: MEDIUM, rule: 'Add an explicit LIMIT to detail (non-aggregated) queries.' }
-
-examples:
-- question: How many work orders did technicians of each seniority level complete each month of 2019?
-  expected_tables: [ fct_work_orders, dim_technicians ]
-  expected_metrics: [ work_order_count ]
-  notes: >
-    Illustrates the mechanics, not a business definition: fact-to-dimension join along the
-    declared references, simple time grouping with DATE_TRUNC directly on a date key (no DIM_DATE
-    needed), completed scope via the completed date.
-  sql: >
-    SELECT DATE_TRUNC('month', fwo.COMPLETED_DATE_KEY) AS month,
-      dtech.SENIORITY_LEVEL,
-      COUNT(DISTINCT fwo.WORK_ORDER_ID) AS work_order_count
-    FROM PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS fwo
-    JOIN PULSAR_DB.FIELDOPS_GOLD.DIM_TECHNICIANS dtech ON fwo.TECHNICIAN_ID = dtech.TECHNICIAN_ID
-    WHERE YEAR(fwo.COMPLETED_DATE_KEY) = 2019
-    GROUP BY 1, 2 ORDER BY 1, 2;

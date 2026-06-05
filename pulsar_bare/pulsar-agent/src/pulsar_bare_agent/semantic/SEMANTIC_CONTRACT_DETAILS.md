@@ -8,6 +8,7 @@
 > Document set (all in this folder):
 > - `SEMANTIC_CONTRACT.md` — the contract **format** (what fields exist).
 > - `SEMANTIC_CONTRACT_DETAILS.md` — *this file*: how to **author** a contract (when/why to populate fields).
+> - `SEMANTIC_INFORMATION_PLACEMENT.md` — **where** information lives (scope-matched, no redundancy).
 > - `SEMANTIC_AGENT_PROMPTING.md` — how the agent **consumes** the contract (out-of-YAML rules).
 > - `SEMANTIC_DESIGN_DECISIONS.md` — **why** the format and authoring rules are what they are.
 > - `SEMANTIC_CONTRACT_SHOULD_CONSIDER.md` — options considered/deferred for future enrichment.
@@ -15,6 +16,11 @@
 Guiding principle for everything here: **a field earns its place only when it varies and changes
 the SQL the agent writes.** If a value is constant, always-true, or trivially derivable from
 another field, omit it — it is prompt noise. The sections below apply this principle field by field.
+
+Its companion principle — **where** a given piece of information goes once it has earned its
+place (one truth, one home, matched to its scope) — is specified in
+`SEMANTIC_INFORMATION_PLACEMENT.md`. The two together are the core of the future automated
+contract builder: filter (this file), then place (that one).
 
 ---
 
@@ -87,7 +93,7 @@ possible: **one `references` per FK column, no exceptions, nothing more.**
 - Do **not** author per-edge metadata (cardinality, join type, fan-out, SQL templates). The default
   semantics of an FK→PK edge (MANY_TO_ONE, LEFT, low fan-out) are stated once in the prompting doc.
   Edges that deviate (e.g. a bridge that multiplies rows) are flagged through the table's
-  `warnings` and `sql_generation_rules`, not through a relationships section.
+  `warnings`, not through a relationships section.
 - `references` is fully **auto-derivable from gold metadata** (dbt manifest / constraints /
   naming): populate it systematically at bootstrap time, like the other structural fields.
 
@@ -115,7 +121,7 @@ trustworthy human/AI with context. They are *not* expected to be present at boot
 
 - `description`, `business_name`
 - `synonyms`
-- `warnings`, `query_surface.conventions`
+- `warnings`, `domain.conventions`
 - `certified_metrics`
 - `recommended_alias`, `default_date_column`, `columns[].default_aggregation`
 

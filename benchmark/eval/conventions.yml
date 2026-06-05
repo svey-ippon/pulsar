@@ -11,6 +11,7 @@
 #
 # kind: anti_prior — contradicts an industry default (FIELDOPS_SPEC.md §5, dosed: 3)
 #       ordinary   — resolves an ambiguity without contradicting any default
+#       vocabulary — internal jargon only the model's synonyms can resolve
 
 conventions:
   - id: CV-1
@@ -33,6 +34,15 @@ conventions:
       "Late" = completed more than 2 business days after the promised date
       (sla_delay_bdays > 2). Business days, promised anchor, 2-day grace.
     required_by: [B2-T, E1-T]
+
+  - id: SY-1
+    kind: vocabulary
+    statement: >-
+      "Site hours" is FieldOps internal jargon for billed man-hours
+      (billed_hours) — NOT on-site elapsed duration, despite the lexical
+      surface. The semantic model must carry the synonym on the billed-hours
+      metric/measure; without it the term is unresolvable.
+    required_by: [A5-T]
 
   - id: GC-REV-ANCHOR
     kind: ordinary

@@ -1,9 +1,9 @@
 # Eval items — human-readable catalogue
 
-The 31 questions of the FieldOps benchmark (16 traps + 15 controls), as
+The 33 questions of the FieldOps benchmark (17 traps + 16 controls), as
 authored in `items/family_*.yml`. What each family loads is analyzed in
 [`../TRAP_FAMILIES.md`](../TRAP_FAMILIES.md); expected answers live in
-`answers.yml` (generated). This document is the readable view: per family, what
+`resolved/family_*.yml` (generated). This document is the readable view: per family, what
 each item tests, the verbatim question, and the conventions/instructions it
 requires.
 
@@ -21,20 +21,23 @@ measures the *contract author's* omission, not the agent's capability. The
 registry (`conventions.yml`) is the coverage checklist used when writing the
 contracts.
 
-The six conventions:
+The seven registry entries:
 
 | Id | Kind | Statement |
 |---|---|---|
 | CV-1 | anti-prior | Service revenue **includes** the call-out fee (FieldOps prices all-in) |
 | CV-2 | anti-prior | "Customer" = the contract-holding client company, never the site |
 | CV-3 | anti-prior | "Late" = completed more than **2 business days** after the **promised** date |
+| SY-1 | vocabulary | "Site hours" = billed **man-hours** (internal jargon carried by the contract's synonyms), not on-site elapsed duration |
 | GC-REV-ANCHOR | ordinary | Revenue is recognized at completion; time-scoped questions on revenue/lines/hours anchor on the work order's **completed date** |
 | GC-SURVEY-LATEST | ordinary | Several survey responses per work order possible; the **latest** counts |
 | GC-DELAY-COMPLETED | ordinary | `sla_delay_bdays` NULL = not completed: punctuality stats are computed among **completed** work orders only |
 
 *Anti-prior* conventions contradict an industry default (the trap is believing
 the contract over intuition); *ordinary* conventions resolve an ambiguity
-without contradicting anything.
+without contradicting anything; *vocabulary* entries are internal jargon that
+only the model's synonyms can resolve (the contract carries exactly one
+synonym, so its presence is itself a signal).
 
 A reading note on conjunctive items: every "revenue" question necessarily
 embeds CV-1 and GC-REV-ANCHOR on top of its own trap. The stored naive
@@ -66,8 +69,8 @@ semantic capability under test; only the *response form* is prescribed.
 ## Family A — Semantic resolution
 
 *Map a business term to the right column or entity, with no strong prior in the
-way. Tests whether the contract's descriptions and conventions are actually
-read.*
+way. Tests whether the contract's descriptions, conventions and synonyms are
+actually read.*
 
 | Item | Kind | What it tests | Question | Required conventions |
 |---|---|---|---|---|
@@ -79,6 +82,8 @@ read.*
 | A3-C | control | lexically matched column ("duration" → `duration_hours`) | "What is the average on-site duration of a completed intervention, in hours?" | — |
 | A4-T | trap | undated measures anchor on the **completed** date (the naive path anchors on the opened date) | "What was our total service revenue in November 2018?" | CV-1, GC-REV-ANCHOR |
 | A4-C | control | explicit anchor in the question: no convention needed, same figure as A4-T | "What was our service revenue from work orders completed in November 2018?" | CV-1 |
+| A5-T | trap | internal jargon resolved through the contract's **synonyms**: "site hours" = billed man-hours, against the lexical pull toward on-site elapsed duration | "How many site hours did we deliver on work orders completed in 2019?" | SY-1, GC-REV-ANCHOR |
+| A5-C | control | the official term resolves directly (same expected figure as A5-T) | "How many billed hours did we deliver on work orders completed in 2019?" | GC-REV-ANCHOR |
 
 ## Family B — Anti-prior conventions
 

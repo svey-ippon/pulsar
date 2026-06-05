@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.tools import BaseTool, tool
 from pydantic import BaseModel, ConfigDict, Field
 
-from pulsar_bare_agent.catalog import DEFAULT_DOMAIN, DomainNotFoundError, list_domain_ids, load_domain
+from pulsar_bare_agent.catalog import DomainNotFoundError, list_domain_ids, load_domain
 from pulsar_bare_agent.settings import AgentSettings
 from pulsar_bare_agent.snowflake_client import (
     SnowflakeClient,
@@ -73,8 +73,7 @@ class DescribeDomainArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     domain_id: str = Field(
-        default=DEFAULT_DOMAIN,
-        description="Analytical domain id. Defaults to the only domain available in this iteration.",
+        description="Analytical domain id — one of the ids listed in the system prompt's routing catalog.",
     )
 
 
@@ -99,7 +98,7 @@ def make_tools(
     timeout_s = resolved_settings.query_timeout_s
 
     @tool(args_schema=DescribeDomainArgs)
-    def describe_domain(domain_id: str = DEFAULT_DOMAIN) -> str:
+    def describe_domain(domain_id: str) -> str:
         """Return the full semantic contract for an analytical domain as JSON.
 
         The contract is the source of truth for writing SQL. It describes the allowed query surface,
@@ -112,7 +111,7 @@ def make_tools(
         aggregation, and honour every documented default filter and warning.
 
         Args:
-            domain_id: Analytical domain id (defaults to the only domain in this iteration).
+            domain_id: Analytical domain id — one of the ids in the system prompt's routing catalog.
         """
         try:
             metadata = load_domain(domain_id)
@@ -129,7 +128,7 @@ def make_tools(
         """Execute a single read-only SQL query against the governed gold layer and return rows.
 
         Only SELECT or WITH statements are allowed; any write/DDL/DML/session statement is rejected
-        before execution. Fully qualify tables as shown in the contract (PULSAR_DB.GOLD.<TABLE>).
+        before execution. Fully qualify tables with the qualified_name given by the contract.
 
         Returns on success:
           {"status":"success","columns":[{"name","type"}],"rows":[{...}],"row_count":N,"execution_time_ms":M}

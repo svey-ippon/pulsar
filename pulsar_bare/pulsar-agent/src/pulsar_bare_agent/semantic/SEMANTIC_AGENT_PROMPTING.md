@@ -9,6 +9,7 @@
 > Document set (all in this folder):
 > - `SEMANTIC_CONTRACT.md` — the contract **format** (what fields exist).
 > - `SEMANTIC_CONTRACT_DETAILS.md` — how to **author** a contract (when/why to populate fields).
+> - `SEMANTIC_INFORMATION_PLACEMENT.md` — **where** information lives (scope-matched, no redundancy).
 > - `SEMANTIC_AGENT_PROMPTING.md` — *this file*: how the agent **consumes** the contract.
 > - `SEMANTIC_DESIGN_DECISIONS.md` — **why** the format and authoring rules are what they are.
 > - `SEMANTIC_CONTRACT_SHOULD_CONSIDER.md` — options considered/deferred for future enrichment.
@@ -16,6 +17,12 @@
 The contract does not constrain execution — the agent writes raw SQL. So the contract's guarantees
 only hold if the agent applies the rules below. They fall into four areas: metric authority,
 joins/grain/fan-out, semantic resolution, and disclosure.
+
+These rules are **domain-independent by design**: the system prompt must never carry a business
+definition, a table name, or a convention of a specific domain — those live in the contracts and
+reach the agent through `describe_domain`. The prompt opens with a **routing catalog** (one line
+per available domain: id, name, summary — built by `build_system_prompt()` from the contracts);
+the agent picks the domain the question belongs to, and declines questions no domain covers.
 
 ---
 
@@ -56,8 +63,8 @@ would erode the distinction the contract exists to protect.
 ## 3. Joins, grain & fan-out
 
 - **The join graph is `columns[].references`** — exhaustive, one entry per FK column (including
-  role-playing date keys). The agent must only join along declared references (or the shared
-  `ORDER_ID` between order-grain facts); it must **never invent a join** that has no reference.
+  role-playing date keys and fine-grain-fact -> header-fact edges). The agent must only join along
+  declared references; it must **never invent a join** that has no reference.
 - **Default join semantics (stated once, here):** an FK→PK edge declared by a `references` is a
   **MANY_TO_ONE LEFT equi-join** on the referenced columns, with low fan-out from the FK side —
   unless a table `warning` or rule says otherwise. The contract does not repeat these defaults per
@@ -83,10 +90,18 @@ would erode the distinction the contract exists to protect.
 
 ## 5. Conventions, refusals, and the response contract
 
-- Apply `query_surface.conventions` as defaults (e.g. what "revenue" means, customers vs orders) and
-  disclose when one was applied.
-- Refuse predictions/forecasts/projections outright. If a needed metric/join/column is not in the
-  contract, state precisely what is missing instead of fabricating SQL.
-- Every answer states which tables, joins, and metric(s)/columns were used, and ends with a short
-  **"Limits & implicits"** section (default filters/conventions applied, fan-out/dedup concerns,
-  scope assumptions). Include the ad-hoc-metric disclosure (§2) here or inline when relevant.
+- Apply `domain.conventions` as defaults (e.g. what "revenue" means) and disclose when one was
+  applied. The conventions are authoritative: when they contradict the agent's intuition or an
+  industry default, the contract wins.
+- If a needed concept/metric/join/column is not in the contract, state precisely what is missing
+  instead of fabricating SQL.
+- If two contract concepts would answer the question with materially different meanings and no
+  convention decides, ask the user to choose (or present both figures, labeled) rather than
+  silently picking one.
+- Every answer states which tables, joins, and metric(s)/columns were used.
+- **Implicit choices are disclosed only when they exist** — a term interpreted (the user's word
+  mapped to a differently-named concept), a convention or default filter applied, a scope
+  assumption, a counter-intuitive definition relied upon, a data or reasoning limit hit. No
+  systematic "limits" section when nothing implicit happened: a mandatory block degrades into
+  noise the user stops reading. The ad-hoc-metric disclosure (§2) follows the same logic — it
+  fires exactly when an ad-hoc figure exists.

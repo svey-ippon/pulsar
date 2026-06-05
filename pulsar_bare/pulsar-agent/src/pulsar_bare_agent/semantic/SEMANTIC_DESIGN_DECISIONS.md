@@ -8,6 +8,7 @@
 > Document set (all in this folder):
 > - `SEMANTIC_CONTRACT.md` — the contract **format** (what fields exist).
 > - `SEMANTIC_CONTRACT_DETAILS.md` — how to **author** a contract (when/why to populate fields).
+> - `SEMANTIC_INFORMATION_PLACEMENT.md` — **where** information lives (scope-matched, no redundancy).
 > - `SEMANTIC_AGENT_PROMPTING.md` — how the agent **consumes** the contract (out-of-YAML rules).
 > - `SEMANTIC_DESIGN_DECISIONS.md` — *this file*: the rationale behind the format and authoring rules.
 > - `SEMANTIC_CONTRACT_SHOULD_CONSIDER.md` — options considered/deferred for future enrichment.

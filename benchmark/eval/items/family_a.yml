@@ -1,6 +1,6 @@
 # Family A — Semantic resolution (see TRAP_FAMILIES.md).
-# Expected answers and signature values are materialized in ../answers.yml by
-# `fieldops-eval-build` — never hand-edited here.
+# Expected answers and signature values are materialized in
+# ../resolved/family_a.yml by `fieldops-eval-build` — never hand-edited here.
 
 items:
   - id: A1-T
@@ -193,3 +193,41 @@ items:
       select round(sum(revenue), 2) as answer
       from wo_rev
       where completed_date_key >= '2018-11-01' and completed_date_key < '2018-12-01'
+
+  - id: A5-T
+    family: A
+    kind: trap
+    capability: "resolve internal jargon through the contract's synonyms: 'site hours' = billed man-hours, against the lexical pull toward on-site elapsed duration"
+    question: "How many site hours did we deliver on work orders completed in 2019?"
+    control_id: A5-C
+    requires_conventions: [SY-1, GC-REV-ANCHOR]
+    pass_criterion: numeric
+    tolerance: { mode: relative, value: 0.005 }
+    certified_sql: |
+      select round(sum(l.billed_hours), 2) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+      inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          on l.work_order_id = wo.work_order_id
+      where wo.completed_date_key >= '2019-01-01' and wo.completed_date_key < '2020-01-01'
+    naive_signatures:
+      - indicates: A5
+        description: "lexical match: on-site elapsed duration summed instead of billed man-hours"
+        sql: |
+          select round(sum(duration_hours), 2) as answer
+          from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+          where completed_date_key >= '2019-01-01' and completed_date_key < '2020-01-01'
+
+  - id: A5-C
+    family: A
+    kind: control
+    capability: "official term resolves directly (same expected figure as A5-T)"
+    question: "How many billed hours did we deliver on work orders completed in 2019?"
+    requires_conventions: [GC-REV-ANCHOR]
+    pass_criterion: numeric
+    tolerance: { mode: relative, value: 0.005 }
+    certified_sql: |
+      select round(sum(l.billed_hours), 2) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+      inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          on l.work_order_id = wo.work_order_id
+      where wo.completed_date_key >= '2019-01-01' and wo.completed_date_key < '2020-01-01'

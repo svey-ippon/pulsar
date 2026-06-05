@@ -6,15 +6,12 @@ from typing import Any
 
 import yaml
 
-DEFAULT_DOMAIN = "olist_sales"
-
-
 class DomainNotFoundError(ValueError):
     """Raised when a requested domain has no semantic contract."""
 
 
 @lru_cache(maxsize=8)
-def load_domain(domain_id: str = DEFAULT_DOMAIN) -> dict[str, Any]:
+def load_domain(domain_id: str) -> dict[str, Any]:
     """Load and parse the YAML semantic contract for *domain_id*.
 
     The contract files ship inside the package under ``semantic/<domain_id>.yaml``.

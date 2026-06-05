@@ -6,8 +6,9 @@
 > the trade-offs, so each can be picked up when the evaluation shows the agent needs it.
 >
 > Document set (all in this folder): `SEMANTIC_CONTRACT.md` (format) ·
-> `SEMANTIC_CONTRACT_DETAILS.md` (authoring) · `SEMANTIC_AGENT_PROMPTING.md` (agent usage) ·
-> `SEMANTIC_DESIGN_DECISIONS.md` (rationale) · *this file* (what to consider next).
+> `SEMANTIC_CONTRACT_DETAILS.md` (authoring) · `SEMANTIC_INFORMATION_PLACEMENT.md` (placement) ·
+> `SEMANTIC_AGENT_PROMPTING.md` (agent usage) · `SEMANTIC_DESIGN_DECISIONS.md` (rationale) ·
+> *this file* (what to consider next).
 
 Evaluation principle: **add a layer only when the eval shows the agent failing without it.** Each
 option below states what failure it would fix.

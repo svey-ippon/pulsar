@@ -8,7 +8,10 @@ PULSAR_DB.FIELDOPS_GOLD via the `snow` CLI, then:
 2. asserts every certified/signature pair DIVERGES beyond the item's tolerance
    — the authoritative version of the generator's pre-flight checks
    (benchmark/DIVERGENCE_CHECKS.md);
-3. writes benchmark/eval/answers.yml (generated artifact, lockfile pattern).
+3. writes benchmark/eval/resolved/family_*.yml (generated artifacts, lockfile
+   pattern): one COMPLETE file per family — the authored items enriched with
+   expected_answer and signature values/divergences — so a scoring session
+   needs a single file open per family.
 
 Re-run after any dataset regeneration: stale answers fail loudly.
 """
@@ -49,6 +52,7 @@ class Item:
     question: str
     pass_criterion: str
     raw: dict[str, Any]
+    source: str
     certified_sql: str | None = None
     tolerance: dict[str, Any] = field(default_factory=lambda: {"mode": "exact"})
     naive_signatures: list[dict[str, Any]] = field(default_factory=list)
@@ -76,6 +80,7 @@ def load_items(eval_dir: Path) -> list[Item]:
                     requires_conventions=raw.get("requires_conventions", []),
                     requires_instructions=raw.get("requires_instructions", []),
                     raw=raw,
+                    source=path.name,
                 )
             )
     return items
@@ -191,6 +196,32 @@ def diverges(certified: Answer, signature: Answer, tolerance: dict[str, Any]) ->
 # ── build ────────────────────────────────────────────────────────────────────
 
 
+class _ResolvedDumper(yaml.SafeDumper):
+    """SafeDumper that keeps multi-line strings (SQL) as literal blocks."""
+
+
+def _str_representer(dumper: yaml.Dumper, data: str) -> yaml.Node:
+    style = "|" if "\n" in data else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+
+_ResolvedDumper.add_representer(str, _str_representer)
+
+
+def _resolve_item(item: Item, expected: Answer | None, signatures: list[dict[str, Any]] | None) -> dict[str, Any]:
+    """The authored item enriched in place: expected_answer right after the SQL,
+    signature values/divergences inside each signature entry."""
+    out: dict[str, Any] = {}
+    for key, value in item.raw.items():
+        if key == "naive_signatures" and signatures is not None:
+            out[key] = signatures
+            continue
+        out[key] = value
+        if key == "certified_sql" and expected is not None:
+            out["expected_answer"] = expected
+    return out
+
+
 def build(eval_dir: Path, verify_only: bool) -> int:
     items = load_items(eval_dir)
     errors = validate(items, load_conventions(eval_dir), load_instructions(eval_dir))
@@ -201,29 +232,27 @@ def build(eval_dir: Path, verify_only: bool) -> int:
         return 1
     print(f"{len(items)} items validated.")
 
-    answers: dict[str, Any] = {}
+    resolved: dict[str, list[dict[str, Any]]] = {}
     failures: list[str] = []
     for item in items:
         if item.pass_criterion != "numeric":
+            # behavioural items are carried over untouched so each resolved
+            # family file is complete on its own
+            resolved.setdefault(item.source, []).append(dict(item.raw))
             continue
         expected = run_sql(item.certified_sql)
-        entry: dict[str, Any] = {"expected_answer": expected, "signatures": []}
+        signatures: list[dict[str, Any]] = []
         for sig in item.naive_signatures:
             value = run_sql(sig["sql"])
             ok = diverges(expected, value, item.tolerance)
-            entry["signatures"].append(
-                {
-                    "indicates": sig["indicates"],
-                    "description": sig["description"],
-                    "value": value,
-                    "diverges": ok,
-                }
-            )
+            signatures.append({**sig, "value": value, "diverges": ok})
             status = "ok" if ok else "NO DIVERGENCE"
             print(f"  {item.id} vs [{sig['indicates']}] {status}")
             if not ok:
                 failures.append(f"{item.id}: signature [{sig['indicates']}] does not diverge")
-        answers[item.id] = entry
+        resolved.setdefault(item.source, []).append(
+            _resolve_item(item, expected, signatures or None)
+        )
         print(f"[{item.id}] expected = {expected}")
 
     if failures:
@@ -232,25 +261,39 @@ def build(eval_dir: Path, verify_only: bool) -> int:
             print(f"  - {failure}")
         return 1
 
-    out_path = eval_dir / "answers.yml"
-    document = {
-        "generated_by": "fieldops-eval-build — DO NOT EDIT (see eval/README.md)",
-        "built_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "gold": "PULSAR_DB.FIELDOPS_GOLD",
-        "answers": answers,
-    }
+    out_dir = eval_dir / "resolved"
+    normalized = json.loads(json.dumps(resolved))
     if verify_only:
-        if out_path.exists():
-            current = yaml.safe_load(out_path.read_text())
-            if current.get("answers") == json.loads(json.dumps(answers)):
-                print("\nVerify-only: answers.yml is up to date.")
-                return 0
-            print("\nVerify-only: answers.yml is STALE (recomputed answers differ).")
+        stale: list[str] = []
+        for name, resolved_items in normalized.items():
+            path = out_dir / name
+            if not path.exists():
+                stale.append(f"{name}: missing")
+                continue
+            current = yaml.safe_load(path.read_text())
+            if current.get("items") != resolved_items:
+                stale.append(f"{name}: recomputed answers differ")
+        if stale:
+            print("\nVerify-only: resolved files are STALE:")
+            for entry in stale:
+                print(f"  - {entry}")
             return 1
-        print("\nVerify-only: answers.yml does not exist.")
-        return 1
-    out_path.write_text(yaml.safe_dump(document, sort_keys=False, allow_unicode=True))
-    print(f"\nAnswers written to {out_path} — all divergences verified.")
+        print("\nVerify-only: resolved files are up to date.")
+        return 0
+
+    out_dir.mkdir(exist_ok=True)
+    built_at = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for name, resolved_items in resolved.items():
+        document = {
+            "generated_by": f"fieldops-eval-build — DO NOT EDIT (authored source: items/{name})",
+            "built_at": built_at,
+            "gold": "PULSAR_DB.FIELDOPS_GOLD",
+            "items": resolved_items,
+        }
+        (out_dir / name).write_text(
+            yaml.dump(document, Dumper=_ResolvedDumper, sort_keys=False, allow_unicode=True, width=100)
+        )
+    print(f"\nResolved files written to {out_dir}/ — all divergences verified.")
     return 0
 
 
@@ -260,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--verify-only",
         action="store_true",
-        help="recompute and compare against answers.yml without writing",
+        help="recompute and compare against the resolved/ files without writing",
     )
     args = parser.parse_args(argv)
     eval_dir = args.eval_dir or find_eval_dir(Path.cwd())

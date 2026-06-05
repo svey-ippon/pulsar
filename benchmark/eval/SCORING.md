@@ -3,7 +3,8 @@
 One copy of this sheet per agent run (`pulsar_bare` / `snowflake_intelligence`).
 Ask each question verbatim, paste the agent's figure/behaviour, then score:
 
-- **Numeric items**: compare to `answers.yml` within the item's tolerance. If
+- **Numeric items**: compare to the item's `expected_answer` in
+  `resolved/family_*.yml` within the item's tolerance. If
   wrong, match the figure against the item's signature values — record the
   `indicates` capability of the matching signature in *Verdict* (e.g.
   `C3: PASS, B1: FAIL` when the depot join is right but fees were dropped).
@@ -24,6 +25,8 @@ Ask each question verbatim, paste the agent's figure/behaviour, then score:
 | A3-C | | | | |
 | A4-T | | | | |
 | A4-C | | | | |
+| A5-T | | | | |
+| A5-C | | | | |
 | B1-T | | | | |
 | B1-C | | | | |
 | B2-T | | | | |

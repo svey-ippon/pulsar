@@ -1,0 +1,164 @@
+generated_by: 'fieldops-eval-build — DO NOT EDIT (authored source: items/family_d.yml)'
+built_at: '2026-06-05T21:30:46Z'
+gold: PULSAR_DB.FIELDOPS_GOLD
+items:
+- id: D1-T
+  family: D
+  kind: trap
+  capability: 'header-grain measure: call_out_fee counted once per work order, never per line'
+  question: What was the total amount billed for interventions completed in June 2018?
+  control_id: D1-C
+  requires_conventions:
+  - CV-1
+  - GC-REV-ANCHOR
+  pass_criterion: numeric
+  tolerance:
+    mode: relative
+    value: 0.005
+  certified_sql: |
+    with wo_rev as (
+        select
+            wo.work_order_id,
+            wo.completed_date_key,
+            coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as billed
+        from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+        left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+            on wo.work_order_id = l.work_order_id
+        where wo.completed_date_key is not null
+        group by wo.work_order_id, wo.completed_date_key
+    )
+    select round(sum(billed), 2) as answer
+    from wo_rev
+    where completed_date_key >= '2018-06-01' and completed_date_key < '2018-07-01'
+  expected_answer: 364991.95
+  naive_signatures:
+  - indicates: D1
+    description: fee replicated on every line by the join (fan-out, ~x3.7)
+    sql: |
+      select round(sum(l.line_amount + wo.call_out_fee), 2) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+      inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          on l.work_order_id = wo.work_order_id
+      where wo.completed_date_key >= '2018-06-01' and wo.completed_date_key < '2018-07-01'
+    value: 478906.99
+    diverges: true
+  - indicates: B1
+    description: call-out fees excluded entirely
+    sql: |
+      select round(sum(l.line_amount), 2) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+      inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          on l.work_order_id = wo.work_order_id
+      where wo.completed_date_key >= '2018-06-01' and wo.completed_date_key < '2018-07-01'
+    value: 324486.15
+    diverges: true
+- id: D1-C
+  family: D
+  kind: control
+  capability: plain line counting on the same scope
+  question: How many billing lines were recorded on interventions completed in June 2018?
+  requires_conventions:
+  - GC-REV-ANCHOR
+  pass_criterion: numeric
+  tolerance:
+    mode: exact
+  certified_sql: |
+    select count(*) as answer
+    from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+    inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+        on l.work_order_id = wo.work_order_id
+    where wo.completed_date_key >= '2018-06-01' and wo.completed_date_key < '2018-07-01'
+  expected_answer: 1098
+- id: D2-T
+  family: D
+  kind: trap
+  capability: COUNT DISTINCT discipline when counting work orders through their lines
+  question: How many work orders completed in 2018 used spare parts?
+  control_id: D2-C
+  requires_conventions:
+  - GC-REV-ANCHOR
+  pass_criterion: numeric
+  tolerance:
+    mode: exact
+  certified_sql: |
+    select count(distinct l.work_order_id) as answer
+    from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+    inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+        on l.work_order_id = wo.work_order_id
+    where l.line_kind = 'PART'
+      and wo.completed_date_key >= '2018-01-01' and wo.completed_date_key < '2019-01-01'
+  expected_answer: 3033
+  naive_signatures:
+  - indicates: D2
+    description: part LINES counted instead of distinct work orders
+    sql: |
+      select count(*) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+      inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          on l.work_order_id = wo.work_order_id
+      where l.line_kind = 'PART'
+        and wo.completed_date_key >= '2018-01-01' and wo.completed_date_key < '2019-01-01'
+    value: 7551
+    diverges: true
+- id: D2-C
+  family: D
+  kind: control
+  capability: 'the exact twin: line counting when LINES are asked for'
+  question: How many spare-part lines were billed on work orders completed in 2018?
+  requires_conventions:
+  - GC-REV-ANCHOR
+  pass_criterion: numeric
+  tolerance:
+    mode: exact
+  certified_sql: |
+    select count(*) as answer
+    from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+    inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+        on l.work_order_id = wo.work_order_id
+    where l.line_kind = 'PART'
+      and wo.completed_date_key >= '2018-01-01' and wo.completed_date_key < '2019-01-01'
+  expected_answer: 7551
+- id: D3-T
+  family: D
+  kind: trap
+  capability: 'survey grain: the LATEST response per work order counts'
+  question: What is our average client satisfaction score?
+  control_id: D3-C
+  requires_conventions:
+  - GC-SURVEY-LATEST
+  pass_criterion: numeric
+  tolerance:
+    mode: absolute
+    value: 0.05
+  certified_sql: |
+    select round(avg(satisfaction_score), 2) as answer
+    from (
+        select satisfaction_score
+        from PULSAR_DB.FIELDOPS_GOLD.FCT_SATISFACTION_SURVEYS
+        qualify
+            row_number() over (
+                partition by work_order_id order by response_sequence desc
+            )
+            = 1
+    )
+  expected_answer: 7.76
+  naive_signatures:
+  - indicates: D3
+    description: naive AVG over every response row (re-surveyed WOs double-counted)
+    sql: |
+      select round(avg(satisfaction_score), 2) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_SATISFACTION_SURVEYS
+    value: 7.43
+    diverges: true
+- id: D3-C
+  family: D
+  kind: control
+  capability: COUNT DISTINCT over the survey fact
+  question: How many work orders received at least one satisfaction survey response?
+  pass_criterion: numeric
+  tolerance:
+    mode: exact
+  certified_sql: |
+    select count(distinct work_order_id) as answer
+    from PULSAR_DB.FIELDOPS_GOLD.FCT_SATISFACTION_SURVEYS
+  expected_answer: 5038

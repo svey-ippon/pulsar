@@ -3,6 +3,7 @@
 > Document set (all in this folder):
 > - `SEMANTIC_CONTRACT.md` — *this file*: the contract **format** (what fields exist).
 > - `SEMANTIC_CONTRACT_DETAILS.md` — how to **author** a contract (when/why to populate fields).
+> - `SEMANTIC_INFORMATION_PLACEMENT.md` — **where** information lives (scope-matched, no redundancy).
 > - `SEMANTIC_AGENT_PROMPTING.md` — how the agent **consumes** the contract (out-of-YAML rules).
 > - `SEMANTIC_DESIGN_DECISIONS.md` — **why** the format and authoring rules are what they are.
 > - `SEMANTIC_CONTRACT_SHOULD_CONSIDER.md` — options considered/deferred for future enrichment.
@@ -26,25 +27,28 @@ format; the default join semantics (FK→PK = many-to-one LEFT equi-join) are st
 # Contract format version.
 version: <int>
 
-# Domain-level identity.
+# Information placement (see SEMANTIC_INFORMATION_PLACEMENT.md): one truth, one
+# home, matched to its scope — metric-scoped facts on the metric, column-scoped
+# on the column, table-usage failure modes in table warnings, domain-wide rules
+# in domain.conventions. No redundancy between levels.
+
+# Domain-level identity and business conventions.
+# There is NO query_surface / allow-list section: the `tables` list (with each
+# table's qualified_name) IS the queryable surface, and actual enforcement
+# belongs to the runtime, not to a YAML the agent merely reads — read-only
+# gating and row caps live in the execute_sql tool (validate_sql +
+# AgentSettings.max_result_rows), access scoping in the Snowflake role grants.
 domain:
   id: <slug>                  # Stable logical id of the domain (matches the YAML filename).
   name: <string>              # Human-readable domain name.
-  description: <string>       # What the domain covers; subject areas, modeling style, scope.
   database: <database>        # Physical database holding the gold layer.
   schema: <schema>            # Physical schema holding the gold layer.
   owner: <role_or_team>       # Optional: owning team/role.
-
-# The bounded surface the agent may query, plus business conventions.
-query_surface:
-  allowed_database: <database>            # Agent must only read from this database.
-  allowed_schema: <schema>                # ...and this schema.
-  allowed_object_types: [TABLE, VIEW]     # Object kinds the agent may query.
-  max_result_rows: <int>                  # Hard cap on returned rows (enforced by execute_sql).
-  default_limit_for_detail_queries: <int> # Suggested LIMIT for non-aggregated queries.
-  conventions:                            # Free-text business rules the model cannot infer from schema.
-    - <string>                            # e.g. what "revenue" means; derived concepts (status from
-                                          #      delay); date-handling defaults; canonical keys.
+  description: <string>       # What the domain covers; subject areas, modeling style, scope.
+  conventions:                # DOMAIN-WIDE rules only: vocabulary and rules that cross tables
+    - <string>                # and metrics (e.g. a time-anchoring rule, date-handling defaults).
+                              # Metric-scoped facts go on the metric, column-scoped on the column
+                              # (see SEMANTIC_INFORMATION_PLACEMENT.md).
 
 # Logical tables exposed to the agent. One entry per queryable gold object.
 tables:
@@ -60,8 +64,9 @@ tables:
     default_date_column: <COLUMN>         # Optional: date column to use when the question is
                                           # time-based but unspecified.
     recommended_alias: <string>           # Alias the agent should use (keeps SQL consistent).
-    warnings:                             # Optional: fan-out, dedup, mandatory-join and trap
-      - <string>                          # guidance specific to this table.
+    warnings:                             # Optional and RARE: a usage failure mode of this table,
+      - <string>                          # not derivable from the schema, with no more local home
+                                          # (admission test in SEMANTIC_INFORMATION_PLACEMENT.md).
     example_questions:                    # Optional: representative questions (routing hint).
       - <string>
 
@@ -94,6 +99,19 @@ certified_metrics:
       - <string>
 
 # SQL-generation guidance the model must follow. Prose, not opaque enum codes.
+# OPTIONAL AND RARE — most contracts should not have this section. Each kind
+# of guidance has a better home: generic SQL discipline (no SELECT *,
+# certified-metric authority, drill-across, COUNT DISTINCT through finer
+# grain, ratio of aggregates, LIMIT on detail queries) is domain-independent
+# and lives in the agent's system prompt; business definitions (what terms
+# mean, anchors, meaningful NULLs) live in domain.conventions; and a
+# model-specific SQL pattern is stated ONCE at its point of use (the warning
+# of the table/metric it protects), where the agent reads it while reasoning
+# about that object. Use this section only for a CROSS-CUTTING pattern with
+# no single local home — one that spans several tables/metrics and would
+# otherwise have to be duplicated into many warnings (e.g. a tenant-isolation
+# predicate every query must carry, a currency-normalization step required
+# before any cross-table money aggregation).
 sql_generation_rules:
   - id: <slug>
     severity: <HIGH | MEDIUM | LOW>
@@ -125,11 +143,12 @@ examples:
   `qualified_name` (physical). There is no separate short `name`.
 - **Join graph = `references`, not a relationships section.** Snowflake declares relationships as
   first-class objects; here the exhaustive FK layer lives on the columns (locality: read where the
-  agent reasons about the column), and non-default join semantics are conveyed by table `warnings`
-  + `sql_generation_rules`. Richer layers are deliberate future options (see
+  agent reasons about the column), and non-default join semantics are conveyed by table
+  `warnings`. Richer layers are deliberate future options (see
   `SEMANTIC_CONTRACT_SHOULD_CONSIDER.md`).
 - **Flags are opt-in, not exhaustive.** A column field is emitted only when it carries signal;
   uniform always-true flags are dropped to reduce prompt noise.
-- **`conventions` / `warnings` / `sql_generation_rules` carry the real value** — they encode what a
-  capable model cannot infer from a well-named schema (business definitions, derived concepts,
-  fan-out traps, mandatory joins).
+- **`domain.conventions` and `warnings` carry the real value** — they encode what a capable model
+  cannot infer from a well-named schema (business definitions, derived concepts, fan-out traps,
+  mandatory joins), each stated once at its point of use. `sql_generation_rules` is a rare escape
+  hatch for cross-cutting patterns only.

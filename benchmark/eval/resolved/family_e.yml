@@ -1,0 +1,111 @@
+generated_by: 'fieldops-eval-build — DO NOT EDIT (authored source: items/family_e.yml)'
+built_at: '2026-06-05T21:30:46Z'
+gold: PULSAR_DB.FIELDOPS_GOLD
+items:
+- id: E1-T
+  family: E
+  kind: trap
+  capability: 'NULL sla_delay_bdays = not completed: excluded from punctuality stats, not ''on time'''
+  question: What proportion of our work orders were completed within the SLA?
+  control_id: E1-C
+  requires_conventions:
+  - CV-3
+  - GC-DELAY-COMPLETED
+  pass_criterion: numeric
+  tolerance:
+    mode: absolute
+    value: 0.005
+  answer_format: ratio 0-1 (the agent may express it as a percentage)
+  certified_sql: |
+    select
+        round(
+            count_if(sla_delay_bdays <= 2) / count_if(sla_delay_bdays is not null), 4
+        ) as answer
+    from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+  expected_answer: 0.8801
+  naive_signatures:
+  - indicates: E1
+    description: all work orders in the denominator (open WOs diluted in)
+    sql: |
+      select round(count_if(sla_delay_bdays <= 2) / count(*), 4) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+    value: 0.8087
+    diverges: true
+  - indicates: E1
+    description: NULL treated as on time (open WOs counted as within SLA)
+    sql: |
+      select
+          round(
+              count_if(sla_delay_bdays <= 2 or sla_delay_bdays is null) / count(*), 4
+          ) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+    value: 0.8898
+    diverges: true
+- id: E1-C
+  family: E
+  kind: control
+  capability: counting the NULLs themselves when asked
+  question: How many work orders are currently open (not yet completed)?
+  pass_criterion: numeric
+  tolerance:
+    mode: exact
+  certified_sql: |
+    select count(*) as answer
+    from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+    where completed_date_key is null
+  expected_answer: 811
+- id: E2-T
+  family: E
+  kind: trap
+  capability: 'NULL part_id = labor line: a parts ranking must exclude labor lines'
+  question: Which part family generates the most billed revenue?
+  control_id: E2-C
+  pass_criterion: numeric
+  tolerance:
+    mode: relative
+    value: 0.005
+  answer_format: top family (name, revenue); the trap is reporting an unclassified/NULL bucket as the
+    top 'family'
+  certified_sql: |
+    select p.part_family, round(sum(l.line_amount), 2) as revenue
+    from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+    inner join PULSAR_DB.FIELDOPS_GOLD.DIM_PARTS as p on l.part_id = p.part_id
+    group by p.part_family
+    order by revenue desc
+    limit 1
+  expected_answer:
+  - part_family: motor
+    revenue: 2014766.07
+  naive_signatures:
+  - indicates: E2
+    description: 'labor lines kept in: the NULL/unclassified bucket tops the ranking'
+    sql: |
+      select round(sum(line_amount), 2) as revenue
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES
+      where part_id is null
+    value: 5959032.55
+    diverges: true
+- id: E2-C
+  family: E
+  kind: control
+  capability: explicit split by line_kind
+  question: How many part lines and how many labor lines did we bill on work orders completed in 2019?
+  requires_conventions:
+  - GC-REV-ANCHOR
+  pass_criterion: numeric
+  tolerance:
+    mode: exact
+  answer_format: two counts (PART, LABOR)
+  certified_sql: |
+    select l.line_kind, count(*) as line_count
+    from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+    inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+        on l.work_order_id = wo.work_order_id
+    where wo.completed_date_key >= '2019-01-01' and wo.completed_date_key < '2020-01-01'
+    group by l.line_kind
+    order by l.line_kind
+  expected_answer:
+  - line_kind: LABOR
+    line_count: 4067
+  - line_kind: PART
+    line_count: 7031
