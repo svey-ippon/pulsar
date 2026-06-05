@@ -641,21 +641,18 @@ sql_generation_rules:
 - { id: limit_detail_queries, severity: MEDIUM, rule: 'Add an explicit LIMIT to detail (non-aggregated) queries.' }
 
 examples:
-- question: What is total service revenue by month?
-  expected_tables: [ fct_work_orders, fct_work_order_lines ]
-  expected_metrics: [ total_service_revenue ]
+- question: How many work orders did technicians of each seniority level complete each month of 2019?
+  expected_tables: [ fct_work_orders, dim_technicians ]
+  expected_metrics: [ work_order_count ]
   notes: >
-    Canonical revenue pattern: lines pre-aggregated to work-order grain (header fee counted once),
-    fee added at header grain, month anchored on the completed date.
+    Illustrates the mechanics, not a business definition: fact-to-dimension join along the
+    declared references, simple time grouping with DATE_TRUNC directly on a date key (no DIM_DATE
+    needed), completed scope via the completed date.
   sql: >
-    WITH line_rev AS (
-      SELECT WORK_ORDER_ID, SUM(LINE_AMOUNT) AS WO_LINE_AMOUNT
-      FROM PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES
-      GROUP BY WORK_ORDER_ID
-    )
     SELECT DATE_TRUNC('month', fwo.COMPLETED_DATE_KEY) AS month,
-      SUM(fwo.CALL_OUT_FEE + COALESCE(lr.WO_LINE_AMOUNT, 0)) AS total_service_revenue
+      dtech.SENIORITY_LEVEL,
+      COUNT(DISTINCT fwo.WORK_ORDER_ID) AS work_order_count
     FROM PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS fwo
-    LEFT JOIN line_rev lr ON fwo.WORK_ORDER_ID = lr.WORK_ORDER_ID
-    WHERE fwo.COMPLETED_DATE_KEY IS NOT NULL
-    GROUP BY 1 ORDER BY 1;
+    JOIN PULSAR_DB.FIELDOPS_GOLD.DIM_TECHNICIANS dtech ON fwo.TECHNICIAN_ID = dtech.TECHNICIAN_ID
+    WHERE YEAR(fwo.COMPLETED_DATE_KEY) = 2019
+    GROUP BY 1, 2 ORDER BY 1, 2;
