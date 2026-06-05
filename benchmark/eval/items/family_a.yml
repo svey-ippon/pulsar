@@ -1,0 +1,121 @@
+# Family A — Semantic resolution (see TRAP_FAMILIES.md).
+# Expected answers and signature values are materialized in ../answers.yml by
+# `fieldops-eval-build` — never hand-edited here.
+
+items:
+  - id: A1-T
+    family: A
+    kind: trap
+    capability: "resolve 'customer' to the contract-holding client, not the site"
+    question: "How many customers do we have?"
+    control_id: A1-C
+    requires_conventions: [CV-2]
+    pass_criterion: numeric
+    tolerance: { mode: exact }
+    certified_sql: |
+      select count(distinct client_id) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.DIM_CLIENTS
+    naive_signatures:
+      - indicates: A1
+        description: "sites counted instead of client companies"
+        sql: |
+          select count(*) as answer
+          from PULSAR_DB.FIELDOPS_GOLD.DIM_SITES
+
+  - id: A1-C
+    family: A
+    kind: control
+    capability: "count sites when sites are asked for"
+    question: "How many client sites do we serve?"
+    pass_criterion: numeric
+    tolerance: { mode: exact }
+    certified_sql: |
+      select count(*) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.DIM_SITES
+
+  - id: A2-T
+    family: A
+    kind: trap
+    capability: "choose service revenue over collected payments"
+    question: "What was our total revenue in Q3 2018?"
+    control_id: A2-C
+    requires_conventions: [CV-1, GC-REV-ANCHOR]
+    pass_criterion: numeric
+    tolerance: { mode: relative, value: 0.005 }
+    certified_sql: |
+      with wo_rev as (
+          select
+              wo.work_order_id,
+              wo.completed_date_key,
+              coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as revenue
+          from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+              on wo.work_order_id = l.work_order_id
+          where wo.completed_date_key is not null
+          group by wo.work_order_id, wo.completed_date_key
+      )
+      select round(sum(revenue), 2) as answer
+      from wo_rev
+      where completed_date_key >= '2018-07-01' and completed_date_key < '2018-10-01'
+    naive_signatures:
+      - indicates: A2
+        description: "collected payments (paid in Q3 2018) instead of service revenue"
+        sql: |
+          select round(sum(payment_amount), 2) as answer
+          from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_PAYMENTS
+          where paid_date_key >= '2018-07-01' and paid_date_key < '2018-10-01'
+      - indicates: B1
+        description: "call-out fees excluded (lines only)"
+        sql: |
+          select round(sum(l.line_amount), 2) as answer
+          from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+          inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+              on l.work_order_id = wo.work_order_id
+          where wo.completed_date_key >= '2018-07-01' and wo.completed_date_key < '2018-10-01'
+
+  - id: A2-C
+    family: A
+    kind: control
+    capability: "compute collected payments when asked explicitly"
+    question: "How much cash did we collect from clients in Q3 2018?"
+    pass_criterion: numeric
+    tolerance: { mode: relative, value: 0.005 }
+    certified_sql: |
+      select round(sum(payment_amount), 2) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_PAYMENTS
+      where paid_date_key >= '2018-07-01' and paid_date_key < '2018-10-01'
+
+  - id: A3-T
+    family: A
+    kind: trap
+    capability: "false friend: 'hours worked' = billed_hours (man-hours), not duration_hours (elapsed)"
+    question: "How many hours did our technicians work on interventions completed in March 2019?"
+    control_id: A3-C
+    requires_conventions: [GC-REV-ANCHOR]
+    pass_criterion: numeric
+    tolerance: { mode: relative, value: 0.005 }
+    certified_sql: |
+      select round(sum(l.billed_hours), 2) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+      inner join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          on l.work_order_id = wo.work_order_id
+      where wo.completed_date_key >= '2019-03-01' and wo.completed_date_key < '2019-04-01'
+    naive_signatures:
+      - indicates: A3
+        description: "elapsed on-site duration summed instead of man-hours delivered"
+        sql: |
+          select round(sum(duration_hours), 2) as answer
+          from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+          where completed_date_key >= '2019-03-01' and completed_date_key < '2019-04-01'
+
+  - id: A3-C
+    family: A
+    kind: control
+    capability: "lexically matched column (duration -> duration_hours)"
+    question: "What is the average on-site duration of a completed intervention, in hours?"
+    pass_criterion: numeric
+    tolerance: { mode: relative, value: 0.005 }
+    certified_sql: |
+      select round(avg(duration_hours), 2) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+      where completed_date_key is not null

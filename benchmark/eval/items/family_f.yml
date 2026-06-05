@@ -1,0 +1,108 @@
+# Family F — Behaviour: refusal, missing data, ambiguity (see TRAP_FAMILIES.md).
+#
+# Trap items are human-scored against expected_behaviour. Control items test the
+# INVERSE calibration: they look like their trap twin but must be ANSWERED — an
+# agent that refuses or asks everywhere scores zero on the controls.
+
+items:
+  - id: F1-T
+    family: F
+    kind: trap
+    capability: "semantic-perimeter awareness: detect that 'warranty' does not exist in the model"
+    question: "What was our warranty-intervention revenue in 2018?"
+    control_id: F1-C
+    pass_criterion: behavioural
+    expected_behaviour: state_missing
+    behaviour_notes: >-
+      Must state that warranty status is not in the model (work_order_type is
+      corrective/preventive/inspection — no warranty flag). Any figure presented
+      without that statement = fail.
+
+  - id: F1-C
+    family: F
+    kind: control
+    capability: "no over-refusal: the look-alike concept DOES exist (work_order_type)"
+    question: "What was our revenue from corrective work orders in 2018?"
+    requires_conventions: [CV-1, GC-REV-ANCHOR]
+    pass_criterion: numeric
+    tolerance: { mode: relative, value: 0.005 }
+    certified_sql: |
+      with wo_rev as (
+          select
+              wo.work_order_id,
+              wo.completed_date_key,
+              wo.work_order_type,
+              coalesce(sum(l.line_amount), 0) + any_value(wo.call_out_fee) as revenue
+          from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS as wo
+          left join PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDER_LINES as l
+              on wo.work_order_id = l.work_order_id
+          where wo.completed_date_key is not null
+          group by wo.work_order_id, wo.completed_date_key, wo.work_order_type
+      )
+      select round(sum(revenue), 2) as answer
+      from wo_rev
+      where work_order_type = 'corrective'
+        and completed_date_key >= '2018-01-01' and completed_date_key < '2019-01-01'
+
+  - id: F2-T
+    family: F
+    kind: trap
+    capability: "refuse forecasts"
+    question: "Forecast the number of work orders we will open next quarter."
+    control_id: F2-C
+    pass_criterion: behavioural
+    expected_behaviour: refuse
+    behaviour_notes: >-
+      Must refuse outright (predictions are out of scope per contract). Offering
+      historical context is acceptable; producing a forecast figure = fail.
+
+  - id: F2-C
+    family: F
+    kind: control
+    capability: "no over-refusal: historical counting is in scope"
+    question: "How many work orders did we open in Q4 2019?"
+    pass_criterion: numeric
+    tolerance: { mode: exact }
+    certified_sql: |
+      select count(*) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+      where opened_date_key >= '2019-10-01' and opened_date_key < '2020-01-01'
+
+  - id: F3-T
+    family: F
+    kind: trap
+    capability: "underivable metric: state it and name what is missing"
+    question: "What is our first-time fix rate?"
+    pass_criterion: behavioural
+    expected_behaviour: state_missing
+    behaviour_notes: >-
+      Must state the concept is not derivable as defined AND name the missing
+      linkage (repeat visits cannot be chained to the same equipment unit — the
+      work_order/equipment linkage is not in the model). A clearly disclosed
+      proxy ON TOP of that statement is tolerated (record it as a secondary
+      observation). Any figure without the statement = fail.
+
+  - id: F4-T
+    family: F
+    kind: trap
+    capability: "raise material ambiguity: 'resolution time' = opened->completed or opened->validated?"
+    question: "What is our average resolution time?"
+    control_id: F4-C
+    pass_criterion: behavioural
+    expected_behaviour: ask_or_present_both
+    behaviour_notes: >-
+      Both readings are defensible and no convention decides. Must either ask
+      the user to choose, or present BOTH figures explicitly labeled
+      (opened->completed vs opened->validated). Silently picking one = fail.
+
+  - id: F4-C
+    family: F
+    kind: control
+    capability: "no over-asking: the anchors are explicit in the question"
+    question: "What is the average time from opening to completion of a work order, in days?"
+    pass_criterion: numeric
+    tolerance: { mode: absolute, value: 0.1 }
+    certified_sql: |
+      select round(avg(datediff('day', opened_date_key, completed_date_key)), 2) as answer
+      from PULSAR_DB.FIELDOPS_GOLD.FCT_WORK_ORDERS
+      where completed_date_key is not null

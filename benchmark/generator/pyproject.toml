@@ -7,10 +7,12 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "numpy>=2.1",
     "pandas>=2.2",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
 fieldops-generate = "fieldops_generator.cli:main"
+fieldops-eval-build = "fieldops_generator.evalbuild:main"
 
 [dependency-groups]
 dev = [

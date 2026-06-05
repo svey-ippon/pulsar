@@ -1,0 +1,197 @@
+generated_by: fieldops-eval-build — DO NOT EDIT (see eval/README.md)
+built_at: '2026-06-05T09:14:17Z'
+gold: PULSAR_DB.FIELDOPS_GOLD
+answers:
+  A1-T:
+    expected_answer: 120
+    signatures:
+    - indicates: A1
+      description: sites counted instead of client companies
+      value: 534
+      diverges: true
+  A1-C:
+    expected_answer: 534
+    signatures: []
+  A2-T:
+    expected_answer: 1200730.81
+    signatures:
+    - indicates: A2
+      description: collected payments (paid in Q3 2018) instead of service revenue
+      value: 1124562.29
+      diverges: true
+    - indicates: B1
+      description: call-out fees excluded (lines only)
+      value: 1065373.07
+      diverges: true
+  A2-C:
+    expected_answer: 1124562.29
+    signatures: []
+  A3-T:
+    expected_answer: 2229.16
+    signatures:
+    - indicates: A3
+      description: elapsed on-site duration summed instead of man-hours delivered
+      value: 1303.5
+      diverges: true
+  A3-C:
+    expected_answer: 5.49
+    signatures: []
+  B1-T:
+    expected_answer: 3756386.15
+    signatures:
+    - indicates: B1
+      description: 'call-out fees excluded (industry default: transport not in revenue)'
+      value: 3328322.94
+      diverges: true
+    - indicates: A2
+      description: collected payments instead of service revenue
+      value: 4078765.96
+      diverges: true
+  B1-C:
+    expected_answer: 428063.21
+    signatures: []
+  B2-T:
+    expected_answer: 0.1192
+    signatures:
+    - indicates: B2
+      description: calendar comparison against the scheduled date (completed > scheduled)
+      value: 0.5669
+      diverges: true
+    - indicates: B2
+      description: no grace period (sla_delay_bdays > 0)
+      value: 0.2029
+      diverges: true
+  B2-C:
+    expected_answer: -2.54
+    signatures: []
+  C1:
+    expected_answer:
+    - state: Ostbrook
+      revenue: 521979.1
+    - state: Westhollow
+      revenue: 330225.09
+    - state: Sablewood
+      revenue: 327788.69
+    signatures:
+    - indicates: C3
+      description: depot state (technician role) used instead of site state
+      value:
+      - state: Ostbrook
+        revenue: 359384.94
+      - state: Eastmere
+        revenue: 353257.8
+      - state: Bryceland
+        revenue: 352137.61
+      diverges: true
+  C2-T:
+    expected_answer:
+    - equipment_category: conveyor_system
+      revenue: 414540.08
+    - equipment_category: compressor
+      revenue: 397454
+    - equipment_category: control_panel
+      revenue: 395895.1
+    signatures:
+    - indicates: C2
+      description: 'unweighted bridge join: multi-category work orders double-counted'
+      value:
+      - equipment_category: conveyor_system
+        revenue: 681102.8
+      - equipment_category: control_panel
+        revenue: 678828.84
+      - equipment_category: switchgear
+        revenue: 666435.62
+      diverges: true
+  C2-C:
+    expected_answer:
+    - equipment_category: switchgear
+      wo_count: 616
+    - equipment_category: conveyor_system
+      wo_count: 562
+    - equipment_category: hvac_unit
+      wo_count: 553
+    signatures: []
+  C3-T:
+    expected_answer: 276434.26
+    signatures:
+    - indicates: C3
+      description: site state used instead of depot state
+      value: 247415.97
+      diverges: true
+    - indicates: B1
+      description: call-out fees excluded from the depot-state revenue
+      value: 243712.97
+      diverges: true
+  D1-T:
+    expected_answer: 364991.95
+    signatures:
+    - indicates: D1
+      description: fee replicated on every line by the join (fan-out, ~x3.7)
+      value: 478906.99
+      diverges: true
+    - indicates: B1
+      description: call-out fees excluded entirely
+      value: 324486.15
+      diverges: true
+  D1-C:
+    expected_answer: 1098
+    signatures: []
+  D2-T:
+    expected_answer: 3033
+    signatures:
+    - indicates: D2
+      description: part LINES counted instead of distinct work orders
+      value: 7551
+      diverges: true
+  D2-C:
+    expected_answer: 7551
+    signatures: []
+  D3-T:
+    expected_answer: 7.76
+    signatures:
+    - indicates: D3
+      description: naive AVG over every response row (re-surveyed WOs double-counted)
+      value: 7.43
+      diverges: true
+  D3-C:
+    expected_answer: 5038
+    signatures: []
+  E1-T:
+    expected_answer: 0.8801
+    signatures:
+    - indicates: E1
+      description: all work orders in the denominator (open WOs diluted in)
+      value: 0.8087
+      diverges: true
+    - indicates: E1
+      description: NULL treated as on time (open WOs counted as within SLA)
+      value: 0.8898
+      diverges: true
+  E1-C:
+    expected_answer: 811
+    signatures: []
+  E2-T:
+    expected_answer:
+    - part_family: motor
+      revenue: 2014766.07
+    signatures:
+    - indicates: E2
+      description: 'labor lines kept in: the NULL/unclassified bucket tops the ranking'
+      value: 5959032.55
+      diverges: true
+  E2-C:
+    expected_answer:
+    - line_kind: LABOR
+      line_count: 4067
+    - line_kind: PART
+      line_count: 7031
+    signatures: []
+  F1-C:
+    expected_answer: 2678818.83
+    signatures: []
+  F2-C:
+    expected_answer: 797
+    signatures: []
+  F4-C:
+    expected_answer: 9.53
+    signatures: []
